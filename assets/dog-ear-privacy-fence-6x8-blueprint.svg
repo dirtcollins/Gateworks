@@ -1,0 +1,178 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100" role="img" aria-labelledby="title desc">
+  <title id="title">6 ft by 8 ft Dog Ear Privacy Fence Panel - Blueprint Style Vector</title>
+  <desc id="desc">Professional line-art elevation drawing of a standard dog-ear privacy fence panel with dimensions, rails, pickets, nail placement, and construction callouts.</desc>
+  <defs>
+    <pattern id="small-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#d7e3ee" stroke-width="1"/>
+    </pattern>
+    <pattern id="large-grid" width="100" height="100" patternUnits="userSpaceOnUse">
+      <rect width="100" height="100" fill="url(#small-grid)"/>
+      <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#abc2d7" stroke-width="1.4"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#174d7c"/>
+    </marker>
+    <style>
+      .sheet { fill: #f6fbff; }
+      .grid { fill: url(#large-grid); opacity: .78; }
+      .blue { stroke: #174d7c; }
+      .blue2 { stroke: #2d6f9f; }
+      .light { stroke: #7aa3bf; }
+      .ink { fill: #123f67; }
+      .note { fill: #174d7c; font-family: Arial, Helvetica, sans-serif; font-size: 22px; letter-spacing: .8px; }
+      .small-note { fill: #174d7c; font-family: Arial, Helvetica, sans-serif; font-size: 17px; letter-spacing: .4px; }
+      .micro { fill: #174d7c; font-family: Arial, Helvetica, sans-serif; font-size: 13px; letter-spacing: .3px; }
+      .outline { fill: none; stroke: #174d7c; stroke-width: 4; stroke-linejoin: round; stroke-linecap: round; }
+      .detail { fill: none; stroke: #174d7c; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+      .thin { fill: none; stroke: #2d6f9f; stroke-width: 1.25; stroke-linejoin: round; stroke-linecap: round; }
+      .ghost { fill: none; stroke: #5c8caf; stroke-width: 2; stroke-dasharray: 12 10; stroke-linecap: round; }
+      .dim { fill: none; stroke: #174d7c; stroke-width: 2; marker-start: url(#arrow); marker-end: url(#arrow); }
+      .ext { fill: none; stroke: #174d7c; stroke-width: 1.6; stroke-linecap: round; }
+      .woodgrain { fill: none; stroke: #6f9cbb; stroke-width: 1.15; stroke-linecap: round; opacity: .72; }
+      .rail-fill { fill: rgba(23, 77, 124, .035); stroke: #174d7c; stroke-width: 2.2; stroke-dasharray: 13 8; }
+      .board-fill { fill: rgba(23, 77, 124, .018); }
+    </style>
+  </defs>
+
+  <rect class="sheet" width="1600" height="1100"/>
+  <rect class="grid" x="0" y="0" width="1600" height="1100"/>
+
+  <g id="title-block">
+    <rect x="70" y="920" width="1460" height="120" fill="none" stroke="#174d7c" stroke-width="3"/>
+    <line x1="70" y1="965" x2="1530" y2="965" class="detail"/>
+    <line x1="920" y1="920" x2="920" y2="1040" class="detail"/>
+    <line x1="1165" y1="920" x2="1165" y2="1040" class="detail"/>
+    <line x1="1340" y1="920" x2="1340" y2="1040" class="detail"/>
+    <text x="95" y="951" class="note">DOG EAR PRIVACY FENCE PANEL</text>
+    <text x="95" y="1003" class="small-note">FRONT ELEVATION - VECTOR LINE ART - STANDARD RESIDENTIAL PANEL</text>
+    <text x="945" y="951" class="small-note">PANEL SIZE</text>
+    <text x="945" y="1003" class="note">6'-0" H x 8'-0" W</text>
+    <text x="1190" y="951" class="small-note">STYLE</text>
+    <text x="1190" y="1003" class="note">DOG EAR</text>
+    <text x="1365" y="951" class="small-note">SCALE</text>
+    <text x="1365" y="1003" class="note">1 IN = 10 PX</text>
+  </g>
+
+  <g id="panel" transform="translate(270 120)">
+    <rect x="-26" y="-28" width="1012" height="778" fill="rgba(246,251,255,.62)" stroke="#7aa3bf" stroke-width="1.5" stroke-dasharray="9 8"/>
+
+    <g id="rear-rails">
+      <rect x="0" y="124" width="960" height="36" class="rail-fill"/>
+      <rect x="0" y="342" width="960" height="36" class="rail-fill"/>
+      <rect x="0" y="588" width="960" height="36" class="rail-fill"/>
+      <text x="982" y="150" class="small-note">2x4 RAIL BEHIND</text>
+      <line x1="952" y1="142" x2="890" y2="142" class="ghost"/>
+      <text x="982" y="368" class="small-note">CENTER RAIL</text>
+      <line x1="952" y1="360" x2="890" y2="360" class="ghost"/>
+      <text x="982" y="614" class="small-note">BOTTOM RAIL</text>
+      <line x1="952" y1="606" x2="890" y2="606" class="ghost"/>
+    </g>
+
+    <g id="pickets">
+      <path class="board-fill outline" d="M0 10 L10 0 L45 0 L55 10 L55 720 L0 720 Z"/>
+      <path class="board-fill outline" d="M56.562 10 L66.562 0 L101.562 0 L111.562 10 L111.562 720 L56.562 720 Z"/>
+      <path class="board-fill outline" d="M113.124 10 L123.124 0 L158.124 0 L168.124 10 L168.124 720 L113.124 720 Z"/>
+      <path class="board-fill outline" d="M169.686 10 L179.686 0 L214.686 0 L224.686 10 L224.686 720 L169.686 720 Z"/>
+      <path class="board-fill outline" d="M226.248 10 L236.248 0 L271.248 0 L281.248 10 L281.248 720 L226.248 720 Z"/>
+      <path class="board-fill outline" d="M282.81 10 L292.81 0 L327.81 0 L337.81 10 L337.81 720 L282.81 720 Z"/>
+      <path class="board-fill outline" d="M339.372 10 L349.372 0 L384.372 0 L394.372 10 L394.372 720 L339.372 720 Z"/>
+      <path class="board-fill outline" d="M395.934 10 L405.934 0 L440.934 0 L450.934 10 L450.934 720 L395.934 720 Z"/>
+      <path class="board-fill outline" d="M452.496 10 L462.496 0 L497.496 0 L507.496 10 L507.496 720 L452.496 720 Z"/>
+      <path class="board-fill outline" d="M509.058 10 L519.058 0 L554.058 0 L564.058 10 L564.058 720 L509.058 720 Z"/>
+      <path class="board-fill outline" d="M565.62 10 L575.62 0 L610.62 0 L620.62 10 L620.62 720 L565.62 720 Z"/>
+      <path class="board-fill outline" d="M622.182 10 L632.182 0 L667.182 0 L677.182 10 L677.182 720 L622.182 720 Z"/>
+      <path class="board-fill outline" d="M678.744 10 L688.744 0 L723.744 0 L733.744 10 L733.744 720 L678.744 720 Z"/>
+      <path class="board-fill outline" d="M735.306 10 L745.306 0 L780.306 0 L790.306 10 L790.306 720 L735.306 720 Z"/>
+      <path class="board-fill outline" d="M791.868 10 L801.868 0 L836.868 0 L846.868 10 L846.868 720 L791.868 720 Z"/>
+      <path class="board-fill outline" d="M848.43 10 L858.43 0 L893.43 0 L903.43 10 L903.43 720 L848.43 720 Z"/>
+      <path class="board-fill outline" d="M904.992 10 L914.992 0 L949.992 0 L959.992 10 L959.992 720 L904.992 720 Z"/>
+    </g>
+
+    <g id="top-cap-line">
+      <path d="M0 10 L10 0 L45 0 L55 10 M56.562 10 L66.562 0 L101.562 0 L111.562 10 M113.124 10 L123.124 0 L158.124 0 L168.124 10 M169.686 10 L179.686 0 L214.686 0 L224.686 10 M226.248 10 L236.248 0 L271.248 0 L281.248 10 M282.81 10 L292.81 0 L327.81 0 L337.81 10 M339.372 10 L349.372 0 L384.372 0 L394.372 10 M395.934 10 L405.934 0 L440.934 0 L450.934 10 M452.496 10 L462.496 0 L497.496 0 L507.496 10 M509.058 10 L519.058 0 L554.058 0 L564.058 10 M565.62 10 L575.62 0 L610.62 0 L620.62 10 M622.182 10 L632.182 0 L667.182 0 L677.182 10 M678.744 10 L688.744 0 L723.744 0 L733.744 10 M735.306 10 L745.306 0 L780.306 0 L790.306 10 M791.868 10 L801.868 0 L836.868 0 L846.868 10 M848.43 10 L858.43 0 L893.43 0 L903.43 10 M904.992 10 L914.992 0 L949.992 0 L959.992 10" class="detail"/>
+    </g>
+
+    <g id="nails">
+      <g fill="#174d7c">
+        <circle cx="18" cy="135" r="3.2"/><circle cx="37" cy="135" r="3.2"/><circle cx="18" cy="354" r="3.2"/><circle cx="37" cy="354" r="3.2"/><circle cx="18" cy="600" r="3.2"/><circle cx="37" cy="600" r="3.2"/>
+        <circle cx="74.562" cy="135" r="3.2"/><circle cx="93.562" cy="135" r="3.2"/><circle cx="74.562" cy="354" r="3.2"/><circle cx="93.562" cy="354" r="3.2"/><circle cx="74.562" cy="600" r="3.2"/><circle cx="93.562" cy="600" r="3.2"/>
+        <circle cx="131.124" cy="135" r="3.2"/><circle cx="150.124" cy="135" r="3.2"/><circle cx="131.124" cy="354" r="3.2"/><circle cx="150.124" cy="354" r="3.2"/><circle cx="131.124" cy="600" r="3.2"/><circle cx="150.124" cy="600" r="3.2"/>
+        <circle cx="187.686" cy="135" r="3.2"/><circle cx="206.686" cy="135" r="3.2"/><circle cx="187.686" cy="354" r="3.2"/><circle cx="206.686" cy="354" r="3.2"/><circle cx="187.686" cy="600" r="3.2"/><circle cx="206.686" cy="600" r="3.2"/>
+        <circle cx="244.248" cy="135" r="3.2"/><circle cx="263.248" cy="135" r="3.2"/><circle cx="244.248" cy="354" r="3.2"/><circle cx="263.248" cy="354" r="3.2"/><circle cx="244.248" cy="600" r="3.2"/><circle cx="263.248" cy="600" r="3.2"/>
+        <circle cx="300.81" cy="135" r="3.2"/><circle cx="319.81" cy="135" r="3.2"/><circle cx="300.81" cy="354" r="3.2"/><circle cx="319.81" cy="354" r="3.2"/><circle cx="300.81" cy="600" r="3.2"/><circle cx="319.81" cy="600" r="3.2"/>
+        <circle cx="357.372" cy="135" r="3.2"/><circle cx="376.372" cy="135" r="3.2"/><circle cx="357.372" cy="354" r="3.2"/><circle cx="376.372" cy="354" r="3.2"/><circle cx="357.372" cy="600" r="3.2"/><circle cx="376.372" cy="600" r="3.2"/>
+        <circle cx="413.934" cy="135" r="3.2"/><circle cx="432.934" cy="135" r="3.2"/><circle cx="413.934" cy="354" r="3.2"/><circle cx="432.934" cy="354" r="3.2"/><circle cx="413.934" cy="600" r="3.2"/><circle cx="432.934" cy="600" r="3.2"/>
+        <circle cx="470.496" cy="135" r="3.2"/><circle cx="489.496" cy="135" r="3.2"/><circle cx="470.496" cy="354" r="3.2"/><circle cx="489.496" cy="354" r="3.2"/><circle cx="470.496" cy="600" r="3.2"/><circle cx="489.496" cy="600" r="3.2"/>
+        <circle cx="527.058" cy="135" r="3.2"/><circle cx="546.058" cy="135" r="3.2"/><circle cx="527.058" cy="354" r="3.2"/><circle cx="546.058" cy="354" r="3.2"/><circle cx="527.058" cy="600" r="3.2"/><circle cx="546.058" cy="600" r="3.2"/>
+        <circle cx="583.62" cy="135" r="3.2"/><circle cx="602.62" cy="135" r="3.2"/><circle cx="583.62" cy="354" r="3.2"/><circle cx="602.62" cy="354" r="3.2"/><circle cx="583.62" cy="600" r="3.2"/><circle cx="602.62" cy="600" r="3.2"/>
+        <circle cx="640.182" cy="135" r="3.2"/><circle cx="659.182" cy="135" r="3.2"/><circle cx="640.182" cy="354" r="3.2"/><circle cx="659.182" cy="354" r="3.2"/><circle cx="640.182" cy="600" r="3.2"/><circle cx="659.182" cy="600" r="3.2"/>
+        <circle cx="696.744" cy="135" r="3.2"/><circle cx="715.744" cy="135" r="3.2"/><circle cx="696.744" cy="354" r="3.2"/><circle cx="715.744" cy="354" r="3.2"/><circle cx="696.744" cy="600" r="3.2"/><circle cx="715.744" cy="600" r="3.2"/>
+        <circle cx="753.306" cy="135" r="3.2"/><circle cx="772.306" cy="135" r="3.2"/><circle cx="753.306" cy="354" r="3.2"/><circle cx="772.306" cy="354" r="3.2"/><circle cx="753.306" cy="600" r="3.2"/><circle cx="772.306" cy="600" r="3.2"/>
+        <circle cx="809.868" cy="135" r="3.2"/><circle cx="828.868" cy="135" r="3.2"/><circle cx="809.868" cy="354" r="3.2"/><circle cx="828.868" cy="354" r="3.2"/><circle cx="809.868" cy="600" r="3.2"/><circle cx="828.868" cy="600" r="3.2"/>
+        <circle cx="866.43" cy="135" r="3.2"/><circle cx="885.43" cy="135" r="3.2"/><circle cx="866.43" cy="354" r="3.2"/><circle cx="885.43" cy="354" r="3.2"/><circle cx="866.43" cy="600" r="3.2"/><circle cx="885.43" cy="600" r="3.2"/>
+        <circle cx="922.992" cy="135" r="3.2"/><circle cx="941.992" cy="135" r="3.2"/><circle cx="922.992" cy="354" r="3.2"/><circle cx="941.992" cy="354" r="3.2"/><circle cx="922.992" cy="600" r="3.2"/><circle cx="941.992" cy="600" r="3.2"/>
+      </g>
+    </g>
+
+    <g id="woodgrain">
+      <path d="M18 52 C32 124, 15 207, 32 278 S19 434, 30 520 S21 646, 34 695" class="woodgrain"/>
+      <path d="M81 44 C68 132, 91 221, 78 315 S91 471, 75 552 S88 646, 81 699" class="woodgrain"/>
+      <path d="M141 60 C153 131, 134 246, 150 319 S132 459, 148 545 S137 639, 151 693" class="woodgrain"/>
+      <path d="M204 42 C186 122, 211 222, 197 305 S212 462, 194 545 S206 642, 196 696" class="woodgrain"/>
+      <path d="M252 57 C266 143, 244 233, 260 315 S241 444, 258 534 S246 642, 263 694" class="woodgrain"/>
+      <path d="M313 49 C297 135, 318 236, 305 322 S321 461, 305 552 S316 645, 309 696" class="woodgrain"/>
+      <path d="M368 62 C384 146, 360 235, 376 312 S358 462, 375 543 S364 647, 378 696" class="woodgrain"/>
+      <path d="M424 47 C409 135, 430 232, 418 318 S433 460, 416 550 S428 644, 420 696" class="woodgrain"/>
+      <path d="M484 60 C498 140, 477 237, 492 318 S475 459, 491 542 S481 646, 495 695" class="woodgrain"/>
+      <path d="M538 49 C522 134, 545 232, 532 316 S547 462, 531 551 S542 644, 536 696" class="woodgrain"/>
+      <path d="M595 58 C609 145, 587 235, 603 315 S584 460, 601 546 S590 643, 604 696" class="woodgrain"/>
+      <path d="M651 48 C637 132, 657 229, 646 312 S660 459, 644 548 S655 644, 649 696" class="woodgrain"/>
+      <path d="M710 59 C724 141, 702 235, 718 317 S700 458, 716 541 S706 646, 720 695" class="woodgrain"/>
+      <path d="M764 49 C748 133, 771 230, 758 315 S773 461, 758 551 S768 644, 762 696" class="woodgrain"/>
+      <path d="M821 60 C835 145, 814 235, 829 314 S812 459, 828 545 S817 646, 831 696" class="woodgrain"/>
+      <path d="M878 47 C862 132, 884 232, 872 314 S887 461, 871 550 S881 644, 875 696" class="woodgrain"/>
+      <path d="M934 61 C947 144, 927 234, 941 315 S925 461, 940 544 S930 645, 944 696" class="woodgrain"/>
+    </g>
+
+    <g id="dimensions">
+      <line x1="0" y1="760" x2="0" y2="806" class="ext"/>
+      <line x1="960" y1="760" x2="960" y2="806" class="ext"/>
+      <line x1="0" y1="790" x2="960" y2="790" class="dim"/>
+      <rect x="408" y="764" width="144" height="40" fill="#f6fbff"/>
+      <text x="428" y="791" class="note">8'-0"</text>
+
+      <line x1="-68" y1="0" x2="-26" y2="0" class="ext"/>
+      <line x1="-68" y1="720" x2="-26" y2="720" class="ext"/>
+      <line x1="-52" y1="0" x2="-52" y2="720" class="dim"/>
+      <rect x="-96" y="312" width="88" height="42" fill="#f6fbff" transform="rotate(-90 -52 333)"/>
+      <text x="-72" y="343" class="note" transform="rotate(-90 -72 343)">6'-0"</text>
+    </g>
+
+    <g id="callouts">
+      <line x1="48" y1="22" x2="-92" y2="-70" class="thin"/>
+      <circle cx="48" cy="22" r="7" fill="none" stroke="#174d7c" stroke-width="2"/>
+      <text x="-245" y="-82" class="small-note">DOG-EAR TOP CUT</text>
+      <text x="-245" y="-55" class="micro">45 DEGREE CORNERS, REPEATING PICKET PROFILE</text>
+
+      <line x1="490" y1="362" x2="600" y2="252" class="thin"/>
+      <circle cx="490" cy="362" r="7" fill="none" stroke="#174d7c" stroke-width="2"/>
+      <text x="610" y="240" class="small-note">FASTENER LAYOUT</text>
+      <text x="610" y="266" class="micro">TWO NAILS OR SCREWS PER RAIL AT EACH PICKET</text>
+
+      <line x1="930" y1="720" x2="1080" y2="750" class="thin"/>
+      <circle cx="930" cy="720" r="7" fill="none" stroke="#174d7c" stroke-width="2"/>
+      <text x="1090" y="742" class="small-note">BOARD BOTTOMS FLUSH</text>
+      <text x="1090" y="768" class="micro">STANDARD PANEL FACE SHOWN WITHOUT POSTS</text>
+    </g>
+  </g>
+
+  <g id="material-key" transform="translate(90 110)">
+    <rect x="0" y="0" width="118" height="56" fill="rgba(23,77,124,.018)" stroke="#174d7c" stroke-width="3"/>
+    <path d="M10 56 L10 0 M34 56 L34 0 M58 56 L58 0 M82 56 L82 0 M106 56 L106 0" class="thin"/>
+    <text x="0" y="88" class="small-note">5.5" PICKETS</text>
+    <text x="0" y="114" class="micro">17 BOARDS ACROSS 96" WIDTH</text>
+    <rect x="0" y="154" width="118" height="24" class="rail-fill"/>
+    <text x="0" y="211" class="small-note">2x4 RAILS</text>
+    <text x="0" y="237" class="micro">DASHED BEHIND FRONT FACE</text>
+  </g>
+</svg>
