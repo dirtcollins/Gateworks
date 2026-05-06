@@ -104,10 +104,10 @@ export function CartPageClient() {
               </span>
             </div>
             <button
-              className="mt-5 h-12 w-full bg-jobsite-safety px-6 text-base font-bold text-white"
+              className="truewerk-cta mt-5 h-12 w-full bg-jobsite-ink px-6 text-sm font-black uppercase tracking-[0.1em] text-white"
               type="button"
             >
-              Checkout Later
+              <span>Checkout later</span>
             </button>
           </aside>
         </div>

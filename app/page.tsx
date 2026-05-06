@@ -45,11 +45,11 @@ export default async function Home({ searchParams }: HomeProps) {
       <div className="mb-4 border border-jobsite-rail bg-white p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-jobsite-safety">
-              GateWorks Pro
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-jobsite-steel">
+              TrueWerk Supply
             </p>
-            <h1 className="text-2xl font-extrabold text-jobsite-ink md:text-3xl">
-              Gate and fence hardware
+            <h1 className="text-2xl font-black text-jobsite-ink md:text-3xl">
+              Technical gate and fence hardware
             </h1>
           </div>
           <div className="grid grid-cols-3 divide-x divide-jobsite-rail border border-jobsite-rail text-center text-xs font-bold">

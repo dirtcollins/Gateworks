@@ -10,14 +10,14 @@ const config: Config = {
     extend: {
       colors: {
         jobsite: {
-          ink: "#171717",
-          steel: "#5f6368",
-          rail: "#dedede",
-          paper: "#f4f4f4",
-          safety: "#f96302",
-          pine: "#00873c",
-          black: "#1b1b1b",
-          amber: "#fff7ed"
+          ink: "#111111",
+          steel: "#5c5a54",
+          rail: "#d8d3ca",
+          paper: "#f3f0e9",
+          safety: "#111111",
+          pine: "#2f6f4e",
+          black: "#111111",
+          amber: "#eee6d8"
         }
       },
       boxShadow: {
@@ -34,11 +34,17 @@ const config: Config = {
           "0%": { transform: "scale(1)" },
           "45%": { transform: "scale(1.35)" },
           "100%": { transform: "scale(1)" }
+        },
+        "button-confirm": {
+          "0%": { transform: "scale(1)", boxShadow: "inset 0 0 0 0 rgba(255,255,255,0)" },
+          "35%": { transform: "scale(0.98)", boxShadow: "inset 0 -52px 0 0 rgba(47,111,78,0.96)" },
+          "100%": { transform: "scale(1)", boxShadow: "inset 0 -52px 0 0 rgba(47,111,78,0.96)" }
         }
       },
       animation: {
         "cart-bump": "cart-bump 650ms ease-out",
-        "cart-badge": "cart-badge 650ms ease-out"
+        "cart-badge": "cart-badge 650ms ease-out",
+        "button-confirm": "button-confirm 520ms ease-out both"
       }
     }
   },

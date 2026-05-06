@@ -75,7 +75,7 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
         isList && "border-t-0"
       )}
     >
-      <p className="text-[11px] font-bold uppercase tracking-wide text-jobsite-steel">
+      <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-jobsite-steel">
         {product.category.name}
       </p>
       <h3
@@ -109,17 +109,19 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
         {isRail ? (
           <button
             className={cn(
-              "mt-2 flex h-9 w-full items-center justify-center gap-1 border-2 text-sm font-extrabold transition-all duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:border-jobsite-rail disabled:text-jobsite-steel",
+              "truewerk-cta mt-2 flex h-9 w-full items-center justify-center gap-1 border text-xs font-black uppercase tracking-[0.1em] transition-all duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:border-jobsite-rail disabled:text-jobsite-steel",
               justAdded
-                ? "border-jobsite-pine bg-jobsite-pine text-white"
-                : "border-jobsite-safety bg-white text-jobsite-safety hover:border-jobsite-ink hover:bg-jobsite-ink hover:text-white"
+                ? "is-added animate-button-confirm border-jobsite-pine bg-jobsite-ink text-white"
+                : "border-jobsite-ink bg-white text-jobsite-ink hover:text-white"
             )}
             disabled={!defaultVariant || defaultVariant.inventory !== "in_stock"}
             type="button"
             onClick={addDefaultVariantToCart}
           >
-            {justAdded ? <Check size={16} /> : null}
-            {justAdded ? "Added" : "Add to Cart"}
+            <span className="inline-flex items-center gap-1">
+              {justAdded ? <Check size={15} /> : null}
+              {justAdded ? "Added" : "+ ADD"}
+            </span>
           </button>
         ) : null}
       </div>
@@ -129,7 +131,7 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
   if (isRail) {
     return (
       <div
-        className="group grid min-h-full w-[220px] grid-rows-[150px_1fr] border border-jobsite-rail bg-white transition hover:shadow-toolbar"
+        className="group grid min-h-full w-[220px] grid-rows-[150px_1fr] border border-jobsite-rail bg-white transition hover:border-jobsite-ink"
       >
         <Link href={`/products/${product.slug}`}>{imageContent}</Link>
         {detailsContent}

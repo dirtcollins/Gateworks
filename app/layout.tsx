@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { MapPin, Menu, Search, ShieldCheck } from "lucide-react";
+import { Menu, Search, User } from "lucide-react";
 import "./globals.css";
 import { CartLink } from "@/components/cart-link";
 
@@ -18,51 +18,65 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <header className="sticky top-0 z-40 bg-jobsite-black text-white shadow-sm">
-          <div className="bg-jobsite-safety px-4 py-1 text-center text-xs font-bold">
-            Phase 1 Product System
+        <header className="sticky top-0 z-40 border-b border-jobsite-rail bg-white text-jobsite-ink shadow-sm">
+          <div className="grid grid-cols-1 bg-jobsite-black text-[11px] font-extrabold uppercase tracking-[0.16em] text-white sm:grid-cols-2">
+            <Link className="px-4 py-2 text-center hover:bg-white/10" href="/">
+              Save up to 25% | Final Few
+            </Link>
+            <Link className="hidden border-l border-white/15 px-4 py-2 text-center hover:bg-white/10 sm:block" href="/">
+              Free shipping on orders $100+
+            </Link>
           </div>
-          <div className="mx-auto flex max-w-[1500px] items-center gap-3 px-4 py-3">
+          <div className="mx-auto grid max-w-[1500px] grid-cols-[auto_1fr_auto] items-center gap-4 px-4 py-4 lg:grid-cols-[1fr_auto_1fr]">
             <button
               aria-label="Open menu"
-              className="grid size-10 shrink-0 place-items-center border border-white/20 lg:hidden"
+              className="grid size-10 shrink-0 place-items-center border border-jobsite-rail lg:hidden"
               type="button"
             >
               <Menu size={22} />
             </button>
-            <Link className="flex shrink-0 items-center gap-2" href="/">
-              <span className="grid size-10 place-items-center bg-jobsite-safety text-white">
-                <ShieldCheck size={22} />
-              </span>
-              <span className="hidden text-lg font-extrabold tracking-tight sm:block">
-                GateWorks Pro
-              </span>
+            <nav className="hidden items-center gap-7 text-sm font-extrabold uppercase tracking-[0.08em] lg:flex">
+              <Link href="/">Men</Link>
+              <Link href="/">Women</Link>
+              <Link href="/">Gear</Link>
+              <Link href="/">Workwear System</Link>
+              <Link href="/">Mission</Link>
+            </nav>
+            <Link className="justify-self-center text-2xl font-black uppercase tracking-[0.18em]" href="/">
+              TrueWerk
             </Link>
-            <form className="relative min-w-0 flex-1" action="/">
-              <input
-                className="h-11 w-full border-0 bg-white pl-4 pr-12 text-sm text-jobsite-ink outline-none"
-                name="q"
-                placeholder="What can we help you find today?"
-                type="search"
-              />
+            <nav className="flex items-center justify-end gap-2">
+              <form className="relative hidden min-w-[240px] xl:block" action="/">
+                <input
+                  className="h-10 w-full border border-jobsite-rail bg-jobsite-paper pl-4 pr-10 text-sm text-jobsite-ink outline-none focus:border-jobsite-ink"
+                  name="q"
+                  placeholder="Search"
+                  type="search"
+                />
+                <button
+                  aria-label="Search"
+                  className="absolute right-0 top-0 grid h-10 w-10 place-items-center text-jobsite-ink"
+                  type="submit"
+                >
+                  <Search size={19} />
+                </button>
+              </form>
               <button
-                aria-label="Search"
-                className="absolute right-0 top-0 grid h-11 w-12 place-items-center bg-jobsite-safety text-white"
-                type="submit"
+                aria-label="Open search"
+                className="grid size-10 place-items-center border border-transparent hover:border-jobsite-rail xl:hidden"
+                type="button"
               >
                 <Search size={20} />
               </button>
-            </form>
-            <div className="hidden items-center gap-2 border-l border-white/20 pl-4 text-xs md:flex">
-              <MapPin size={18} />
-              <span>
-                <strong className="block text-white">Bakersfield</strong>
-                93313
-              </span>
-            </div>
-            <nav className="flex items-center gap-2">
               <Link
-                className="hidden px-3 py-2 text-sm font-semibold text-white hover:bg-white/10 sm:block"
+                aria-label="Open account page"
+                className="grid size-10 place-items-center border border-transparent hover:border-jobsite-rail"
+                href="/admin"
+              >
+                <User size={20} />
+              </Link>
+              <Link
+                className="hidden px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-jobsite-ink hover:bg-jobsite-paper sm:block"
                 href="/admin"
               >
                 Admin
@@ -70,13 +84,13 @@ export default function RootLayout({
               <CartLink />
             </nav>
           </div>
-          <div className="border-t border-white/10 bg-[#2b2b2b]">
-            <div className="mx-auto flex max-w-[1500px] gap-5 overflow-x-auto px-4 py-2 text-xs font-bold uppercase tracking-wide text-white/85">
-              <Link href="/">Products</Link>
-              <span>Gate Hardware</span>
-              <span>Fence Hardware</span>
-              <span>Bulk Pricing</span>
-              <span>Jobsite Pickup</span>
+          <div className="border-t border-jobsite-rail lg:hidden">
+            <div className="mx-auto flex max-w-[1500px] gap-6 overflow-x-auto px-4 py-3 text-xs font-extrabold uppercase tracking-[0.08em] text-jobsite-steel">
+              <Link href="/">Men</Link>
+              <Link href="/">Women</Link>
+              <Link href="/">Gear</Link>
+              <Link href="/">Workwear System</Link>
+              <Link href="/">Mission</Link>
             </div>
           </div>
         </header>

@@ -142,7 +142,7 @@ export function ProductPageClient({
 
   return (
     <main className="pb-24 md:pb-0">
-      <section className="border-b border-jobsite-rail bg-white">
+      <section className="border-b border-jobsite-rail bg-jobsite-paper">
         <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-2 px-4 py-2 text-xs font-semibold text-jobsite-steel">
           <span>Fencing & Gates</span>
           <span>/</span>
@@ -152,7 +152,7 @@ export function ProductPageClient({
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-[1500px] gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_588px]">
+      <section className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 lg:grid-cols-[minmax(0,1fr)_588px]">
         <div className="border border-jobsite-rail bg-white p-3">
           <div className="relative aspect-[1.18/1] bg-white">
             <Image
@@ -200,10 +200,10 @@ export function ProductPageClient({
               <span>Store SKU # {skuTail.slice(-5)}</span>
               <span>{product.category.name}</span>
             </div>
-            <p className="text-sm font-semibold text-jobsite-steel">
-              GateWorks Pro
+            <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-jobsite-steel">
+              TrueWerk Supply
             </p>
-            <h1 className="mt-1 text-2xl font-bold leading-tight text-jobsite-ink">
+            <h1 className="mt-2 text-3xl font-black leading-tight text-jobsite-ink">
               {product.title}
             </h1>
             <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -222,11 +222,11 @@ export function ProductPageClient({
           </div>
 
           <div className="mt-3 border border-jobsite-rail bg-white p-4">
-            <p className="text-xs font-bold uppercase text-jobsite-steel">
-              Preferred Pricing
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-jobsite-steel">
+              Member Pricing
             </p>
             <div className="mt-1 flex items-end gap-2">
-              <p className="text-4xl font-extrabold text-jobsite-ink">
+              <p className="text-4xl font-black text-jobsite-ink">
                 {formatCurrency(selectedVariant.price)}
               </p>
               <p className="pb-1 text-sm font-semibold text-jobsite-pine">
@@ -242,7 +242,7 @@ export function ProductPageClient({
             <ul className="grid gap-2 text-sm leading-5 text-jobsite-ink">
               <li>• {product.description}</li>
               <li>• Updates price, SKU, image, and inventory without page reload.</li>
-              <li>• Built for simple Phase 1 construction ecommerce workflows.</li>
+              <li>• Built for durable construction ecommerce workflows.</li>
             </ul>
           </div>
 
@@ -268,10 +268,10 @@ export function ProductPageClient({
                             <button
                               key={`${option}-${value}`}
                               className={cn(
-                                "min-h-10 border px-3 text-sm font-bold transition",
+                                "min-h-10 border px-3 text-sm font-extrabold transition",
                                 isSelected
-                                  ? "border-2 border-jobsite-safety bg-jobsite-amber text-jobsite-ink"
-                                  : "border-jobsite-rail bg-white text-jobsite-ink hover:border-jobsite-safety"
+                                  ? "border-2 border-jobsite-ink bg-jobsite-amber text-jobsite-ink"
+                                  : "border-jobsite-rail bg-white text-jobsite-ink hover:border-jobsite-ink"
                               )}
                               type="button"
                               onClick={() => handleOptionChange(option, value)}
@@ -307,7 +307,7 @@ export function ProductPageClient({
 
           <div className="grid grid-cols-2 gap-2 border-b border-jobsite-rail p-4">
             <button
-              className="border-2 border-jobsite-safety bg-jobsite-amber p-3 text-left"
+              className="border-2 border-jobsite-ink bg-jobsite-amber p-3 text-left"
               type="button"
             >
               <span className="block text-sm font-extrabold">Pickup</span>
@@ -338,17 +338,19 @@ export function ProductPageClient({
               <QuantitySelector value={quantity} onChange={setQuantity} />
               <button
                 className={cn(
-                  "inline-flex h-12 flex-1 items-center justify-center gap-2 px-5 text-base font-extrabold text-white transition-all duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-jobsite-rail disabled:text-jobsite-steel",
+                  "truewerk-cta inline-flex h-12 flex-1 items-center justify-center gap-2 bg-jobsite-ink px-5 text-sm font-black uppercase tracking-[0.1em] text-white transition-all duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-jobsite-rail disabled:text-jobsite-steel",
                   justAdded
-                    ? "bg-jobsite-pine"
-                    : "bg-jobsite-safety hover:bg-jobsite-ink"
+                    ? "is-added animate-button-confirm"
+                    : "hover:text-white"
                 )}
                 disabled={!isInStock}
                 type="button"
                 onClick={addToCart}
               >
-                {justAdded ? <Check size={20} /> : <ShoppingCart size={20} />}
-                {justAdded ? "Added" : "Add to Cart"}
+                <span className="inline-flex items-center gap-2">
+                  {justAdded ? <Check size={20} /> : <ShoppingCart size={20} />}
+                  {justAdded ? "Added" : "Add to cart"}
+                </span>
               </button>
             </div>
           </div>
@@ -419,17 +421,19 @@ export function ProductPageClient({
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-jobsite-rail bg-white p-3 shadow-toolbar md:hidden">
         <button
           className={cn(
-            "inline-flex h-14 w-full items-center justify-center gap-2 px-6 text-base font-bold text-white transition-all duration-200 active:scale-[0.98] disabled:bg-jobsite-rail disabled:text-jobsite-steel",
-            justAdded ? "bg-jobsite-pine" : "bg-jobsite-safety"
+            "truewerk-cta inline-flex h-14 w-full items-center justify-center gap-2 bg-jobsite-ink px-6 text-sm font-black uppercase tracking-[0.1em] text-white transition-all duration-200 active:scale-[0.98] disabled:bg-jobsite-rail disabled:text-jobsite-steel",
+            justAdded ? "is-added animate-button-confirm" : ""
           )}
           disabled={!isInStock}
           type="button"
           onClick={addToCart}
         >
-          {justAdded ? <Check size={20} /> : <ShoppingCart size={20} />}
-          {justAdded
-            ? "Added"
-            : `Add ${quantity} to Cart - ${formatCurrency(selectedVariant.price * quantity)}`}
+          <span className="inline-flex items-center gap-2">
+            {justAdded ? <Check size={20} /> : <ShoppingCart size={20} />}
+            {justAdded
+              ? "Added"
+              : `Add ${quantity} to cart - ${formatCurrency(selectedVariant.price * quantity)}`}
+          </span>
         </button>
       </div>
     </main>

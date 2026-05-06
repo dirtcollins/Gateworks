@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingBag } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useCartStore } from "@/lib/cart-store";
 import { cn } from "@/lib/utils";
@@ -29,12 +29,12 @@ export function CartLink() {
     <Link
       aria-label="Open cart"
       className={cn(
-        "relative grid size-11 place-items-center bg-jobsite-safety text-white transition-transform",
+        "relative grid size-10 place-items-center border border-jobsite-ink bg-jobsite-ink text-white transition-transform hover:bg-white hover:text-jobsite-ink",
         isAnimating && "animate-cart-bump"
       )}
       href="/cart"
     >
-      <ShoppingCart size={22} />
+      <ShoppingBag size={20} />
       {itemCount > 0 ? (
         <span
           className={cn(
