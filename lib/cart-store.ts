@@ -1,0 +1,58 @@
+"use client";
+
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import type { CartItem } from "@/lib/types";
+
+type CartState = {
+  items: CartItem[];
+  addItem: (item: CartItem) => void;
+  removeItem: (variantId: string) => void;
+  updateQuantity: (variantId: string, quantity: number) => void;
+  clearCart: () => void;
+};
+
+export const useCartStore = create<CartState>()(
+  persist(
+    (set) => ({
+      items: [],
+      addItem: (item) =>
+        set((state) => {
+          const existing = state.items.find(
+            (cartItem) => cartItem.variantId === item.variantId
+          );
+
+          if (!existing) {
+            return { items: [...state.items, item] };
+          }
+
+          return {
+            items: state.items.map((cartItem) =>
+              cartItem.variantId === item.variantId
+                ? {
+                    ...cartItem,
+                    quantity: cartItem.quantity + item.quantity
+                  }
+                : cartItem
+            )
+          };
+        }),
+      removeItem: (variantId) =>
+        set((state) => ({
+          items: state.items.filter((item) => item.variantId !== variantId)
+        })),
+      updateQuantity: (variantId, quantity) =>
+        set((state) => ({
+          items: state.items.map((item) =>
+            item.variantId === variantId
+              ? { ...item, quantity: Math.max(1, quantity) }
+              : item
+          )
+        })),
+      clearCart: () => set({ items: [] })
+    }),
+    {
+      name: "construction-commerce-cart"
+    }
+  )
+);
