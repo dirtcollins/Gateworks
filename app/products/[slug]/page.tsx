@@ -1,5 +1,10 @@
 import { notFound } from "next/navigation";
-import { getProduct, getRelatedProducts, products } from "@/lib/catalog";
+import {
+  getProduct,
+  getRelatedProducts,
+  mergeCatalogProducts,
+  products
+} from "@/lib/catalog";
 import { ProductPageClient } from "@/components/product-page-client";
 import { fetchSupabaseProduct, fetchSupabaseProducts } from "@/lib/supabase-catalog";
 
@@ -27,13 +32,13 @@ export async function generateMetadata({ params }: ProductPageProps) {
 export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
   const supabaseProducts = await fetchSupabaseProducts();
-  const product = supabaseProducts?.find((item) => item.slug === slug) || getProduct(slug);
+  const activeProducts = mergeCatalogProducts(supabaseProducts, products);
+  const product = activeProducts.find((item) => item.slug === slug) || getProduct(slug);
 
   if (!product) {
     notFound();
   }
 
-  const activeProducts = supabaseProducts || products;
   const relatedProducts = activeProducts
     .filter(
       (candidate) =>

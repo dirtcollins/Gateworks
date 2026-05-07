@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --truewerk-font: "Avenir Next", Avenir, "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: #f3f0e9;
+  color: #111111;
+  font-family: var(--truewerk-font);
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.truewerk-cta {
+  position: relative;
+  overflow: hidden;
+}
+
+.truewerk-cta::before {
+  background: #2f6f4e;
+  content: "";
+  inset: auto 0 0;
+  height: 0;
+  position: absolute;
+  transition: height 180ms ease;
+  z-index: 0;
+}
+
+.truewerk-cta:hover::before,
+.truewerk-cta.is-added::before {
+  height: 100%;
+}
+
+.truewerk-cta > * {
+  position: relative;
+  z-index: 1;
+}

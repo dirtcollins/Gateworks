@@ -14,6 +14,10 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "mobileimages.lowes.com"
+      },
+      {
+        protocol: "https",
+        hostname: "www.hooverfence.com"
       }
     ]
   }

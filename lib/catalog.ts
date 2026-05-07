@@ -4,6 +4,7 @@ import { slugify } from "@/lib/utils";
 
 type RawProduct = {
   source?: string;
+  brand?: string;
   source_category_slug: string;
   source_category: string;
   product_grouping: string;
@@ -232,7 +233,7 @@ function buildProduct(groupSlug: string, groupItems: RawProduct[]): Product {
     })),
     variants,
     specifications: {
-      Brand: first.source_category ? "National Hardware" : "Construction Supply",
+      Brand: first.brand || first.source || "Construction Supply",
       Category: first.source_category,
       "Catalog Number": first.catalog_number || "N/A",
       "Primary SKU": first.stock_number || "N/A",
@@ -425,12 +426,131 @@ function withDecorativeTHingeVariants(product: Product): Product {
   };
 }
 
-export const products: Product[] = Array.from(groupedProducts.entries())
-  .slice(0, 50)
+function withAdjustOMaticLatchDetails(product: Product): Product {
+  if (product.slug !== "21-adjust-o-matic-latch") {
+    return product;
+  }
+
+  return {
+    ...product,
+    description:
+      "Adjust-O-Matic latch for in-swing gates and doors with an automatic latch action, reversible installation, and a strike that can mount on either the gate or the post.",
+    details: [
+      "Suitable for in-swing gates, doors, and similar exterior openings.",
+      "Hot-rolled steel case and strike with a steel rod bar.",
+      "Strike can be mounted either on the gate or on the post.",
+      "Latches automatically after closing.",
+      "Designed for right-hand or left-hand applications.",
+      "Mounting screws are included."
+    ],
+    specifications: {
+      ...product.specifications,
+      Brand: "National Hardware",
+      Category: "Gate Latches & Locks",
+      "Product Family": "Adjust-O-Matic Latch",
+      "Available Sizes": "4\", 6\"",
+      "Available Finishes": "Black, Zinc Plated",
+      "Available Packaging": "Visual Pack, Bagged",
+      "Each UPCs": product.variants
+        .map((variant) => {
+          const source = rawProducts.find((item) => item.stock_number === variant.sku);
+          return source?.upc ? `${variant.sku}: ${source.upc}` : undefined;
+        })
+        .filter(Boolean)
+        .join("; "),
+      "Technical Drawing":
+        "https://nationalhardwarestorage.blob.core.windows.net/documents/nh_td_v21a_n101-220.pdf",
+      "Weather Protection": "WeatherGuard finish protection",
+      "Installation Handing": "Right-hand or left-hand",
+      "Included Hardware": "Mounting screws"
+    }
+  };
+}
+
+const displayProductEntries = Array.from(groupedProducts.entries()).filter(
+  ([, groupItems], index) =>
+    index < 50 || groupItems.some((item) => item.source === "Hoover Fence")
+);
+
+export const products: Product[] = displayProductEntries
   .map(([groupSlug, groupItems]) => buildProduct(groupSlug, groupItems))
-  .map(withDecorativeTHingeVariants);
+  .map(withDecorativeTHingeVariants)
+  .map(withAdjustOMaticLatchDetails);
 
 export const categories = uniqueCategories(rawProducts);
+
+function mergeProductData(fallback: Product, primary: Product): Product {
+  const variantMap = new Map<string, ProductVariant>();
+
+  fallback.variants.forEach((variant) => {
+    variantMap.set(variant.sku, variant);
+  });
+  primary.variants.forEach((variant) => {
+    variantMap.set(variant.sku, variant);
+  });
+
+  const variants = Array.from(variantMap.values()).sort(
+    (a, b) => sizeSortValue(a.options.length) - sizeSortValue(b.options.length)
+  );
+
+  const imageMap = new Map<string, Product["images"][number]>();
+  fallback.images.forEach((image) => imageMap.set(image.url, image));
+  primary.images.forEach((image) => imageMap.set(image.url, image));
+  variants.forEach((variant, index) => {
+    if (!imageMap.has(variant.image)) {
+      imageMap.set(variant.image, {
+        id: `${primary.id}-variant-image-${index + 1}`,
+        productId: primary.id,
+        variantId: variant.id,
+        url: variant.image,
+        alt: `${primary.title} image ${index + 1}`,
+        sortOrder: index + 1
+      });
+    }
+  });
+
+  const details =
+    fallback.details.length > primary.details.length ? fallback.details : primary.details;
+  const description =
+    fallback.description.length > primary.description.length
+      ? fallback.description
+      : primary.description;
+
+  return {
+    ...fallback,
+    ...primary,
+    description,
+    price: getDisplayPrice(variants),
+    images: Array.from(imageMap.values()).map((image, index) => ({
+      ...image,
+      sortOrder: index + 1
+    })),
+    variants,
+    specifications: {
+      ...fallback.specifications,
+      ...primary.specifications
+    },
+    details
+  };
+}
+
+export function mergeCatalogProducts(
+  primaryProducts: Product[] | null | undefined,
+  fallbackProducts: Product[] = products
+) {
+  const productMap = new Map<string, Product>();
+
+  fallbackProducts.forEach((product) => {
+    productMap.set(product.slug, product);
+  });
+
+  primaryProducts?.forEach((product) => {
+    const fallback = productMap.get(product.slug);
+    productMap.set(product.slug, fallback ? mergeProductData(fallback, product) : product);
+  });
+
+  return Array.from(productMap.values());
+}
 
 export function getProduct(slug: string) {
   return products.find((product) => product.slug === slug || product.id === slug);

@@ -39,12 +39,20 @@ const config: Config = {
           "0%": { transform: "scale(1)", boxShadow: "inset 0 0 0 0 rgba(255,255,255,0)" },
           "35%": { transform: "scale(0.98)", boxShadow: "inset 0 -52px 0 0 rgba(47,111,78,0.96)" },
           "100%": { transform: "scale(1)", boxShadow: "inset 0 -52px 0 0 rgba(47,111,78,0.96)" }
+        },
+        "heart-save": {
+          "0%": { transform: "scale(1)", filter: "drop-shadow(0 0 0 rgba(220,38,38,0))" },
+          "28%": { transform: "scale(1.38)", filter: "drop-shadow(0 0 8px rgba(220,38,38,0.35))" },
+          "52%": { transform: "scale(0.9)", filter: "drop-shadow(0 0 4px rgba(220,38,38,0.25))" },
+          "76%": { transform: "scale(1.14)", filter: "drop-shadow(0 0 6px rgba(220,38,38,0.3))" },
+          "100%": { transform: "scale(1)", filter: "drop-shadow(0 0 0 rgba(220,38,38,0))" }
         }
       },
       animation: {
         "cart-bump": "cart-bump 650ms ease-out",
         "cart-badge": "cart-badge 650ms ease-out",
-        "button-confirm": "button-confirm 520ms ease-out both"
+        "button-confirm": "button-confirm 520ms ease-out both",
+        "heart-save": "heart-save 720ms ease-out both"
       }
     }
   },

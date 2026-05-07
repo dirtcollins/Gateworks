@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { categories, searchProducts } from "@/lib/catalog";
+import { categories, mergeCatalogProducts, searchProducts } from "@/lib/catalog";
 import { ProductGrid } from "@/components/product-grid";
 import { SearchBar } from "@/components/search-bar";
 import { fetchSupabaseProducts } from "@/lib/supabase-catalog";
@@ -16,7 +16,9 @@ export default async function Home({ searchParams }: HomeProps) {
   const query = params.q || "";
   const category = params.category || "all";
   const supabaseProducts = await fetchSupabaseProducts();
-  const activeProducts = supabaseProducts || searchProducts("", "all");
+  const activeProducts = supabaseProducts
+    ? mergeCatalogProducts(supabaseProducts, searchProducts("", "all"))
+    : searchProducts("", "all");
   const activeCategories =
     supabaseProducts
       ? Array.from(
@@ -39,6 +41,10 @@ export default async function Home({ searchParams }: HomeProps) {
 
     return matchesCategory && matchesSearch;
   });
+  const variantCount = activeProducts.reduce(
+    (total, product) => total + product.variants.length,
+    0
+  );
 
   return (
     <main className="mx-auto max-w-[1500px] px-4 py-4 md:py-6">
@@ -54,11 +60,11 @@ export default async function Home({ searchParams }: HomeProps) {
           </div>
           <div className="grid grid-cols-3 divide-x divide-jobsite-rail border border-jobsite-rail text-center text-xs font-bold">
             <div className="px-4 py-2">
-              <span className="block text-jobsite-pine">50</span>
+              <span className="block text-jobsite-pine">{activeProducts.length}</span>
               Products
             </div>
             <div className="px-4 py-2">
-              <span className="block text-jobsite-pine">68</span>
+              <span className="block text-jobsite-pine">{variantCount}</span>
               Variants
             </div>
             <div className="px-4 py-2">

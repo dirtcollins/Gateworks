@@ -452,8 +452,8 @@ export function AdminDashboard({ products }: AdminDashboardProps) {
         </div>
       </div>
 
-      <div className="grid items-stretch gap-5 lg:grid-cols-[390px_1fr]">
-        <aside className="grid min-h-full grid-rows-[auto_1fr] border border-jobsite-rail bg-white">
+      <div className="grid min-h-0 items-stretch gap-5 lg:h-[calc(100vh-250px)] lg:grid-cols-[390px_1fr]">
+        <aside className="grid min-h-0 grid-rows-[auto_1fr] border border-jobsite-rail bg-white">
           <div className="border-b border-jobsite-rail p-4">
             <label className="relative block">
               <Search
@@ -469,7 +469,7 @@ export function AdminDashboard({ products }: AdminDashboardProps) {
             </label>
           </div>
 
-          <div className="overflow-auto">
+          <div className="min-h-0 overflow-auto">
             {filteredProducts.map((product, index) => {
               const isSelected = selectedProduct?.id === product.id;
               const image =
@@ -521,7 +521,7 @@ export function AdminDashboard({ products }: AdminDashboardProps) {
           </div>
         </aside>
 
-        <section className="border border-jobsite-rail bg-white">
+        <section className="min-h-0 overflow-auto border border-jobsite-rail bg-white">
           {selectedProduct ? (
             <>
               <div className="border-b border-jobsite-rail p-5">

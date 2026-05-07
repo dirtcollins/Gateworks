@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { Menu, Search, User } from "lucide-react";
 import "./globals.css";
 import { CartLink } from "@/components/cart-link";
+import { ListLink } from "@/components/list-link";
+import { QuoteLink } from "@/components/quote-link";
 
 export const metadata: Metadata = {
   title: "Construction Commerce Phase 1",
@@ -81,6 +83,8 @@ export default function RootLayout({
               >
                 Admin
               </Link>
+              <ListLink />
+              <QuoteLink />
               <CartLink />
             </nav>
           </div>

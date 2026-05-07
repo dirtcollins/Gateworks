@@ -9,15 +9,19 @@ import {
   ClipboardList,
   Heart,
   PackageX,
+  Plus,
   Share2,
   ShoppingCart,
   Star,
-  Truck
+  Truck,
+  X
 } from "lucide-react";
 import { Accordion } from "@/components/accordion";
 import { ProductRail } from "@/components/product-rail";
 import { QuantitySelector } from "@/components/quantity-selector";
 import { useCartStore } from "@/lib/cart-store";
+import { useListStore } from "@/lib/list-store";
+import { useQuoteStore } from "@/lib/quote-store";
 import { useRecentlyViewedStore } from "@/lib/recently-viewed-store";
 import type { Product, ProductVariant } from "@/lib/types";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -49,7 +53,25 @@ export function ProductPageClient({
   );
   const [quantity, setQuantity] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
+  const [actionMessage, setActionMessage] = useState("");
+  const [shareCopied, setShareCopied] = useState(false);
+  const [isListDrawerOpen, setIsListDrawerOpen] = useState(false);
+  const [isQuoteDrawerOpen, setIsQuoteDrawerOpen] = useState(false);
+  const [listHeartAnimating, setListHeartAnimating] = useState(false);
+  const [quoteIconAnimating, setQuoteIconAnimating] = useState(false);
+  const [selectedListIds, setSelectedListIds] = useState<string[]>(["favorites"]);
+  const [selectedQuoteIds, setSelectedQuoteIds] = useState<string[]>([]);
+  const [newListName, setNewListName] = useState("");
+  const [newQuoteName, setNewQuoteName] = useState("");
   const addItem = useCartStore((state) => state.addItem);
+  const lists = useListStore((state) => state.lists);
+  const addList = useListStore((state) => state.addList);
+  const addItemToList = useListStore((state) => state.addItemToList);
+  const addQuoteItem = useQuoteStore((state) => state.addItem);
+  const quotes = useQuoteStore((state) => state.quotes);
+  const activeQuoteId = useQuoteStore((state) => state.activeQuoteId);
+  const createQuote = useQuoteStore((state) => state.createQuote);
+  const setActiveQuote = useQuoteStore((state) => state.setActiveQuote);
   const recentlyViewedIds = useRecentlyViewedStore((state) => state.productIds);
   const addRecentlyViewed = useRecentlyViewedStore((state) => state.addProduct);
 
@@ -139,6 +161,162 @@ export function ProductPageClient({
     });
     setJustAdded(true);
     window.setTimeout(() => setJustAdded(false), 1200);
+  }
+
+  const currentActionItem = {
+    productId: product.id,
+    variantId: selectedVariant.id,
+    title: product.title,
+    sku: selectedVariant.sku,
+    image: selectedVariant.image,
+    price: selectedVariant.price,
+    quantity,
+    options: selectedVariant.options
+  };
+
+  const savedListIds = lists
+    .filter((list) =>
+      list.items.some((item) => item.variantId === selectedVariant.id)
+    )
+    .map((list) => list.id);
+  const isSavedToList = savedListIds.length > 0;
+  const activeQuote = quotes.find((quote) => quote.id === activeQuoteId) || quotes[0];
+  const savedQuoteIds = quotes
+    .filter((quote) =>
+      quote.items.some((item) => item.variantId === selectedVariant.id)
+    )
+    .map((quote) => quote.id);
+  const isAddedToQuote = savedQuoteIds.length > 0;
+
+  function showActionMessage(message: string) {
+    setActionMessage(message);
+    window.setTimeout(() => setActionMessage(""), 2200);
+  }
+
+  function openListDrawer() {
+    setSelectedListIds(savedListIds.length ? savedListIds : ["favorites"]);
+    setIsListDrawerOpen(true);
+  }
+
+  function openQuoteDrawer() {
+    setSelectedQuoteIds(
+      savedQuoteIds.length ? savedQuoteIds : [activeQuote?.id || quotes[0]?.id].filter(Boolean)
+    );
+    setIsQuoteDrawerOpen(true);
+  }
+
+  function animateListHeart() {
+    setListHeartAnimating(false);
+    window.requestAnimationFrame(() => {
+      setListHeartAnimating(true);
+      window.setTimeout(() => setListHeartAnimating(false), 750);
+    });
+  }
+
+  function animateQuoteIcon() {
+    setQuoteIconAnimating(false);
+    window.requestAnimationFrame(() => {
+      setQuoteIconAnimating(true);
+      window.setTimeout(() => setQuoteIconAnimating(false), 750);
+    });
+  }
+
+  function toggleSelectedList(listId: string) {
+    setSelectedListIds((currentListIds) => {
+      if (currentListIds.includes(listId)) {
+        return currentListIds.filter((currentListId) => currentListId !== listId);
+      }
+
+      return [...currentListIds, listId];
+    });
+  }
+
+  function toggleSelectedQuote(quoteId: string) {
+    setSelectedQuoteIds((currentQuoteIds) => {
+      if (currentQuoteIds.includes(quoteId)) {
+        return currentQuoteIds.filter((currentQuoteId) => currentQuoteId !== quoteId);
+      }
+
+      return [...currentQuoteIds, quoteId];
+    });
+  }
+
+  function createList() {
+    const listId = addList(newListName);
+
+    if (!listId) {
+      return;
+    }
+
+    setSelectedListIds((currentListIds) =>
+      currentListIds.includes(listId)
+        ? currentListIds
+        : [...currentListIds, listId]
+    );
+    setNewListName("");
+  }
+
+  function createProductQuote() {
+    const quoteId = createQuote(newQuoteName);
+    setSelectedQuoteIds((currentQuoteIds) =>
+      currentQuoteIds.includes(quoteId)
+        ? currentQuoteIds
+        : [...currentQuoteIds, quoteId]
+    );
+    setNewQuoteName("");
+  }
+
+  function saveToSelectedLists() {
+    const targetListIds = selectedListIds.length ? selectedListIds : ["favorites"];
+
+    targetListIds.forEach((listId) => addItemToList(listId, currentActionItem));
+    setIsListDrawerOpen(false);
+    animateListHeart();
+    showActionMessage(
+      targetListIds.length === 1
+        ? "Saved to selected list."
+        : `Saved to ${targetListIds.length} lists.`
+    );
+  }
+
+  function saveToSelectedQuotes() {
+    const fallbackQuoteId = activeQuote?.id || quotes[0]?.id || createQuote("New Job Quote");
+    const targetQuoteIds = selectedQuoteIds.length
+      ? selectedQuoteIds
+      : [fallbackQuoteId];
+
+    targetQuoteIds.forEach((quoteId) => addQuoteItem(currentActionItem, quoteId));
+    setActiveQuote(targetQuoteIds[0]);
+    setIsQuoteDrawerOpen(false);
+    animateQuoteIcon();
+    showActionMessage(
+      targetQuoteIds.length === 1
+        ? "Saved to selected quote."
+        : `Saved to ${targetQuoteIds.length} quotes.`
+    );
+  }
+
+  async function shareProduct() {
+    const productUrl = window.location.href;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: product.title,
+          text: `${product.title} - ${selectedVariant.sku}`,
+          url: productUrl
+        });
+        showActionMessage("Share sheet opened.");
+        return;
+      }
+
+      await navigator.clipboard.writeText(productUrl);
+      setShareCopied(true);
+      showActionMessage("Product link copied.");
+      window.setTimeout(() => setShareCopied(false), 1600);
+    } catch {
+      showActionMessage("Share was cancelled.");
+    }
   }
 
   const isInStock = selectedVariant.inventory === "in_stock";
@@ -369,18 +547,82 @@ export function ProductPageClient({
           </div>
 
           <div className="grid grid-cols-3 divide-x divide-jobsite-rail text-xs font-bold">
-            <button className="grid gap-1 p-3 text-jobsite-ink" type="button">
-              <Heart className="mx-auto" size={18} />
-              List
+            <button
+              aria-pressed={isSavedToList}
+              className={cn(
+                "group grid h-16 content-center gap-1 px-3 py-2 text-jobsite-ink transition hover:bg-jobsite-paper focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-jobsite-ink",
+                isSavedToList && "bg-jobsite-amber"
+              )}
+              type="button"
+              onClick={openListDrawer}
+            >
+              <Heart
+                className={cn(
+                  "mx-auto transition duration-150 group-hover:fill-red-600 group-hover:text-red-600 group-focus-visible:fill-red-600 group-focus-visible:text-red-600",
+                  isSavedToList && "fill-red-600 text-red-600",
+                  listHeartAnimating && "animate-heart-save fill-red-600 text-red-600"
+                )}
+                size={18}
+              />
+              <span
+                className={cn(
+                  "transition-colors duration-150",
+                  "group-hover:text-red-600 group-focus-visible:text-red-600"
+                )}
+              >
+                Add to List
+              </span>
             </button>
-            <button className="grid gap-1 p-3 text-jobsite-ink" type="button">
-              <ClipboardList className="mx-auto" size={18} />
-              Quote
+            <button
+              aria-pressed={isAddedToQuote}
+              className={cn(
+                "group grid h-16 content-center gap-1 px-3 py-2 text-jobsite-ink transition hover:bg-jobsite-paper focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-jobsite-ink",
+                isAddedToQuote && "bg-jobsite-amber"
+              )}
+              type="button"
+              onClick={openQuoteDrawer}
+            >
+              <ClipboardList
+                className={cn(
+                  "mx-auto transition duration-150 group-hover:text-jobsite-pine group-focus-visible:text-jobsite-pine",
+                  isAddedToQuote && "text-jobsite-pine",
+                  quoteIconAnimating && "animate-cart-bump text-jobsite-pine"
+                )}
+                size={18}
+              />
+              <span
+                className={cn(
+                  "transition-colors duration-150",
+                  "group-hover:text-jobsite-pine group-focus-visible:text-jobsite-pine"
+                )}
+              >
+                Add to Quote
+              </span>
             </button>
-            <button className="grid gap-1 p-3 text-jobsite-ink" type="button">
-              <Share2 className="mx-auto" size={18} />
-              Share
+            <button
+              className={cn(
+                "grid h-16 content-center gap-1 px-3 py-2 text-jobsite-ink transition hover:bg-jobsite-paper",
+                shareCopied && "bg-jobsite-amber"
+              )}
+              type="button"
+              onClick={shareProduct}
+            >
+              {shareCopied ? (
+                <Check className="mx-auto" size={18} />
+              ) : (
+                <Share2 className="mx-auto" size={18} />
+              )}
+              {shareCopied ? "Copied" : "Share"}
             </button>
+          </div>
+          <div
+            aria-live="polite"
+            className={cn(
+              "border-t border-jobsite-rail px-4 text-xs font-bold text-jobsite-pine transition",
+              actionMessage ? "py-1.5 opacity-100" : "h-0 overflow-hidden border-t-0 opacity-0"
+            )}
+          >
+            {actionMessage || "Action ready"}
           </div>
         </div>
         </div>
@@ -430,6 +672,317 @@ export function ProductPageClient({
       {recentlyViewed.length ? (
         <ProductRail title="Recently Viewed" products={recentlyViewed} />
       ) : null}
+
+      <div
+        aria-hidden={!isListDrawerOpen}
+        className={cn(
+          "fixed inset-0 z-[70] transition",
+          isListDrawerOpen ? "pointer-events-auto" : "pointer-events-none"
+        )}
+      >
+        <button
+          aria-label="Close add to list panel"
+          className={cn(
+            "absolute inset-0 bg-black/40 transition-opacity",
+            isListDrawerOpen ? "opacity-100" : "opacity-0"
+          )}
+          type="button"
+          onClick={() => setIsListDrawerOpen(false)}
+        />
+        <aside
+          aria-label="Add product to list"
+          className={cn(
+            "absolute right-0 top-0 flex h-full w-full max-w-[430px] flex-col bg-white shadow-2xl transition-transform duration-300",
+            isListDrawerOpen ? "translate-x-0" : "translate-x-full"
+          )}
+        >
+          <div className="flex items-center justify-between border-b border-jobsite-rail p-5">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-jobsite-steel">
+                Save product
+              </p>
+              <h2 className="mt-1 text-2xl font-black text-jobsite-ink">
+                Add to List
+              </h2>
+            </div>
+            <button
+              aria-label="Close add to list panel"
+              className="grid size-10 place-items-center border border-jobsite-rail text-jobsite-ink transition hover:bg-jobsite-paper"
+              type="button"
+              onClick={() => setIsListDrawerOpen(false)}
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5">
+            <div className="grid grid-cols-[88px_1fr] gap-3 border border-jobsite-rail p-3">
+              <div className="relative aspect-square bg-white">
+                <Image
+                  alt={product.title}
+                  className="object-contain p-2"
+                  fill
+                  sizes="88px"
+                  src={selectedVariant.image}
+                />
+              </div>
+              <div>
+                <p className="text-sm font-black text-jobsite-ink">
+                  {product.title}
+                </p>
+                <p className="mt-1 text-xs font-bold text-jobsite-steel">
+                  SKU {selectedVariant.sku}
+                </p>
+                <p className="mt-2 text-sm font-black text-jobsite-ink">
+                  {formatCurrency(selectedVariant.price)}
+                  <span className="ml-2 text-xs font-bold text-jobsite-steel">
+                    Qty {quantity}
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <p className="text-sm font-black text-jobsite-ink">Pick a list</p>
+              <div className="mt-3 grid gap-2">
+                {lists.map((list) => {
+                  const isSelected = selectedListIds.includes(list.id);
+                  const containsItem = list.items.some(
+                    (item) => item.variantId === selectedVariant.id
+                  );
+
+                  return (
+                    <label
+                      key={list.id}
+                      className={cn(
+                        "flex cursor-pointer items-start gap-3 border p-3 transition hover:border-jobsite-ink",
+                        isSelected
+                          ? "border-jobsite-ink bg-jobsite-amber"
+                          : "border-jobsite-rail bg-white"
+                      )}
+                    >
+                      <input
+                        checked={isSelected}
+                        className="mt-1 size-4 accent-jobsite-ink"
+                        type="checkbox"
+                        onChange={() => toggleSelectedList(list.id)}
+                      />
+                      <span className="flex-1">
+                        <span className="block text-sm font-black text-jobsite-ink">
+                          {list.name}
+                        </span>
+                        <span className="mt-1 block text-xs font-bold text-jobsite-steel">
+                          {list.items.length} item{list.items.length === 1 ? "" : "s"}
+                          {containsItem ? " - already contains this product" : ""}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <form
+              className="mt-5 border border-jobsite-rail p-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                createList();
+              }}
+            >
+              <label
+                className="text-sm font-black text-jobsite-ink"
+                htmlFor="new-list-name"
+              >
+                Create a new list
+              </label>
+              <div className="mt-2 flex gap-2">
+                <input
+                  className="h-11 min-w-0 flex-1 border border-jobsite-rail px-3 text-sm outline-none focus:border-jobsite-ink"
+                  id="new-list-name"
+                  placeholder="List name"
+                  value={newListName}
+                  onChange={(event) => setNewListName(event.target.value)}
+                />
+                <button
+                  className="inline-flex h-11 items-center gap-2 border border-jobsite-ink bg-white px-4 text-sm font-black text-jobsite-ink transition hover:bg-jobsite-ink hover:text-white"
+                  type="submit"
+                >
+                  <Plus size={17} />
+                  Create
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div className="border-t border-jobsite-rail p-5">
+            <button
+              className="truewerk-cta flex h-12 w-full items-center justify-center bg-jobsite-ink px-5 text-sm font-black uppercase tracking-[0.1em] text-white transition active:scale-[0.98]"
+              type="button"
+              onClick={saveToSelectedLists}
+            >
+              <span>Save to List</span>
+            </button>
+          </div>
+        </aside>
+      </div>
+
+      <div
+        aria-hidden={!isQuoteDrawerOpen}
+        className={cn(
+          "fixed inset-0 z-[70] transition",
+          isQuoteDrawerOpen ? "pointer-events-auto" : "pointer-events-none"
+        )}
+      >
+        <button
+          aria-label="Close add to quote panel"
+          className={cn(
+            "absolute inset-0 bg-black/40 transition-opacity",
+            isQuoteDrawerOpen ? "opacity-100" : "opacity-0"
+          )}
+          type="button"
+          onClick={() => setIsQuoteDrawerOpen(false)}
+        />
+        <aside
+          aria-label="Add product to quote"
+          className={cn(
+            "absolute right-0 top-0 flex h-full w-full max-w-[430px] flex-col bg-white shadow-2xl transition-transform duration-300",
+            isQuoteDrawerOpen ? "translate-x-0" : "translate-x-full"
+          )}
+        >
+          <div className="flex items-center justify-between border-b border-jobsite-rail p-5">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-jobsite-steel">
+                Quote product
+              </p>
+              <h2 className="mt-1 text-2xl font-black text-jobsite-ink">
+                Add to Quote
+              </h2>
+            </div>
+            <button
+              aria-label="Close add to quote panel"
+              className="grid size-10 place-items-center border border-jobsite-rail text-jobsite-ink transition hover:bg-jobsite-paper"
+              type="button"
+              onClick={() => setIsQuoteDrawerOpen(false)}
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5">
+            <div className="grid grid-cols-[88px_1fr] gap-3 border border-jobsite-rail p-3">
+              <div className="relative aspect-square bg-white">
+                <Image
+                  alt={product.title}
+                  className="object-contain p-2"
+                  fill
+                  sizes="88px"
+                  src={selectedVariant.image}
+                />
+              </div>
+              <div>
+                <p className="text-sm font-black text-jobsite-ink">
+                  {product.title}
+                </p>
+                <p className="mt-1 text-xs font-bold text-jobsite-steel">
+                  SKU {selectedVariant.sku}
+                </p>
+                <p className="mt-2 text-sm font-black text-jobsite-ink">
+                  {formatCurrency(selectedVariant.price)}
+                  <span className="ml-2 text-xs font-bold text-jobsite-steel">
+                    Qty {quantity}
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <p className="text-sm font-black text-jobsite-ink">Pick a quote</p>
+              <div className="mt-3 grid gap-2">
+                {quotes.map((quote) => {
+                  const isSelected = selectedQuoteIds.includes(quote.id);
+                  const containsItem = quote.items.some(
+                    (item) => item.variantId === selectedVariant.id
+                  );
+                  const itemCount = quote.items.reduce(
+                    (totalItems, item) => totalItems + item.quantity,
+                    0
+                  );
+
+                  return (
+                    <label
+                      key={quote.id}
+                      className={cn(
+                        "flex cursor-pointer items-start gap-3 border p-3 transition hover:border-jobsite-ink",
+                        isSelected
+                          ? "border-jobsite-ink bg-jobsite-amber"
+                          : "border-jobsite-rail bg-white"
+                      )}
+                    >
+                      <input
+                        checked={isSelected}
+                        className="mt-1 size-4 accent-jobsite-ink"
+                        type="checkbox"
+                        onChange={() => toggleSelectedQuote(quote.id)}
+                      />
+                      <span className="flex-1">
+                        <span className="block text-sm font-black text-jobsite-ink">
+                          {quote.name}
+                        </span>
+                        <span className="mt-1 block text-xs font-bold text-jobsite-steel">
+                          {quote.quoteNumber} - {itemCount} item
+                          {itemCount === 1 ? "" : "s"}
+                          {containsItem ? " - already contains this product" : ""}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <form
+              className="mt-5 border border-jobsite-rail p-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                createProductQuote();
+              }}
+            >
+              <label
+                className="text-sm font-black text-jobsite-ink"
+                htmlFor="new-quote-name"
+              >
+                Create a new quote
+              </label>
+              <div className="mt-2 flex gap-2">
+                <input
+                  className="h-11 min-w-0 flex-1 border border-jobsite-rail px-3 text-sm outline-none focus:border-jobsite-ink"
+                  id="new-quote-name"
+                  placeholder="Quote name"
+                  value={newQuoteName}
+                  onChange={(event) => setNewQuoteName(event.target.value)}
+                />
+                <button
+                  className="inline-flex h-11 items-center gap-2 border border-jobsite-ink bg-white px-4 text-sm font-black text-jobsite-ink transition hover:bg-jobsite-ink hover:text-white"
+                  type="submit"
+                >
+                  <Plus size={17} />
+                  Create
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div className="border-t border-jobsite-rail p-5">
+            <button
+              className="truewerk-cta flex h-12 w-full items-center justify-center bg-jobsite-ink px-5 text-sm font-black uppercase tracking-[0.1em] text-white transition active:scale-[0.98]"
+              type="button"
+              onClick={saveToSelectedQuotes}
+            >
+              <span>Save to Quote</span>
+            </button>
+          </div>
+        </aside>
+      </div>
 
       <div className="fixed inset-x-0 bottom-0 z-50 border-t border-jobsite-rail bg-white p-3 shadow-toolbar md:hidden">
         <button
