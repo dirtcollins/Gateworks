@@ -26,6 +26,7 @@ type ProductRow = {
     sku: string;
     price: number | string;
     inventory_status: "in_stock" | "out_of_stock";
+    inventory_quantity: number | null;
     image_url: string | null;
     length: string | null;
     material: string | null;
@@ -51,7 +52,8 @@ function mapProduct(row: ProductRow): Product {
     productId: row.id,
     sku: variant.sku,
     price: Number(variant.price),
-    inventory: variant.inventory_status,
+    inventory: variant.inventory_status === "out_of_stock" ? "out_of_stock" : "in_stock",
+    inventoryQuantity: Number(variant.inventory_quantity ?? 100),
     image: variant.image_url || row.product_images[0]?.url || "/assets/logo.svg",
     options: {
       length: variant.length || "Standard",
@@ -108,6 +110,7 @@ export async function fetchSupabaseProducts() {
         sku,
         price,
         inventory_status,
+        inventory_quantity,
         image_url,
         length,
         material,
@@ -157,6 +160,7 @@ export async function fetchSupabaseProduct(slug: string) {
         sku,
         price,
         inventory_status,
+        inventory_quantity,
         image_url,
         length,
         material,

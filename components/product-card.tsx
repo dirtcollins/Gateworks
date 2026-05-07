@@ -104,7 +104,8 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
           {formatCurrency(product.price)}
         </p>
         <p className="text-xs font-semibold text-jobsite-pine">
-          In stock - {product.variants.length} option{product.variants.length === 1 ? "" : "s"}
+          {defaultVariant?.inventoryQuantity ?? 100} in stock - {product.variants.length} option
+          {product.variants.length === 1 ? "" : "s"}
         </p>
         {isRail ? (
           <button

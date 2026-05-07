@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   Check,
@@ -39,9 +40,12 @@ export function ProductPageClient({
   relatedProducts,
   products
 }: ProductPageClientProps) {
-  const [selectedVariant, setSelectedVariant] = useState(product.variants[0]);
+  const firstAvailableVariant =
+    product.variants.find((variant) => variant.inventory === "in_stock") ||
+    product.variants[0];
+  const [selectedVariant, setSelectedVariant] = useState(firstAvailableVariant);
   const [selectedImage, setSelectedImage] = useState(
-    product.variants[0]?.image || product.images[0]?.url || "/assets/logo.svg"
+    firstAvailableVariant?.image || product.images[0]?.url || "/assets/logo.svg"
   );
   const [quantity, setQuantity] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
@@ -144,9 +148,16 @@ export function ProductPageClient({
     <main className="pb-24 md:pb-0">
       <section className="border-b border-jobsite-rail bg-jobsite-paper">
         <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-2 px-4 py-2 text-xs font-semibold text-jobsite-steel">
-          <span>Fencing & Gates</span>
+          <Link className="hover:text-jobsite-ink hover:underline" href="/">
+            Fencing & Gates
+          </Link>
           <span>/</span>
-          <span>{product.category.name}</span>
+          <Link
+            className="hover:text-jobsite-ink hover:underline"
+            href={`/?category=${product.category.slug}`}
+          >
+            {product.category.name}
+          </Link>
           <span>/</span>
           <span className="text-jobsite-ink">{product.title}</span>
         </div>
@@ -193,7 +204,7 @@ export function ProductPageClient({
         </div>
 
         <div>
-          <div className="border border-jobsite-rail p-4">
+          <div className="border border-jobsite-rail bg-white p-4">
             <div className="mb-2 grid gap-1 text-[11px] font-bold uppercase text-jobsite-steel sm:grid-cols-2">
               <span>Internet # {skuTail}</span>
               <span>Model # {selectedVariant.sku}</span>
@@ -298,7 +309,9 @@ export function ProductPageClient({
               )}
             >
               {isInStock ? <CheckCircle2 size={17} /> : <PackageX size={17} />}
-              {isInStock ? "7507 in stock" : "Out of stock"}
+              {isInStock
+                ? `${selectedVariant.inventoryQuantity} in stock`
+                : "Out of stock"}
             </p>
             <p className="mt-1 text-xs font-semibold text-jobsite-steel">
               Aisle 31, Bay 001

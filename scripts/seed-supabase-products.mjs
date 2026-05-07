@@ -97,12 +97,8 @@ for (const [, items] of selectedGroups) {
           product_id: product.id,
           sku: item.stock_number,
           price: Number(item.price || 0),
-          inventory_status:
-            item.availability === "Active" && !item.is_discontinued
-              ? "in_stock"
-              : "out_of_stock",
-          inventory_quantity:
-            item.availability === "Active" && !item.is_discontinued ? 25 : 0,
+          inventory_status: "in_stock",
+          inventory_quantity: 100,
           image_url: item.image,
           length: item.size || "Standard",
           material: inferMaterial(item),

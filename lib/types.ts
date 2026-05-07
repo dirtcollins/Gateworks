@@ -19,6 +19,7 @@ export type ProductVariant = {
   sku: string;
   price: number;
   inventory: "in_stock" | "out_of_stock";
+  inventoryQuantity: number;
   image: string;
   options: {
     length?: string;

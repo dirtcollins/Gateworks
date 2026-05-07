@@ -107,6 +107,17 @@ function getOptionSummary(values: string[]) {
   return values.length > 1 ? "Varies by option" : values[0] || "N/A";
 }
 
+function getDisplayPrice(variants: ProductVariant[]) {
+  const inStockPrices = variants
+    .filter((variant) => variant.inventory === "in_stock")
+    .map((variant) => variant.price);
+  const prices = inStockPrices.length
+    ? inStockPrices
+    : variants.map((variant) => variant.price);
+
+  return Math.min(...prices);
+}
+
 function uniqueCategories(items: RawProduct[]): Category[] {
   const categoryMap = new Map<string, Category>();
 
@@ -137,32 +148,38 @@ function buildProduct(groupSlug: string, groupItems: RawProduct[]): Product {
     slug: first.source_category_slug
   };
 
-  const variants: ProductVariant[] = groupItems.map((item, index) => {
-    const id = `${groupSlug}-${slugify(item.stock_number || String(index))}`;
-    const image =
-      getHighResolutionImageUrl(item.image) ||
-      getHighResolutionImageUrl(item.secondary_image) ||
-      getInferredNationalImageUrl(item) ||
-      fallbackImage;
+  const variants: ProductVariant[] = groupItems
+    .map((item, index) => {
+      const id = `${groupSlug}-${slugify(item.stock_number || String(index))}`;
+      const image =
+        getHighResolutionImageUrl(item.image) ||
+        getHighResolutionImageUrl(item.secondary_image) ||
+        getInferredNationalImageUrl(item) ||
+        fallbackImage;
 
-    return {
-      id,
-      productId: groupSlug,
-      sku: item.stock_number || item.catalog_number || id,
-      price: Number(item.price || first.price || 0),
-      inventory:
-        item.availability === "Active" && !item.is_discontinued
-          ? "in_stock"
-          : "out_of_stock",
-      image,
-      options: {
-        length: item.size || "Standard",
-        material: inferMaterial(item),
-        finish: item.finish || "Standard",
-        color: inferColor(item.finish)
+      return {
+        id,
+        productId: groupSlug,
+        sku: item.stock_number || item.catalog_number || id,
+        price: Number(item.price || first.price || 0),
+        inventory: "in_stock" as const,
+        inventoryQuantity: 100,
+        image,
+        options: {
+          length: item.size || "Standard",
+          material: inferMaterial(item),
+          finish: item.finish || "Standard",
+          color: inferColor(item.finish)
+        }
+      };
+    })
+    .sort((a, b) => {
+      if (a.inventory !== b.inventory) {
+        return a.inventory === "in_stock" ? -1 : 1;
       }
-    };
-  });
+
+      return sizeSortValue(a.options.length) - sizeSortValue(b.options.length);
+    });
 
   const imageUrls = Array.from(
     new Set(
@@ -204,7 +221,7 @@ function buildProduct(groupSlug: string, groupItems: RawProduct[]): Product {
     description:
       `${first.website_name || title} for gates, fencing, and exterior construction work.${featureText}`.trim(),
     category,
-    price: Math.min(...variants.map((variant) => variant.price)),
+    price: getDisplayPrice(variants),
     images: imageUrls.map((url, index) => ({
       id: `${groupSlug}-image-${index + 1}`,
       productId: groupSlug,
@@ -377,7 +394,7 @@ function withDecorativeTHingeVariants(product: Product): Product {
 
   return {
     ...variantProduct,
-    price: Math.min(...variants.map((variant) => variant.price)),
+    price: getDisplayPrice(variants),
     variants,
     images,
     slug: product.slug,
