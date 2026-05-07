@@ -9,16 +9,49 @@ export function LoginButton() {
   const displayName = useUserStore((state) => state.displayName);
   const savedUsers = useUserStore((state) => state.savedUsers);
   const userId = useUserStore((state) => state.userId);
+  const setSavedUsers = useUserStore((state) => state.setSavedUsers);
   const setUserName = useUserStore((state) => state.setUserName);
   const switchUser = useUserStore((state) => state.switchUser);
   const resetUser = useUserStore((state) => state.resetUser);
   const [isOpen, setIsOpen] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<"idle" | "saving" | "error">(
+    "idle"
+  );
   const [name, setName] = useState(displayName === "Guest" ? "" : displayName);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  async function loadSavedUsers() {
+    try {
+      const response = await fetch("/api/site-users", {
+        cache: "no-store"
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to load saved users.");
+      }
+
+      const payload = (await response.json()) as {
+        users?: {
+          id: string;
+          displayName: string;
+          lastUsedAt: string;
+        }[];
+      };
+
+      setSavedUsers(payload.users || []);
+      setSyncStatus("idle");
+    } catch {
+      setSyncStatus("error");
+    }
+  }
 
   useEffect(() => {
     setName(displayName === "Guest" ? "" : displayName);
   }, [displayName]);
+
+  useEffect(() => {
+    void loadSavedUsers();
+  }, []);
 
   useEffect(() => {
     function closeOnOutsideClick(event: MouseEvent) {
@@ -38,10 +71,29 @@ export function LoginButton() {
     return () => document.removeEventListener("mousedown", closeOnOutsideClick);
   }, [isOpen]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setSyncStatus("saving");
     setUserName(name);
-    setIsOpen(false);
+
+    try {
+      const response = await fetch("/api/site-users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ name })
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to save user.");
+      }
+
+      await loadSavedUsers();
+      setIsOpen(false);
+    } catch {
+      setSyncStatus("error");
+    }
   }
 
   return (
@@ -54,7 +106,10 @@ export function LoginButton() {
           isOpen ? "border-jobsite-ink bg-jobsite-paper" : "border-transparent"
         )}
         type="button"
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={() => {
+          setIsOpen((current) => !current);
+          void loadSavedUsers();
+        }}
       >
         <User size={20} />
         <span className="hidden truncate text-xs font-extrabold uppercase tracking-[0.08em] sm:block">
@@ -98,6 +153,11 @@ export function LoginButton() {
                   </option>
                 ))}
               </select>
+              {syncStatus === "error" ? (
+                <p className="mt-2 text-xs font-bold text-red-700">
+                  Live users are unavailable. This browser will keep working locally.
+                </p>
+              ) : null}
             </div>
           ) : null}
 
@@ -119,9 +179,10 @@ export function LoginButton() {
             <div className="grid grid-cols-[1fr_auto] gap-2">
               <button
                 className="h-11 bg-jobsite-ink px-4 text-sm font-black uppercase tracking-[0.1em] text-white"
+                disabled={syncStatus === "saving"}
                 type="submit"
               >
-                Save User
+                {syncStatus === "saving" ? "Saving" : "Save User"}
               </button>
               <button
                 className="h-11 border border-jobsite-rail bg-white px-4 text-sm font-black uppercase tracking-[0.1em] text-jobsite-ink hover:border-jobsite-ink"

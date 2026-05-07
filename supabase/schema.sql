@@ -70,6 +70,14 @@ create table if not exists public.product_reviews (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.site_users (
+  id text primary key,
+  display_name text not null,
+  normalized_name text not null unique,
+  created_at timestamptz not null default now(),
+  last_used_at timestamptz not null default now()
+);
+
 create table if not exists public.carts (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
@@ -129,6 +137,7 @@ create index if not exists products_search_document_idx on public.products using
 create index if not exists product_variants_product_id_idx on public.product_variants(product_id);
 create index if not exists product_variants_sku_idx on public.product_variants(sku);
 create index if not exists product_images_product_id_idx on public.product_images(product_id);
+create index if not exists site_users_last_used_at_idx on public.site_users(last_used_at desc);
 create index if not exists cart_items_cart_id_idx on public.cart_items(cart_id);
 create index if not exists admin_audit_logs_entity_idx on public.admin_audit_logs(entity_type, entity_id);
 create index if not exists admin_audit_logs_created_at_idx on public.admin_audit_logs(created_at desc);
@@ -199,6 +208,7 @@ alter table public.products enable row level security;
 alter table public.product_variants enable row level security;
 alter table public.product_images enable row level security;
 alter table public.product_reviews enable row level security;
+alter table public.site_users enable row level security;
 alter table public.carts enable row level security;
 alter table public.cart_items enable row level security;
 alter table public.admin_profiles enable row level security;
@@ -259,6 +269,25 @@ on public.product_reviews for select
 to anon, authenticated
 using (status = 'approved');
 
+drop policy if exists "Public can read site users" on public.site_users;
+create policy "Public can read site users"
+on public.site_users for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "Public can create site users" on public.site_users;
+create policy "Public can create site users"
+on public.site_users for insert
+to anon, authenticated
+with check (true);
+
+drop policy if exists "Public can update site users" on public.site_users;
+create policy "Public can update site users"
+on public.site_users for update
+to anon, authenticated
+using (true)
+with check (true);
+
 drop policy if exists "Users can manage their own carts" on public.carts;
 create policy "Users can manage their own carts"
 on public.carts for all
@@ -299,5 +328,6 @@ using (public.is_admin());
 
 grant usage on schema public to anon, authenticated;
 grant select on public.categories, public.brands, public.products, public.product_variants, public.product_images, public.product_reviews to anon, authenticated;
+grant select, insert, update on public.site_users to anon, authenticated;
 grant select, insert, update, delete on public.carts, public.cart_items to authenticated;
 grant select on public.admin_profiles, public.admin_audit_logs to authenticated;

@@ -13,6 +13,7 @@ type UserState = {
   displayName: string;
   savedUsers: SavedUser[];
   userId: string;
+  setSavedUsers: (users: SavedUser[]) => void;
   setUserName: (name: string) => void;
   switchUser: (userId: string) => void;
   resetUser: () => void;
@@ -54,6 +55,22 @@ function saveUser(savedUsers: SavedUser[], displayName: string) {
   return [savedUser, ...otherUsers];
 }
 
+function mergeSavedUsers(currentUsers: SavedUser[], incomingUsers: SavedUser[]) {
+  const usersById = new Map<string, SavedUser>();
+
+  for (const user of [...incomingUsers, ...currentUsers]) {
+    if (user.id !== guestUserId) {
+      usersById.set(user.id, user);
+    }
+  }
+
+  return Array.from(usersById.values()).sort(
+    (firstUser, secondUser) =>
+      new Date(secondUser.lastUsedAt).getTime() -
+      new Date(firstUser.lastUsedAt).getTime()
+  );
+}
+
 type PersistedUserState = Partial<UserState>;
 
 export const useUserStore = create<UserState>()(
@@ -62,6 +79,10 @@ export const useUserStore = create<UserState>()(
       displayName: guestName,
       savedUsers: [],
       userId: guestUserId,
+      setSavedUsers: (users) =>
+        set((state) => ({
+          savedUsers: mergeSavedUsers(state.savedUsers, users)
+        })),
       setUserName: (name) => {
         const displayName = formatDisplayName(name);
         const userId = makeUserId(displayName);
