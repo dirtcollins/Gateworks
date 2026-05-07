@@ -2,6 +2,10 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import {
+  makeScopedStoreName,
+  readScopedPersistedState
+} from "@/lib/scoped-store";
 import type { CartItem } from "@/lib/types";
 
 export type SavedList = {
@@ -20,20 +24,31 @@ type SavedListState = {
   hasItem: (variantId: string) => boolean;
 };
 
-const defaultLists: SavedList[] = [
-  {
-    id: "favorites",
-    name: "Favorites",
+const listStoreName = "gateworks-saved-list";
+
+function makeDefaultLists(): SavedList[] {
+  return [
+    {
+      id: "favorites",
+      name: "Favorites",
+      items: [],
+      createdAt: "2026-01-01T00:00:00.000Z"
+    },
+    {
+      id: "jobsite-materials",
+      name: "Jobsite Materials",
+      items: [],
+      createdAt: "2026-01-01T00:00:00.000Z"
+    }
+  ];
+}
+
+function listDefaults() {
+  return {
     items: [],
-    createdAt: "2026-01-01T00:00:00.000Z"
-  },
-  {
-    id: "jobsite-materials",
-    name: "Jobsite Materials",
-    items: [],
-    createdAt: "2026-01-01T00:00:00.000Z"
-  }
-];
+    lists: makeDefaultLists()
+  };
+}
 
 function makeListId(name: string) {
   const slug = name
@@ -49,7 +64,7 @@ export const useListStore = create<SavedListState>()(
   persist(
     (set, get) => ({
       items: [],
-      lists: defaultLists,
+      lists: makeDefaultLists(),
       addList: (name) => {
         const cleanName = name.trim();
 
@@ -120,7 +135,16 @@ export const useListStore = create<SavedListState>()(
         )
     }),
     {
-      name: "gateworks-saved-list"
+      name: makeScopedStoreName(listStoreName, "guest"),
+      skipHydration: true
     }
   )
 );
+
+export function hydrateListsForUser(userId: string) {
+  const scopedStoreName = makeScopedStoreName(listStoreName, userId);
+  const persistedState = readScopedPersistedState(listStoreName, userId, listDefaults);
+
+  useListStore.persist.setOptions({ name: scopedStoreName });
+  useListStore.setState(persistedState);
+}

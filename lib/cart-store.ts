@@ -2,6 +2,10 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import {
+  makeScopedStoreName,
+  readScopedPersistedState
+} from "@/lib/scoped-store";
 import type { CartItem } from "@/lib/types";
 
 type CartState = {
@@ -11,6 +15,12 @@ type CartState = {
   updateQuantity: (variantId: string, quantity: number) => void;
   clearCart: () => void;
 };
+
+const cartStoreName = "construction-commerce-cart";
+
+function cartDefaults() {
+  return { items: [] };
+}
 
 export const useCartStore = create<CartState>()(
   persist(
@@ -52,7 +62,16 @@ export const useCartStore = create<CartState>()(
       clearCart: () => set({ items: [] })
     }),
     {
-      name: "construction-commerce-cart"
+      name: makeScopedStoreName(cartStoreName, "guest"),
+      skipHydration: true
     }
   )
 );
+
+export function hydrateCartForUser(userId: string) {
+  const scopedStoreName = makeScopedStoreName(cartStoreName, userId);
+  const persistedState = readScopedPersistedState(cartStoreName, userId, cartDefaults);
+
+  useCartStore.persist.setOptions({ name: scopedStoreName });
+  useCartStore.setState(persistedState);
+}

@@ -2,6 +2,10 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import {
+  makeScopedStoreName,
+  readScopedPersistedState
+} from "@/lib/scoped-store";
 import type { CartItem } from "@/lib/types";
 
 export type QuoteRecord = {
@@ -28,6 +32,7 @@ type QuoteState = {
 };
 
 const initialQuoteNumber = 1050;
+const quoteStoreName = "gateworks-quote-list";
 
 function isoDate(daysFromNow = 0) {
   const date = new Date();
@@ -67,6 +72,15 @@ function formatQuoteName(name: string) {
 type PersistedQuoteState = Partial<QuoteState> & {
   items?: CartItem[];
 };
+
+function quoteDefaults() {
+  const quote = defaultQuote();
+
+  return {
+    quotes: [quote],
+    activeQuoteId: quote.id
+  };
+}
 
 export const useQuoteStore = create<QuoteState>()(
   persist(
@@ -185,8 +199,9 @@ export const useQuoteStore = create<QuoteState>()(
       }
     }),
     {
-      name: "gateworks-quote-list",
+      name: makeScopedStoreName(quoteStoreName, "guest"),
       version: 2,
+      skipHydration: true,
       migrate: (persistedState) => {
         const persisted = persistedState as PersistedQuoteState;
 
@@ -206,3 +221,15 @@ export const useQuoteStore = create<QuoteState>()(
     }
   )
 );
+
+export function hydrateQuotesForUser(userId: string) {
+  const scopedStoreName = makeScopedStoreName(quoteStoreName, userId);
+  const persistedState = readScopedPersistedState(
+    quoteStoreName,
+    userId,
+    quoteDefaults
+  );
+
+  useQuoteStore.persist.setOptions({ name: scopedStoreName });
+  useQuoteStore.setState(persistedState);
+}

@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Menu, Search, User } from "lucide-react";
+import { Menu, Search } from "lucide-react";
 import "./globals.css";
 import { CartLink } from "@/components/cart-link";
+import { LoginButton } from "@/components/login-button";
 import { ListLink } from "@/components/list-link";
 import { QuoteLink } from "@/components/quote-link";
+import { UserStorageScope } from "@/components/user-storage-scope";
 
 export const metadata: Metadata = {
   title: "Construction Commerce Phase 1",
@@ -20,6 +22,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <UserStorageScope />
         <header className="sticky top-0 z-40 border-b border-jobsite-rail bg-white text-jobsite-ink shadow-sm">
           <div className="grid grid-cols-1 bg-jobsite-black text-[11px] font-extrabold uppercase tracking-[0.16em] text-white sm:grid-cols-2">
             <Link className="px-4 py-2 text-center hover:bg-white/10" href="/">
@@ -70,13 +73,7 @@ export default function RootLayout({
               >
                 <Search size={20} />
               </button>
-              <Link
-                aria-label="Open account page"
-                className="grid size-10 place-items-center border border-transparent hover:border-jobsite-rail"
-                href="/admin"
-              >
-                <User size={20} />
-              </Link>
+              <LoginButton />
               <Link
                 className="hidden px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-jobsite-ink hover:bg-jobsite-paper sm:block"
                 href="/admin"
