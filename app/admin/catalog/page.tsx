@@ -6,6 +6,8 @@ export const metadata = {
   title: "Catalog Admin | Gateworks"
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminCatalogPage() {
   const supabaseProducts = await fetchSupabaseProducts();
 

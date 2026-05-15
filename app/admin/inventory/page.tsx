@@ -11,6 +11,8 @@ export const metadata = {
   title: "Inventory | Gateworks Operations"
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function InventoryPage() {
   const supabaseProducts = await fetchSupabaseProducts();
   const activeProducts = mergeCatalogProducts(supabaseProducts, products);

@@ -11,6 +11,8 @@ export const metadata = {
   title: "Demand Intelligence | Gateworks Operations"
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminDemandPage() {
   const supabaseProducts = await fetchSupabaseProducts();
   const activeProducts = mergeCatalogProducts(supabaseProducts, products);
