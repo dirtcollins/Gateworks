@@ -241,6 +241,9 @@ export function ProductPageClient({
       sku: pricedSelectedVariant.sku,
       image: pricedSelectedVariant.image,
       price: pricedSelectedVariant.price,
+      weightLbs: pricedSelectedVariant.calculated_weight_lb,
+      cwtPrice: pricedSelectedVariant.steel_cwt_price,
+      pricingMethod: pricedSelectedVariant.pricing_method,
       quantity,
       options: pricedSelectedVariant.options
     });
@@ -255,6 +258,9 @@ export function ProductPageClient({
     sku: pricedSelectedVariant.sku,
     image: pricedSelectedVariant.image,
     price: pricedSelectedVariant.price,
+    weightLbs: pricedSelectedVariant.calculated_weight_lb,
+    cwtPrice: pricedSelectedVariant.steel_cwt_price,
+    pricingMethod: pricedSelectedVariant.pricing_method,
     quantity,
     options: pricedSelectedVariant.options
   };

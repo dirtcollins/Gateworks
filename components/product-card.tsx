@@ -37,6 +37,9 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
       sku: defaultVariant.sku,
       image: defaultVariant.image,
       price: defaultVariant.price,
+      weightLbs: defaultVariant.calculated_weight_lb,
+      cwtPrice: defaultVariant.steel_cwt_price,
+      pricingMethod: defaultVariant.pricing_method,
       quantity: 1,
       options: defaultVariant.options
     });

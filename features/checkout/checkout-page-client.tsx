@@ -62,6 +62,14 @@ export function CheckoutPageClient() {
     () => items.reduce((total, item) => total + item.price * item.quantity, 0),
     [items]
   );
+  const shippingWeightLbs = useMemo(
+    () =>
+      items.reduce(
+        (total, item) => total + (item.weightLbs || 0) * item.quantity,
+        0
+      ),
+    [items]
+  );
   const deliveryFee = fulfillmentMethod === "delivery" ? (subtotal >= 500 ? 0 : 85) : 0;
   const tax = isQuoteRequest ? 0 : Number((subtotal * 0.0825).toFixed(2));
   const total = subtotal + tax + deliveryFee;
@@ -444,6 +452,9 @@ export function CheckoutPageClient() {
                 </label>
                 <div className="grid gap-2 border-t border-industrial-rail pt-4 text-sm">
                   <div className="flex justify-between"><span>Subtotal</span><strong>{formatCurrency(subtotal)}</strong></div>
+                  {shippingWeightLbs > 0 && (
+                    <div className="flex justify-between"><span>Material weight</span><strong>{shippingWeightLbs.toFixed(2)} lb</strong></div>
+                  )}
                   <div className="flex justify-between"><span>Delivery</span><strong>{formatCurrency(deliveryFee)}</strong></div>
                   <div className="flex justify-between"><span>Estimated tax</span><strong>{formatCurrency(tax)}</strong></div>
                   <div className="flex justify-between text-xl"><span>Total</span><strong>{formatCurrency(total)}</strong></div>

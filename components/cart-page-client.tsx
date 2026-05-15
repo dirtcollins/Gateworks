@@ -131,6 +131,11 @@ export function CartPageClient() {
                   <p className="mt-3 text-lg font-bold text-jobsite-ink">
                     {formatCurrency(item.price)}
                   </p>
+                  {item.weightLbs ? (
+                    <p className="mt-1 text-xs font-bold uppercase tracking-[0.08em] text-jobsite-steel">
+                      {item.weightLbs.toFixed(2)} lb each
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
                   <QuantitySelector

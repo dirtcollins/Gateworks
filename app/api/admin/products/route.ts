@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeAdminRequest } from "@/lib/admin-auth";
+import { calculateTubingCwtPricing } from "@/lib/pricing";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
 type AdminPatchBody =
@@ -75,6 +76,32 @@ function pickAllowed(
   );
 }
 
+function toNumber(value: unknown) {
+  const numberValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim()
+        ? Number(value)
+        : NaN;
+
+  return Number.isFinite(numberValue) ? numberValue : undefined;
+}
+
+const cwtRecalculationFields = new Set([
+  "manual_price",
+  "pricing_method",
+  "width_in",
+  "height_in",
+  "wall_thickness_in",
+  "length_ft",
+  "material_density_lb_per_in3",
+  "steel_cwt_price"
+]);
+
+function needsCwtRecalculation(changes: Record<string, unknown>) {
+  return Object.keys(changes).some((key) => cwtRecalculationFields.has(key));
+}
+
 async function writeAuditLog(
   action: string,
   entityId: string,
@@ -130,7 +157,69 @@ export async function PATCH(request: NextRequest) {
         .eq("id", body.variantId);
 
       if (error) throw error;
-      await writeAuditLog(body.action, body.variantId, changes, auth.actorId);
+      let persistedChanges = changes;
+
+      if (needsCwtRecalculation(changes)) {
+        const { data: variant, error: variantError } = await admin
+          .from("product_variants")
+          .select(
+            `
+            width_in,
+            height_in,
+            wall_thickness_in,
+            length_ft,
+            material_density_lb_per_in3,
+            steel_cwt_price,
+            manual_price,
+            pricing_method
+          `
+          )
+          .eq("id", body.variantId)
+          .maybeSingle();
+
+        if (variantError) throw variantError;
+
+        if (variant?.pricing_method === "cwt_calculated") {
+          const pricing = calculateTubingCwtPricing({
+            width_in: toNumber(variant.width_in) || 0,
+            height_in: toNumber(variant.height_in) || 0,
+            wall_thickness_in: toNumber(variant.wall_thickness_in) || 0,
+            length_ft: toNumber(variant.length_ft),
+            material_density_lb_per_in3: toNumber(variant.material_density_lb_per_in3),
+            steel_cwt_price: toNumber(variant.steel_cwt_price),
+            manual_price: toNumber(variant.manual_price) ?? null,
+            pricing_method: variant.pricing_method
+          });
+
+          if (pricing) {
+            const recalculatedChanges = {
+              price: pricing.final_price,
+              manual_price: pricing.manual_price,
+              calculated_price: pricing.calculated_price,
+              rounded_price: pricing.rounded_price,
+              final_price: pricing.final_price,
+              pricing_method: pricing.pricing_method,
+              width_in: pricing.width_in,
+              height_in: pricing.height_in,
+              wall_thickness_in: pricing.wall_thickness_in,
+              length_ft: pricing.length_ft,
+              material_density_lb_per_in3: pricing.material_density_lb_per_in3,
+              steel_cwt_price: pricing.steel_cwt_price,
+              calculated_weight_lb: pricing.calculated_weight_lb
+            };
+
+            const { error: pricingError } = await admin
+              .from("product_variants")
+              .update(recalculatedChanges)
+              .eq("id", body.variantId);
+
+            if (pricingError) throw pricingError;
+            persistedChanges = { ...changes, ...recalculatedChanges };
+          }
+        }
+      }
+
+      await writeAuditLog(body.action, body.variantId, persistedChanges, auth.actorId);
       return NextResponse.json({ ok: true });
     }
 

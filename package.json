@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
+    "metal:verify": "node --test src/lib/metalWeight.test.ts && node scripts/audit-metal-products.ts",
     "supabase:deploy": "node scripts/deploy-supabase.mjs && node scripts/seed-supabase-products.mjs",
     "supabase:verify": "node scripts/verify-supabase-remote.mjs"
   },

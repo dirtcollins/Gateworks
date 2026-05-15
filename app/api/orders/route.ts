@@ -23,6 +23,9 @@ type OrderPayload = {
     sku: string;
     image?: string;
     price: number;
+    weightLbs?: number;
+    cwtPrice?: number;
+    pricingMethod?: "manual" | "cwt_calculated";
     quantity: number;
     options?: Record<string, string | undefined>;
   }>;
@@ -87,6 +90,9 @@ type OrderItemRow = {
     variantId?: string;
     title?: string;
     image?: string;
+    weightLbs?: number;
+    cwtPrice?: number;
+    pricingMethod?: "manual" | "cwt_calculated";
     options?: Record<string, string | undefined>;
   } | null;
 };
@@ -132,6 +138,15 @@ function toClientOrder(row: OrderRow) {
       sku: item.sku,
       image: item.item_payload?.image || "/assets/logo.svg",
       price: Number(item.unit_price),
+      weightLbs:
+        typeof item.item_payload?.weightLbs === "number"
+          ? item.item_payload.weightLbs
+          : undefined,
+      cwtPrice:
+        typeof item.item_payload?.cwtPrice === "number"
+          ? item.item_payload.cwtPrice
+          : undefined,
+      pricingMethod: item.item_payload?.pricingMethod,
       quantity: item.quantity,
       quantityNeeded: Number(item.quantity_needed ?? item.quantity),
       quantityPulled: Number(item.quantity_pulled ?? 0),

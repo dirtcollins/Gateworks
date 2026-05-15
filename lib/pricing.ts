@@ -1,8 +1,27 @@
 import type { Product, ProductVariant } from "@/lib/types";
+import {
+  DEFAULT_METAL_LENGTH_FT,
+  DEFAULT_STEEL_CWT_PRICE,
+  STEEL_DENSITY_LB_PER_IN3,
+  calculateCwtPrice,
+  calculateMetalWeight,
+  parseLengthFt,
+  parseTubeSize,
+  parseWallThickness,
+  toFiniteNumber
+} from "@/src/lib/metalWeight";
 
-export const DEFAULT_STEEL_CWT_PRICE = 105;
-export const STEEL_DENSITY_LB_PER_IN3 = 0.2836;
-export const DEFAULT_TUBING_LENGTH_FT = 20;
+export {
+  DEFAULT_STEEL_CWT_PRICE,
+  STEEL_DENSITY_LB_PER_IN3,
+  calculateCwtPrice,
+  calculateMetalWeight,
+  parseLengthFt,
+  parseTubeSize,
+  parseWallThickness
+};
+
+export const DEFAULT_TUBING_LENGTH_FT = DEFAULT_METAL_LENGTH_FT;
 
 const TUBING_CATEGORY_SLUGS = new Set([
   "square-steel-tubing",
@@ -24,74 +43,6 @@ export function isTubingProduct(product: Pick<Product, "category">) {
   return TUBING_CATEGORY_SLUGS.has(product.category.slug);
 }
 
-function toFiniteNumber(value: unknown) {
-  const numberValue =
-    typeof value === "number"
-      ? value
-      : typeof value === "string" && value.trim()
-        ? Number(value)
-        : NaN;
-
-  return Number.isFinite(numberValue) ? numberValue : undefined;
-}
-
-function parseFractionalInches(value: string) {
-  const normalized = value.trim().replace(/"/g, "");
-  const mixedMatch = normalized.match(/^(\d+)-(\d+)\/(\d+)$/);
-  if (mixedMatch) {
-    const [, whole, numerator, denominator] = mixedMatch;
-    return Number(whole) + Number(numerator) / Number(denominator);
-  }
-
-  const fractionMatch = normalized.match(/^(\d+)\/(\d+)$/);
-  if (fractionMatch) {
-    const [, numerator, denominator] = fractionMatch;
-    return Number(numerator) / Number(denominator);
-  }
-
-  const decimal = Number(normalized);
-  return Number.isFinite(decimal) ? decimal : undefined;
-}
-
-export function parseTubeSize(value?: string) {
-  if (!value) return null;
-
-  const match = value.match(
-    /(\d+(?:-\d+\/\d+|\.\d+)?|\d+\/\d+)\s*"?\s*x\s*(\d+(?:-\d+\/\d+|\.\d+)?|\d+\/\d+)/i
-  );
-
-  if (!match) return null;
-
-  const width = parseFractionalInches(match[1]);
-  const height = parseFractionalInches(match[2]);
-
-  if (!width || !height) return null;
-
-  return {
-    width_in: width,
-    height_in: height
-  };
-}
-
-export function parseWallThickness(value?: string) {
-  if (!value) return undefined;
-
-  const match = value.match(/(?:^|[^\d])(\.\d+|\d+\.\d+|\d+\/\d+)(?=\s*(?:"|in|wall|\)|$))/i);
-  if (!match) return undefined;
-
-  return parseFractionalInches(match[1]);
-}
-
-export function parseLengthFt(value?: string) {
-  if (!value) return undefined;
-
-  const match = value.match(/(\d+(?:\.\d+)?)\s*(?:ft|feet|')/i);
-  if (!match) return undefined;
-
-  const length = Number(match[1]);
-  return Number.isFinite(length) ? length : undefined;
-}
-
 export function calculateTubingCwtPricing(input: TubingInput) {
   const length_ft = input.length_ft || DEFAULT_TUBING_LENGTH_FT;
   const material_density_lb_per_in3 =
@@ -100,25 +51,41 @@ export function calculateTubingCwtPricing(input: TubingInput) {
   const pricing_method = input.pricing_method || "cwt_calculated";
   const manual_price = input.manual_price ?? null;
 
-  const inner_width = input.width_in - 2 * input.wall_thickness_in;
-  const inner_height = input.height_in - 2 * input.wall_thickness_in;
+  const isSquareTubing = input.width_in === input.height_in;
+  let weight;
 
-  if (inner_width <= 0 || inner_height <= 0) {
+  try {
+    weight = calculateMetalWeight(
+      isSquareTubing
+        ? {
+            shape: "square-tubing",
+            outsideSizeInches: input.width_in,
+            wallThicknessInches: input.wall_thickness_in,
+            lengthFt: length_ft,
+            densityLbPerIn3: material_density_lb_per_in3
+          }
+        : {
+            shape: "rectangle-tubing",
+            widthInches: input.width_in,
+            heightInches: input.height_in,
+            wallThicknessInches: input.wall_thickness_in,
+            lengthFt: length_ft,
+            densityLbPerIn3: material_density_lb_per_in3
+          }
+    );
+  } catch {
     return null;
   }
 
-  const outer_area = input.width_in * input.height_in;
-  const inner_area = inner_width * inner_height;
-  const steel_area = outer_area - inner_area;
-  const length_in = length_ft * 12;
-  const raw_weight_lb = steel_area * length_in * material_density_lb_per_in3;
-  const calculated_weight_lb = Math.ceil(raw_weight_lb * 100) / 100;
-  const calculated_price = (calculated_weight_lb / 100) * steel_cwt_price;
-  const rounded_price = Math.ceil(calculated_price);
+  const calculated_weight_lb = Math.ceil(weight.weightLbs * 100) / 100;
+  const cwtPricing = calculateCwtPrice({
+    weightLbs: calculated_weight_lb,
+    cwtPrice: steel_cwt_price
+  });
   const final_price =
     pricing_method === "manual" && manual_price !== null
       ? manual_price
-      : rounded_price;
+      : cwtPricing.finalPrice;
 
   return {
     width_in: input.width_in,
@@ -128,8 +95,8 @@ export function calculateTubingCwtPricing(input: TubingInput) {
     material_density_lb_per_in3,
     steel_cwt_price,
     calculated_weight_lb,
-    calculated_price: Number(calculated_price.toFixed(2)),
-    rounded_price,
+    calculated_price: Number(cwtPricing.calculatedPrice.toFixed(2)),
+    rounded_price: cwtPricing.roundedPrice,
     manual_price,
     final_price,
     pricing_method
@@ -171,8 +138,8 @@ export function applyTubingPricingToVariant(
   }
 
   const pricing = calculateTubingCwtPricing({
-    width_in: toFiniteNumber(variant.width_in) || tubeSize.width_in,
-    height_in: toFiniteNumber(variant.height_in) || tubeSize.height_in,
+    width_in: toFiniteNumber(variant.width_in) || tubeSize.widthInches,
+    height_in: toFiniteNumber(variant.height_in) || tubeSize.heightInches,
     wall_thickness_in: wallThickness,
     length_ft:
       toFiniteNumber(variant.length_ft) ||

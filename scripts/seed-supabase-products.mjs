@@ -1,5 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { createClient } from "@supabase/supabase-js";
+import {
+  DEFAULT_STEEL_CWT_PRICE,
+  STEEL_DENSITY_LB_PER_IN3,
+  calculateCwtPrice,
+  calculateMetalWeight,
+  parseLengthFt,
+  parseTubeSize,
+  parseWallThickness
+} from "../src/lib/metalWeight.ts";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -19,8 +28,7 @@ const raw = JSON.parse(
 );
 
 const sourceProducts = raw.products;
-const STEEL_CWT_PRICE = 105;
-const STEEL_DENSITY_LB_PER_IN3 = 0.2836;
+const STEEL_CWT_PRICE = DEFAULT_STEEL_CWT_PRICE;
 const groups = new Map();
 
 for (const item of sourceProducts) {
@@ -47,57 +55,51 @@ function inferMaterial(item) {
   return "Steel";
 }
 
-function parseFractionalInches(value = "") {
-  const normalized = value.trim().replace(/"/g, "");
-  const mixed = normalized.match(/^(\d+)-(\d+)\/(\d+)$/);
-  if (mixed) return Number(mixed[1]) + Number(mixed[2]) / Number(mixed[3]);
-  const fraction = normalized.match(/^(\d+)\/(\d+)$/);
-  if (fraction) return Number(fraction[1]) / Number(fraction[2]);
-  const numberValue = Number(normalized);
-  return Number.isFinite(numberValue) ? numberValue : undefined;
-}
-
-function parseTubeSize(value = "") {
-  const match = value.match(
-    /(\d+(?:-\d+\/\d+|\.\d+)?|\d+\/\d+)\s*"?\s*x\s*(\d+(?:-\d+\/\d+|\.\d+)?|\d+\/\d+)/i
-  );
-  if (!match) return null;
-  const width = parseFractionalInches(match[1]);
-  const height = parseFractionalInches(match[2]);
-  return width && height ? { width, height } : null;
-}
-
-function parseLengthFt(value = "") {
-  const match = value.match(/(\d+(?:\.\d+)?)\s*(?:ft|feet|')/i);
-  return match ? Number(match[1]) : 20;
-}
-
 function calculateTubingPrice(item) {
   if (!item.tube_shape || !item.tube_size || !item.wall_thickness) return null;
   const dimensions = parseTubeSize(item.tube_size);
-  const wall = Number(item.wall_thickness);
+  const wall = parseWallThickness(item.wall_thickness, item.gauge);
   if (!dimensions || !Number.isFinite(wall)) return null;
 
-  const lengthFt = parseLengthFt(item.stock_length);
-  const innerWidth = dimensions.width - 2 * wall;
-  const innerHeight = dimensions.height - 2 * wall;
-  if (innerWidth <= 0 || innerHeight <= 0) return null;
+  const lengthFt = parseLengthFt(item.stock_length) || 20;
+  let weight;
 
-  const steelArea = dimensions.width * dimensions.height - innerWidth * innerHeight;
-  const calculatedWeight =
-    Math.ceil(steelArea * lengthFt * 12 * STEEL_DENSITY_LB_PER_IN3 * 100) / 100;
-  const calculatedPrice = calculatedWeight * (STEEL_CWT_PRICE / 100);
-  const roundedPrice = Math.ceil(calculatedPrice);
+  try {
+    weight = calculateMetalWeight(
+      item.tube_shape === "square"
+        ? {
+            shape: "square-tubing",
+            outsideSizeInches: dimensions.widthInches,
+            wallThicknessInches: wall,
+            lengthFt
+          }
+        : {
+            shape: "rectangle-tubing",
+            widthInches: dimensions.widthInches,
+            heightInches: dimensions.heightInches,
+            wallThicknessInches: wall,
+            lengthFt
+          }
+    );
+  } catch {
+    return null;
+  }
+
+  const calculatedWeight = Math.ceil(weight.weightLbs * 100) / 100;
+  const cwtPricing = calculateCwtPrice({
+    weightLbs: calculatedWeight,
+    cwtPrice: STEEL_CWT_PRICE
+  });
 
   return {
-    price: roundedPrice,
+    price: cwtPricing.roundedPrice,
     manual_price: null,
-    calculated_price: Number(calculatedPrice.toFixed(2)),
-    rounded_price: roundedPrice,
-    final_price: roundedPrice,
+    calculated_price: Number(cwtPricing.calculatedPrice.toFixed(2)),
+    rounded_price: cwtPricing.roundedPrice,
+    final_price: cwtPricing.finalPrice,
     pricing_method: "cwt_calculated",
-    width_in: dimensions.width,
-    height_in: dimensions.height,
+    width_in: dimensions.widthInches,
+    height_in: dimensions.heightInches,
     wall_thickness_in: wall,
     length_ft: lengthFt,
     material_density_lb_per_in3: STEEL_DENSITY_LB_PER_IN3,

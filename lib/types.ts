@@ -70,6 +70,9 @@ export type CartItem = {
   sku: string;
   image: string;
   price: number;
+  weightLbs?: number;
+  cwtPrice?: number;
+  pricingMethod?: "manual" | "cwt_calculated";
   quantity: number;
   quantityNeeded?: number;
   quantityPulled?: number;
