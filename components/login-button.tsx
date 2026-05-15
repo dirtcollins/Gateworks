@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { User } from "lucide-react";
 import { useUserStore } from "@/lib/user-store";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,7 @@ export function LoginButton() {
   const [name, setName] = useState(displayName === "Guest" ? "" : displayName);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  async function loadSavedUsers() {
+  const loadSavedUsers = useCallback(async () => {
     try {
       const response = await fetch("/api/site-users", {
         cache: "no-store"
@@ -43,7 +43,7 @@ export function LoginButton() {
     } catch {
       setSyncStatus("error");
     }
-  }
+  }, [setSavedUsers]);
 
   useEffect(() => {
     setName(displayName === "Guest" ? "" : displayName);
@@ -51,7 +51,7 @@ export function LoginButton() {
 
   useEffect(() => {
     void loadSavedUsers();
-  }, []);
+  }, [loadSavedUsers]);
 
   useEffect(() => {
     function closeOnOutsideClick(event: MouseEvent) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { authorizeAdminRequest } from "@/lib/admin-auth";
+import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
 type AdminPatchBody =
   | {
@@ -42,6 +43,18 @@ const productFields = new Set([
 
 const variantFields = new Set([
   "price",
+  "manual_price",
+  "calculated_price",
+  "rounded_price",
+  "final_price",
+  "pricing_method",
+  "width_in",
+  "height_in",
+  "wall_thickness_in",
+  "length_ft",
+  "material_density_lb_per_in3",
+  "steel_cwt_price",
+  "calculated_weight_lb",
   "inventory_status",
   "inventory_quantity",
   "image_url",
@@ -53,14 +66,6 @@ const variantFields = new Set([
 
 const imageFields = new Set(["url", "alt", "sort_order"]);
 
-const adminRoles = new Set([
-  "owner",
-  "admin",
-  "merchandiser",
-  "inventory_manager",
-  "content_editor"
-]);
-
 function pickAllowed(
   changes: Record<string, unknown>,
   allowedFields: Set<string>
@@ -70,92 +75,13 @@ function pickAllowed(
   );
 }
 
-async function authorizeAdminRequest(request: NextRequest) {
-  if (!supabaseAdmin) {
-    return {
-      ok: false as const,
-      response: NextResponse.json(
-        {
-          ok: false,
-          reason: "Supabase service role is not configured. Saved locally only."
-        },
-        { status: 503 }
-      )
-    };
-  }
-
-  if (
-    process.env.NODE_ENV === "production" &&
-    process.env.ADMIN_REQUIRE_AUTH !== "true"
-  ) {
-    return {
-      ok: false as const,
-      response: NextResponse.json(
-        {
-          ok: false,
-          reason: "Admin writes require Supabase Auth before production."
-        },
-        { status: 403 }
-      )
-    };
-  }
-
-  if (process.env.ADMIN_REQUIRE_AUTH !== "true") {
-    return { ok: true as const, actorId: null };
-  }
-
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (!token) {
-    return {
-      ok: false as const,
-      response: NextResponse.json(
-        { ok: false, reason: "Admin login is required." },
-        { status: 401 }
-      )
-    };
-  }
-
-  const { data: userData, error: userError } =
-    await supabaseAdmin.auth.getUser(token);
-  if (userError || !userData.user) {
-    return {
-      ok: false as const,
-      response: NextResponse.json(
-        { ok: false, reason: "Invalid admin session." },
-        { status: 401 }
-      )
-    };
-  }
-
-  const { data: profile, error: profileError } = await supabaseAdmin
-    .from("admin_profiles")
-    .select("role")
-    .eq("user_id", userData.user.id)
-    .maybeSingle();
-
-  if (
-    profileError ||
-    !profile?.role ||
-    !adminRoles.has(String(profile.role))
-  ) {
-    return {
-      ok: false as const,
-      response: NextResponse.json(
-        { ok: false, reason: "Admin permissions are required." },
-        { status: 403 }
-      )
-    };
-  }
-
-  return { ok: true as const, actorId: userData.user.id };
-}
-
 async function writeAuditLog(
   action: string,
   entityId: string,
   changes: unknown,
   actorId: string | null
 ) {
+  const supabaseAdmin = getSupabaseAdminClient();
   if (!supabaseAdmin) return;
 
   await supabaseAdmin.from("admin_audit_logs").insert({
@@ -170,12 +96,12 @@ async function writeAuditLog(
 export async function PATCH(request: NextRequest) {
   const auth = await authorizeAdminRequest(request);
   if (!auth.ok) return auth.response;
-  const admin = supabaseAdmin;
+  const admin = getSupabaseAdminClient();
   if (!admin) {
     return NextResponse.json(
       {
         ok: false,
-        reason: "Supabase service role is not configured. Saved locally only."
+        reason: "Supabase service role is not configured. Change was not saved."
       },
       { status: 503 }
     );
