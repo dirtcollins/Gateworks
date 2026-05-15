@@ -1,13 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import "server-only";
 
-const adminRoles = new Set([
-  "owner",
-  "admin",
-  "merchandiser",
-  "inventory_manager",
-  "content_editor"
-]);
+import { NextRequest, NextResponse } from "next/server";
+import { isAdminRole } from "@/lib/admin-roles";
+import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type AdminAuthResult =
   | {
@@ -64,25 +60,57 @@ export async function authorizeAdminRequest(
     return { ok: true, actorId: null };
   }
 
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (!token) {
+  const bearerToken = request.headers
+    .get("authorization")
+    ?.replace(/^Bearer\s+/i, "");
+  const userId = bearerToken
+    ? await getBearerUserId(supabaseAdmin, bearerToken)
+    : await getCookieUserId();
+
+  if (!userId) {
     return {
       ok: false,
       response: NextResponse.json(
-        { ok: false, reason: "Admin login is required." },
+        { ok: false, reason: "A valid admin login is required." },
         { status: 401 }
       )
     };
   }
 
+  return authorizeAdminUserId(userId);
+}
+
+async function getBearerUserId(
+  supabaseAdmin: NonNullable<ReturnType<typeof getSupabaseAdminClient>>,
+  token: string
+) {
   const { data: userData, error: userError } =
     await supabaseAdmin.auth.getUser(token);
-  if (userError || !userData.user) {
+  if (userError || !userData.user) return null;
+  return userData.user.id;
+}
+
+async function getCookieUserId() {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) return null;
+  return data.user.id;
+}
+
+export async function authorizeAdminUserId(
+  userId: string
+): Promise<AdminAuthResult> {
+  const supabaseAdmin = getSupabaseAdminClient();
+
+  if (!supabaseAdmin) {
     return {
       ok: false,
       response: NextResponse.json(
-        { ok: false, reason: "Invalid admin session." },
-        { status: 401 }
+        {
+          ok: false,
+          reason: "Supabase service role is not configured."
+        },
+        { status: 503 }
       )
     };
   }
@@ -90,13 +118,13 @@ export async function authorizeAdminRequest(
   const { data: profile, error: profileError } = await supabaseAdmin
     .from("admin_profiles")
     .select("role")
-    .eq("user_id", userData.user.id)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (
     profileError ||
     !profile?.role ||
-    !adminRoles.has(String(profile.role))
+    !isAdminRole(profile.role)
   ) {
     return {
       ok: false,
@@ -107,6 +135,5 @@ export async function authorizeAdminRequest(
     };
   }
 
-  return { ok: true, actorId: userData.user.id };
+  return { ok: true, actorId: userId };
 }
-

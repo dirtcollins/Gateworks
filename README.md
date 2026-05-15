@@ -39,6 +39,30 @@ Then verify the remote project:
 npm run supabase:verify
 ```
 
+## First Admin User
+
+Admin access uses Supabase Auth cookie sessions plus the `admin_profiles` table.
+Create the first admin before using `/admin` in a preview or production
+deployment:
+
+1. In the Supabase dashboard, create or invite a user under Authentication.
+2. Copy that user's Auth `id`.
+3. Insert an admin profile for that user:
+
+```sql
+insert into public.admin_profiles (user_id, role)
+values ('00000000-0000-0000-0000-000000000000', 'owner')
+on conflict (user_id) do update
+set role = excluded.role;
+```
+
+Allowed admin roles are `owner`, `admin`, `merchandiser`,
+`inventory_manager`, and `content_editor`.
+
+The deployed app must keep `ADMIN_REQUIRE_AUTH=true`. Admin pages redirect to
+`/admin/login`; signed-in users without an allowed `admin_profiles` role are
+sent to `/admin/access-denied`.
+
 ## Development
 
 ```bash
