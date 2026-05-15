@@ -5,6 +5,8 @@ export const metadata = {
   title: "Admin Access Denied | Gateworks"
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminAccessDeniedPage() {
   const supabase = await createSupabaseServerClient();
   const {
@@ -43,4 +45,3 @@ export default async function AdminAccessDeniedPage() {
     </main>
   );
 }
-
