@@ -37,7 +37,9 @@ export function AccountPageClient() {
   useEffect(() => {
     async function loadAccountData() {
       const [ordersResponse, cartsResponse] = await Promise.all([
-        fetch(`/api/orders?userId=${encodeURIComponent(userId)}`, { cache: "no-store" }),
+        fetch(`/api/orders?userId=${encodeURIComponent(userId)}&includeItems=false`, {
+          cache: "no-store"
+        }),
         fetch(`/api/saved-carts?userId=${encodeURIComponent(userId)}`, { cache: "no-store" })
       ]);
 

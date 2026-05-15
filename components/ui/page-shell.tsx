@@ -19,11 +19,11 @@ export function PageShell({
   actions
 }: PageShellProps) {
   return (
-    <main className={cn("mx-auto w-full max-w-[1500px] px-4 py-4 md:py-6", className)}>
+    <main className={cn("w-full px-4 py-4 md:py-6", className)}>
       {(title || eyebrow || description || actions) && (
         <section className="mb-4 border border-industrial-rail bg-white p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
+            <div className="w-full">
               {eyebrow && (
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-industrial-muted">
                   {eyebrow}
@@ -48,4 +48,3 @@ export function PageShell({
     </main>
   );
 }
-

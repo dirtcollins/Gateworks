@@ -29,6 +29,7 @@ import {
   isTubingProduct
 } from "@/lib/pricing";
 import type { Product, ProductVariant } from "@/lib/types";
+import { getProductImageForSize } from "@/lib/product-image";
 import { cn, formatCurrency } from "@/lib/utils";
 
 type ProductPageClientProps = {
@@ -44,6 +45,26 @@ const optionLabels: Array<keyof ProductVariant["options"]> = [
   "color"
 ];
 const tubingLengthOptions = [20, 24];
+
+function pickImageSource(product: Product, imageUrl?: string, size: "thumb" | "card" | "medium" | "full" = "card") {
+  const normalized = imageUrl || "/assets/logo.svg";
+  const matchedImage = product.images.find((candidate) => candidate.url === normalized);
+
+  if (matchedImage?.sizes) {
+    return getProductImageForSize(matchedImage.url, size, matchedImage.sizes);
+  }
+
+  if (matchedImage) {
+    return getProductImageForSize(normalized, size);
+  }
+
+  const primaryImage = product.images[0];
+  if (primaryImage?.sizes) {
+    return getProductImageForSize(primaryImage.url, size, primaryImage.sizes);
+  }
+
+  return getProductImageForSize(primaryImage?.url, size) || getProductImageForSize(normalized, size);
+}
 
 function getTubingWallLabel(variant: ProductVariant) {
   const optionLength = variant.options.length || "";
@@ -117,6 +138,16 @@ export function ProductPageClient({
     return urls;
   }, [product.images, product.variants, selectedVariant.image]);
 
+  const galleryImages = useMemo(
+    () => allImages.map((image) => ({ source: image, thumb: pickImageSource(product, image, "thumb") })),
+    [allImages, product]
+  );
+
+  const selectedImageSource = useMemo(
+    () => pickImageSource(product, selectedImage, "medium"),
+    [product, selectedImage]
+  );
+
   const optionValues = useMemo(() => {
     return optionLabels.reduce<Record<string, string[]>>((values, option) => {
       values[option] = Array.from(
@@ -180,6 +211,11 @@ export function ProductPageClient({
     };
   }, [product, selectedTubingLengthFt, selectedTubingWallLabel, selectedVariant]);
 
+  const selectedVariantCardImage = useMemo(
+    () => pickImageSource(product, pricedSelectedVariant.image, "card"),
+    [product, pricedSelectedVariant.image]
+  );
+
   const actionVariantId =
     pricedSelectedVariant.id === selectedVariant.id &&
     isTubingProduct(product) &&
@@ -239,7 +275,7 @@ export function ProductPageClient({
       variantId: actionVariantId,
       title: product.title,
       sku: pricedSelectedVariant.sku,
-      image: pricedSelectedVariant.image,
+      image: selectedVariantCardImage,
       price: pricedSelectedVariant.price,
       weightLbs: pricedSelectedVariant.calculated_weight_lb,
       cwtPrice: pricedSelectedVariant.steel_cwt_price,
@@ -256,7 +292,7 @@ export function ProductPageClient({
     variantId: actionVariantId,
     title: product.title,
     sku: pricedSelectedVariant.sku,
-    image: pricedSelectedVariant.image,
+    image: selectedVariantCardImage,
     price: pricedSelectedVariant.price,
     weightLbs: pricedSelectedVariant.calculated_weight_lb,
     cwtPrice: pricedSelectedVariant.steel_cwt_price,
@@ -449,24 +485,24 @@ export function ProductPageClient({
               fill
               quality={90}
               sizes="(max-width: 1024px) 100vw, 44vw"
-              src={selectedImage}
+              src={selectedImageSource}
             />
           </div>
           <p className="mt-1 text-center text-xs text-jobsite-steel">
             Click thumbnails to change image
           </p>
           <div className="mt-3 grid grid-cols-5 gap-2">
-            {allImages.slice(0, 8).map((image) => (
+            {galleryImages.slice(0, 8).map((image) => (
               <button
-                key={image}
+                key={image.source}
                 className={cn(
                   "relative aspect-square border bg-white",
-                  selectedImage === image
+                  selectedImage === image.source
                     ? "border-2 border-jobsite-safety"
                     : "border-jobsite-rail"
                 )}
                 type="button"
-                onClick={() => setSelectedImage(image)}
+                onClick={() => setSelectedImage(image.source)}
               >
                 <Image
                   alt={`${product.title} thumbnail`}
@@ -474,7 +510,7 @@ export function ProductPageClient({
                   fill
                   quality={60}
                   sizes="88px"
-                  src={image}
+                  src={image.thumb}
                 />
               </button>
             ))}
@@ -908,7 +944,7 @@ export function ProductPageClient({
                   fill
                   quality={60}
                   sizes="88px"
-                  src={selectedVariant.image}
+                  src={selectedVariantCardImage}
                 />
               </div>
               <div>
@@ -1062,7 +1098,7 @@ export function ProductPageClient({
                   fill
                   quality={60}
                   sizes="88px"
-                  src={selectedVariant.image}
+                  src={selectedVariantCardImage}
                 />
               </div>
               <div>

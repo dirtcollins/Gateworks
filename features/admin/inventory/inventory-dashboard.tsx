@@ -1,17 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowLeft,
   ClipboardCheck,
   Download,
+  Check,
   History,
   PackageCheck,
   Plus,
+  Pencil,
   Search,
   ShoppingCart,
+  X,
   TriangleAlert,
   Upload,
   Warehouse,
@@ -31,6 +35,7 @@ import type {
 } from "@/features/admin/inventory/inventory-data";
 import { getInventorySummary } from "@/features/admin/inventory/inventory-data";
 import { formatCurrency } from "@/lib/utils";
+import { getProductImageForSize } from "@/lib/product-image";
 
 type InventoryDashboardProps = {
   categories: Array<{ slug: string; name: string }>;
@@ -80,6 +85,13 @@ type OperationForm = {
   unitCost: string;
   unitPrice: string;
 };
+
+type QuickEditField = "quantityOnHand" | "unitPrice";
+type QuickEditState = {
+  rowId: string;
+  field: QuickEditField;
+  value: string;
+} | null;
 
 type InventoryApiPayload = {
   inventory?: InventoryRow[];
@@ -143,6 +155,13 @@ const rowActions: Array<{ mode: OperationMode; label: string }> = [
   { mode: "bin", label: "Rack/bin" },
   { mode: "history", label: "History" }
 ];
+
+function getRowThumbnail(row: InventoryRow) {
+  if (row.productImage) {
+    return row.productImage.sizes?.thumb || getProductImageForSize(row.productImage.url, "thumb");
+  }
+  return "/assets/logo.svg";
+}
 
 const eventTypeByMode: Partial<Record<OperationMode, InventoryEventType>> = {
   add_item: "created",
@@ -255,9 +274,12 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
   const [lowOnly, setLowOnly] = useState(false);
   const [outOnly, setOutOnly] = useState(false);
   const [damagedOnly, setDamagedOnly] = useState(false);
+  const [visibleLimit, setVisibleLimit] = useState(220);
   const [operation, setOperation] = useState<OperationState | null>(null);
   const [form, setForm] = useState(createForm());
   const [formError, setFormError] = useState("");
+  const [quickEdit, setQuickEdit] = useState<QuickEditState>(null);
+  const [quickEditError, setQuickEditError] = useState("");
   const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -322,6 +344,17 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
     });
   }, [category, damagedOnly, items, location, lowOnly, outOnly, query, status, supplier]);
 
+  useEffect(() => {
+    setVisibleLimit(220);
+  }, [category, damagedOnly, location, lowOnly, outOnly, query, status, supplier]);
+
+  const visibleRows = useMemo(
+    () => filteredRows.slice(0, visibleLimit),
+    [filteredRows, visibleLimit]
+  );
+
+  const hasMoreRows = visibleRows.length < filteredRows.length;
+
   const lowStockRows = useMemo(
     () =>
       items
@@ -345,6 +378,142 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
 
   function requireReason(mode: OperationMode) {
     return !["history", "purchase_order"].includes(mode);
+  }
+
+  function startQuickEdit(row: InventoryRow, field: QuickEditField) {
+    setQuickEdit({
+      rowId: row.id,
+      field,
+      value: field === "quantityOnHand" ? String(row.quantityOnHand) : String(row.unitPrice)
+    });
+    setQuickEditError("");
+  }
+
+  function cancelQuickEdit() {
+    setQuickEdit(null);
+    setQuickEditError("");
+  }
+
+  function parseQuickValue(value: string) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : NaN;
+  }
+
+  function persistQuickQuantity(row: InventoryRow, nextQuantity: number) {
+    void fetch("/api/admin/inventory", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "adjust",
+        inventoryItemId: row.id,
+        variantId: row.variantId,
+        locationCode: row.locationCode,
+        binCode: row.binCode,
+        quantity: nextQuantity,
+        reason: "Quick edit"
+      })
+    })
+      .then((response) => response.json() as Promise<InventoryMutationResponse>)
+      .then((payload) => {
+        if (payload.item) {
+          const updatedItem = payload.item;
+          setItems((current) =>
+            current.map((item) =>
+              item.id === row.id ||
+              (updatedItem.variantId && item.variantId === updatedItem.variantId)
+                ? updatedItem
+                : item
+            )
+          );
+          return;
+        }
+
+        if (payload.reason) {
+          setQuickEditError(payload.reason);
+        } else {
+          setQuickEditError("Could not save quantity edit to inventory database.");
+        }
+      })
+      .catch(() => {
+        setQuickEditError("Could not save quantity edit. Please retry.");
+      });
+  }
+
+  function persistQuickPrice(row: InventoryRow, nextPrice: number) {
+    if (!row.variantId || !row.sku) {
+      setQuickEditError("Price edits require a catalog variant to be loaded.");
+      return;
+    }
+    void fetch("/api/admin/products", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "update_variant",
+        variantId: row.variantId,
+        sku: row.sku,
+        changes: {
+          price: nextPrice
+        }
+      })
+    })
+      .then((response) => response.json() as Promise<{ ok?: boolean; reason?: string }>)
+      .then((payload) => {
+        if (payload.ok) {
+          setItems((current) =>
+            current.map((item) =>
+              item.id === row.id || item.variantId === row.variantId
+                ? { ...item, unitPrice: nextPrice }
+                : item
+            )
+          );
+          return;
+        }
+        setQuickEditError(payload.reason || "Could not save price edit.");
+      })
+      .catch(() => {
+        setQuickEditError("Could not save price edit. Please retry.");
+      });
+  }
+
+  function submitQuickEdit() {
+    if (!quickEdit) return;
+
+    const row = items.find((item) => item.id === quickEdit.rowId);
+    if (!row) {
+      cancelQuickEdit();
+      return;
+    }
+
+    const value = parseQuickValue(quickEdit.value);
+    if (Number.isNaN(value)) {
+      setQuickEditError("Please enter a valid number.");
+      return;
+    }
+
+    if (quickEdit.field === "quantityOnHand") {
+      const nextQuantity = Math.max(0, Math.floor(value));
+      if (nextQuantity !== row.quantityOnHand) {
+        persistQuickQuantity(row, nextQuantity);
+      }
+      setQuickEdit(null);
+      return;
+    }
+
+    const nextPrice = Number(value.toFixed(2));
+    if (nextPrice < 0) {
+      setQuickEditError("Price cannot be negative.");
+      return;
+    }
+    if (nextPrice !== row.unitPrice) {
+      persistQuickPrice(row, nextPrice);
+    }
+    setQuickEdit(null);
+  }
+
+  function updateQuickValue(nextValue: string) {
+    setQuickEdit((current) =>
+      current ? { ...current, value: nextValue } : current
+    );
   }
 
   function parseQuantity(defaultValue = 0) {
@@ -705,6 +874,9 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
               </div>
               <div className="text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">
                 {formatNumber(filteredRows.length)} rows
+                <span className="ml-2 font-black normal-case text-jobsite-steel">
+                  (showing {formatNumber(visibleRows.length)})
+                </span>
               </div>
             </CardHeader>
             <CardBody className="grid gap-4">
@@ -789,6 +961,11 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
                   </button>
                 ))}
               </div>
+              {quickEditError ? (
+                <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-800">
+                  {quickEditError}
+                </p>
+              ) : null}
 
               <div className="overflow-x-auto border border-industrial-rail">
                 <table className="min-w-[1320px] divide-y divide-industrial-rail text-left text-sm">
@@ -806,19 +983,33 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
                       <th className="px-3 py-3">Controls</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-industrial-rail bg-white">
-                    {filteredRows.map((row) => (
+              <tbody className="divide-y divide-industrial-rail bg-white">
+                    {visibleRows.map((row) => (
                       <tr className="align-top" key={row.id}>
                         <td className="px-3 py-3">
                           <Link
-                            className="font-black text-industrial-ink hover:underline"
+                            className="flex items-start gap-3 font-black text-industrial-ink hover:underline"
                             href={`/products/${row.productSlug}`}
                           >
-                            {row.productTitle}
+                            <span className="relative size-11 shrink-0 rounded-md border border-industrial-rail bg-white p-1">
+                              <Image
+                                alt={row.productImage?.alt || row.productTitle}
+                                className="object-contain"
+                                width={44}
+                                height={44}
+                                decoding="async"
+                                quality={45}
+                                sizes="44px"
+                                src={getRowThumbnail(row)}
+                              />
+                            </span>
+                            <span>
+                              <span>{row.productTitle}</span>
+                              <span className="mt-1 block text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">
+                                {row.sku}
+                              </span>
+                            </span>
                           </Link>
-                          <p className="mt-1 text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">
-                            {row.sku}
-                          </p>
                         </td>
                         <td className="px-3 py-3">
                           <p className="font-semibold text-industrial-ink">{row.category}</p>
@@ -827,7 +1018,56 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
                           </p>
                         </td>
                         <td className="px-3 py-3 text-right font-black">
-                          {formatNumber(row.quantityOnHand)}
+                          {quickEdit?.rowId === row.id &&
+                          quickEdit.field === "quantityOnHand" ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Input
+                                autoFocus
+                                className="h-8 w-24 text-right"
+                                inputMode="numeric"
+                                min={0}
+                                onBlur={submitQuickEdit}
+                                onChange={(event) => updateQuickValue(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    submitQuickEdit();
+                                  }
+                                  if (event.key === "Escape") {
+                                    cancelQuickEdit();
+                                  }
+                                }}
+                                step={1}
+                                type="number"
+                                value={quickEdit.value}
+                              />
+                              <button
+                                className="rounded border border-industrial-rail px-2 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={submitQuickEdit}
+                                type="button"
+                              >
+                                <Check size={13} />
+                              </button>
+                              <button
+                                className="rounded border border-industrial-rail px-2 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={cancelQuickEdit}
+                                type="button"
+                              >
+                                <X size={13} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              className="flex w-full items-center justify-end gap-1.5 hover:text-industrial-ink/85"
+                              onClick={() => startQuickEdit(row, "quantityOnHand")}
+                              type="button"
+                            >
+                              <span>{formatNumber(row.quantityOnHand)}</span>
+                              <Pencil size={13} />
+                            </button>
+                          )}
                           {row.quantityDamaged > 0 && (
                             <p className="mt-1 text-xs text-red-700">
                               {row.quantityDamaged} damaged
@@ -848,7 +1088,55 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
                             {formatCurrency(row.unitCost)}
                           </p>
                           <p className="mt-1 text-xs text-industrial-steel">
-                            Sale {formatCurrency(row.unitPrice)}
+                            {quickEdit?.rowId === row.id && quickEdit.field === "unitPrice" ? (
+                              <span className="inline-flex items-center gap-1.5">
+                                <Input
+                                  autoFocus
+                                  className="h-7 w-24 text-right text-xs"
+                                  inputMode="decimal"
+                                  min={0}
+                                  onBlur={submitQuickEdit}
+                                  onChange={(event) => updateQuickValue(event.target.value)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                      event.preventDefault();
+                                      submitQuickEdit();
+                                    }
+                                    if (event.key === "Escape") {
+                                      cancelQuickEdit();
+                                    }
+                                  }}
+                                  step={0.01}
+                                  type="number"
+                                  value={quickEdit.value}
+                                />
+                                <button
+                                  className="rounded border border-industrial-rail px-2 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={submitQuickEdit}
+                                  type="button"
+                                >
+                                  <Check size={12} />
+                                </button>
+                                <button
+                                  className="rounded border border-industrial-rail px-2 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={cancelQuickEdit}
+                                  type="button"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </span>
+                            ) : (
+                              <button
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-industrial-steel transition hover:text-industrial-ink/85"
+                                onClick={() => startQuickEdit(row, "unitPrice")}
+                                type="button"
+                              >
+                                Sale {formatCurrency(row.unitPrice)}
+                                <Pencil size={13} />
+                              </button>
+                            )}
                           </p>
                         </td>
                         <td className="px-3 py-3">
@@ -890,6 +1178,15 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
                     ))}
                   </tbody>
                 </table>
+                {hasMoreRows ? (
+                  <button
+                    className="mt-3 border border-industrial-rail bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
+                    onClick={() => setVisibleLimit((current) => current + 220)}
+                    type="button"
+                  >
+                    Load more rows
+                  </button>
+                ) : null}
               </div>
             </CardBody>
           </Card>

@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteHeader } from "@/components/layout/site-header";
+import { RootShell } from "@/components/layout/root-shell";
 
 export const metadata: Metadata = {
   title: "Gateworks",
@@ -18,9 +17,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <SiteHeader />
-        {children}
-        <SiteFooter />
+        <RootShell>{children}</RootShell>
       </body>
     </html>
   );

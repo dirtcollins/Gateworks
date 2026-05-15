@@ -8,6 +8,12 @@ create extension if not exists pgcrypto;
 create unique index if not exists product_images_product_url_key
 on public.product_images(product_id, url);
 
+alter table public.product_images
+  add column if not exists thumb_url text,
+  add column if not exists card_url text,
+  add column if not exists medium_url text,
+  add column if not exists full_url text;
+
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'customer-drawings',

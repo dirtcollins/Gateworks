@@ -5,6 +5,7 @@ import type { KeyboardEvent } from "react";
 import { PackageSearch, Search } from "lucide-react";
 import { formatPricingMethod } from "@/lib/pricing";
 import type { Product } from "@/lib/types";
+import { getProductImageForSize } from "@/lib/product-image";
 import { cn, formatCurrency } from "@/lib/utils";
 import { getProductStock } from "@/features/admin/catalog/utils";
 
@@ -48,8 +49,10 @@ export function AdminProductList({
       <div className="min-h-0 overflow-auto">
         {filteredProducts.map((product, index) => {
           const isSelected = selectedProductId === product.id;
-          const image =
-            product.images[0]?.url || product.variants[0]?.image || "/assets/logo.svg";
+          const image = getProductImageForSize(
+            product.images[0]?.url || product.variants[0]?.image || "/assets/logo.svg",
+            "card"
+          );
           const variant = product.variants[0];
 
           return (

@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   FileText,
+  Plus,
   Mail,
   PackageCheck,
   Search,
@@ -20,6 +21,7 @@ import { StatGrid } from "@/components/ui/stat-grid";
 import type { OrderStatus } from "@/lib/platform-backend";
 import { useOrderStore, type OrderRecord } from "@/lib/order-store";
 import { formatCurrency } from "@/lib/utils";
+import Link from "next/link";
 
 const taxRate = 0.0825;
 
@@ -268,34 +270,118 @@ export function QuotesDashboard() {
   const [staffNote, setStaffNote] = useState(
     "Confirm material availability, contractor pricing tier, delivery fee, and expiration before sending."
   );
+  const [isCreatingQuote, setIsCreatingQuote] = useState(false);
 
-  useEffect(() => {
-    setLocalQuoteRequests(getInitialSampleQuoteRequests());
+  function buildQuotePayload(quote: OrderRecord) {
+    return {
+      userId: quote.userId,
+      orderNumber: quote.orderNumber,
+      customerName: quote.customerName,
+      companyName: quote.companyName,
+      email: quote.email,
+      phone: quote.phone,
+      items: quote.items,
+      fulfillmentMethod: quote.fulfillmentMethod,
+      requestedDate: quote.requestedDate,
+      requestedWindow: quote.requestedWindow,
+      jobName: quote.jobName,
+      jobsiteAddress: quote.jobsiteAddress,
+      drawings: quote.drawings,
+      pickupContact: quote.pickupContact,
+      subtotal: quote.subtotal,
+      tax: quote.tax,
+      deliveryFee: quote.deliveryFee,
+      total: quote.total,
+      status: quote.status,
+      paymentStatus: quote.paymentStatus,
+      isQuoteRequest: quote.isQuoteRequest
+    };
+  }
 
-    async function loadQuoteRequests() {
-      const response = await fetch("/api/orders?limit=250", { cache: "no-store" });
-      if (!response.ok) return;
+  async function handleCreateQuote() {
+    if (isCreatingQuote) return;
+
+    setIsCreatingQuote(true);
+    setBackendNotice("");
+
+    const createdQuote = createOrder({
+      userId: "admin-user",
+      customerName: "New Customer",
+      companyName: "New Customer",
+      email: "customer@example.com",
+      phone: "555-0187",
+      items: [],
+      fulfillmentMethod: "delivery",
+      requestedDate: new Date().toISOString().slice(0, 10),
+      requestedWindow: "12:00 PM - 2:00 PM",
+      jobName: "New quote",
+      jobsiteAddress: {
+        name: "New Customer",
+        company: "New Customer",
+        email: "customer@example.com",
+        phone: "555-0187",
+        addressLine1: "500 Main Street",
+        addressLine2: "",
+        city: "Los Angeles",
+        state: "CA",
+        postalCode: "90001",
+        notes: "Quote created from admin workspace."
+      },
+      drawings: [],
+      pickupContact: "New Customer",
+      subtotal: 0,
+      tax: 0,
+      deliveryFee: 0,
+      total: 0,
+      status: "draft",
+      paymentStatus: "unpaid",
+      isQuoteRequest: true
+    });
+
+    setSelectedQuoteId(createdQuote.id);
+    setActionMessage("New quote created. Add products and build details from this workspace.");
+
+    try {
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildQuotePayload(createdQuote))
+      });
 
       const payload = (await response.json()) as {
-        orders?: OrderRecord[];
+        ok?: boolean;
         persisted?: boolean;
+        orderId?: string;
         reason?: string;
       };
 
-      if (payload.persisted && payload.orders) {
-        setHasLoadedPersistedOrders(true);
-        setBackendNotice("");
-        setOrders(payload.orders);
-      } else if (!payload.persisted) {
+      if (payload.persisted) {
+        setActionMessage(
+          "Quote saved to backend. Add products and build details from this workspace."
+        );
+      } else if (payload.persisted === false) {
         setBackendNotice(
           payload.reason ||
-            "Supabase is not configured. Quote changes are saved in this browser only."
+            "Supabase is not configured. New quote was created locally and saved only in this browser."
         );
       }
+    } catch (error) {
+      setBackendNotice(
+        error instanceof Error && error.message
+          ? error.message
+          : "Unable to persist new quote right now; it remains in your local workspace."
+      );
     }
 
-    void loadQuoteRequests();
-  }, [setOrders]);
+    window.setTimeout(() => {
+      setActionMessage("");
+      setIsCreatingQuote(false);
+  }, 4500);
+  }
+
+  useEffect(() => {
+    setLocalQuoteRequests(getInitialSampleQuoteRequests());
+  }, []);
 
   const quoteRequests = useMemo(() => {
     const requests = storedOrders.filter((order) => order.isQuoteRequest);
@@ -508,10 +594,21 @@ export function QuotesDashboard() {
   }
 
   return (
-    <PageShell
-      description="Sales counter quote desk for customer quote requests, contractor pricing, drawing review, approval, send-out, and quote-to-order conversion."
-      eyebrow="Gateworks Operations"
-      title="Quotes"
+      <PageShell
+        description="Sales counter quote desk for customer quote requests, contractor pricing, drawing review, approval, send-out, and quote-to-order conversion."
+        eyebrow="Gateworks Operations"
+        title="Quotes"
+        actions={
+        <Button
+          disabled={isCreatingQuote}
+          onClick={handleCreateQuote}
+          variant="primary"
+          type="button"
+        >
+          <Plus size={16} />
+          Create new quote
+        </Button>
+      }
     >
       <div className="grid gap-5">
         <StatGrid
@@ -617,6 +714,12 @@ export function QuotesDashboard() {
                       {quote.fulfillmentMethod} / {formatDate(quote.requestedDate)} /{" "}
                       {formatCurrency(getQuotedTotal(quote))}
                     </p>
+                    <Link
+                      className="inline-flex h-7 items-center justify-center rounded border border-industrial-ink bg-white px-2 text-[11px] font-black uppercase tracking-[0.08em] text-industrial-ink"
+                      href={`/admin/quotes/${quote.id}`}
+                    >
+                      Open quote
+                    </Link>
                   </button>
                 ))}
 

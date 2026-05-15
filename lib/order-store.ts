@@ -70,9 +70,14 @@ type CreateOrderInput = Omit<OrderRecord, "id" | "orderNumber" | "createdAt" | "
 type OrderState = {
   orders: OrderRecord[];
   setOrders: (orders: OrderRecord[]) => void;
+  isRemoteOrdersLoading: boolean;
+  hasRemoteOrdersLoaded: boolean;
+  setRemoteOrdersLoading: (value: boolean) => void;
+  setRemoteOrdersLoaded: (value: boolean) => void;
   createOrder: (order: CreateOrderInput) => OrderRecord;
   updateOrderStatus: (orderId: string, status: OrderStatus, detail?: string) => void;
   updatePaymentStatus: (orderId: string, paymentStatus: PaymentStatus, detail?: string) => void;
+  upsertOrder: (order: OrderRecord) => void;
   clearOrders: () => void;
 };
 
@@ -104,6 +109,10 @@ export const useOrderStore = create<OrderState>()(
   persist(
     (set, get) => ({
       orders: [],
+      isRemoteOrdersLoading: false,
+      hasRemoteOrdersLoaded: false,
+      setRemoteOrdersLoading: (value) => set({ isRemoteOrdersLoading: value }),
+      setRemoteOrdersLoaded: (value) => set({ hasRemoteOrdersLoaded: value }),
       setOrders: (orders) => set({ orders }),
       createOrder: (order) => {
         const now = new Date().toISOString();
@@ -159,6 +168,22 @@ export const useOrderStore = create<OrderState>()(
               : order
           )
         })),
+      upsertOrder: (order) =>
+        set((state) => {
+          const index = state.orders.findIndex((item) => item.id === order.id);
+          const next = [...state.orders];
+
+          if (index >= 0) {
+            next[index] = {
+              ...order,
+              id: state.orders[index].id,
+              updatedAt: new Date().toISOString()
+            };
+            return { orders: next };
+          }
+
+          return { orders: [order, ...state.orders] };
+        }),
       clearOrders: () => set({ orders: [] })
     }),
     {

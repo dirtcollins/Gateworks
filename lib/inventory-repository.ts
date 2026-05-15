@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { InventoryRow, InventoryStatus } from "@/features/admin/inventory/inventory-data";
+import { getImageSet } from "@/lib/product-image";
 
 type InventoryItemRow = {
   id: string;
@@ -26,6 +27,18 @@ type InventoryItemRow = {
               title: string;
               slug: string;
               specifications: Record<string, string> | null;
+              product_images: Array<{
+                id: string;
+                product_id: string;
+                variant_id: string | null;
+                url: string;
+                alt: string;
+                sort_order: number;
+                thumb_url?: string | null;
+                card_url?: string | null;
+                medium_url?: string | null;
+                full_url?: string | null;
+              }> | null;
               categories:
                 | {
                     name: string;
@@ -42,6 +55,18 @@ type InventoryItemRow = {
               title: string;
               slug: string;
               specifications: Record<string, string> | null;
+              product_images: Array<{
+                id: string;
+                product_id: string;
+                variant_id: string | null;
+                url: string;
+                alt: string;
+                sort_order: number;
+                thumb_url?: string | null;
+                card_url?: string | null;
+                medium_url?: string | null;
+                full_url?: string | null;
+              }> | null;
               categories:
                 | {
                     name: string;
@@ -167,6 +192,25 @@ function mapInventoryRow(row: InventoryItemRow): InventoryRow {
     quantityOnHand - quantityReserved - quantityDamaged
   );
   const reorderPoint = Number(row.reorder_point || 0);
+  const productImage =
+    product?.product_images && product.product_images.length
+      ? [...product.product_images]
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((image) => ({
+            id: image.id,
+            productId: image.product_id,
+            variantId: image.variant_id || undefined,
+            url: image.url,
+            alt: image.alt || product.title,
+            sortOrder: image.sort_order,
+            sizes: getImageSet(image.url, {
+              thumb: image.thumb_url || undefined,
+              card: image.card_url || undefined,
+              medium: image.medium_url || undefined,
+              full: image.full_url || undefined
+            })
+          }))[0]
+      : undefined;
 
   return {
     id: row.id,
@@ -194,16 +238,25 @@ function mapInventoryRow(row: InventoryItemRow): InventoryRow {
     status: getStatus(quantityAvailable, reorderPoint),
     unitCost: Number(variant?.cost || 0),
     unitPrice: Number(variant?.price || 0),
+    productImage,
     lastUpdated: row.updated_at,
     history: []
   };
 }
 
 export async function listInventoryRows(admin: SupabaseClient) {
-  const { data, error } = await admin
-    .from("inventory_items")
-    .select(
-      `
+  const imageProjection = "product_images (id, product_id, variant_id, url, alt, sort_order)";
+  const imageProjectionWithSizes = `product_images (id, product_id, variant_id, url, alt, sort_order, thumb_url, card_url, medium_url, full_url)`;
+
+  async function queryRows(includeSizes: boolean) {
+    const selectedImageProjection = includeSizes
+      ? imageProjectionWithSizes
+      : imageProjection;
+
+    const { data, error } = await admin
+      .from("inventory_items")
+      .select(
+        `
       id,
       variant_id,
       location_id,
@@ -226,18 +279,30 @@ export async function listInventoryRows(admin: SupabaseClient) {
           title,
           slug,
           specifications,
-          categories (name, slug)
+          categories (name, slug),
+          ${selectedImageProjection}
         )
       ),
       inventory_locations (code),
       inventory_bins (code)
     `
-    )
-    .order("updated_at", { ascending: false });
+      )
+      .order("updated_at", { ascending: false });
 
-  if (error) throw error;
+    return { data, error };
+  }
 
-  return ((data || []) as unknown as InventoryItemRow[]).map(mapInventoryRow);
+  const optimized = await queryRows(true);
+
+  if (optimized.error && optimized.error.code === "42703") {
+    const legacy = await queryRows(false);
+    if (legacy.error) throw legacy.error;
+    return ((legacy.data || []) as unknown as InventoryItemRow[]).map(mapInventoryRow);
+  }
+
+  if (optimized.error) throw optimized.error;
+
+  return ((optimized.data || []) as unknown as InventoryItemRow[]).map(mapInventoryRow);
 }
 
 async function getOrCreateLocation(
@@ -280,7 +345,9 @@ async function getOrCreateLocation(
 }
 
 async function findVariantId(admin: SupabaseClient, input: InventoryMutationInput) {
-  if (input.variantId) return input.variantId;
+  if (input.variantId && asUuid(input.variantId)) {
+    return input.variantId;
+  }
   if (!input.sku) return null;
 
   const { data, error } = await admin
@@ -297,11 +364,12 @@ async function fetchInventoryItem(
   admin: SupabaseClient,
   input: InventoryMutationInput
 ) {
-  if (input.inventoryItemId) {
+  const inventoryItemId = asUuid(input.inventoryItemId);
+  if (inventoryItemId) {
     const { data, error } = await admin
       .from("inventory_items")
       .select("*")
-      .eq("id", input.inventoryItemId)
+      .eq("id", inventoryItemId)
       .single();
     if (error) throw error;
     return data;
@@ -315,6 +383,17 @@ async function fetchInventoryItem(
     input.locationCode,
     input.binCode
   );
+
+  const { data: existingInventoryItem, error: existingItemError } = await admin
+    .from("inventory_items")
+    .select("*")
+    .eq("variant_id", variantId)
+    .eq("location_id", location.id)
+    .eq("bin_id", bin.id)
+    .maybeSingle();
+
+  if (existingItemError) throw existingItemError;
+  if (existingInventoryItem) return existingInventoryItem;
 
   const { data, error } = await admin
     .from("inventory_items")
@@ -340,7 +419,10 @@ export async function applyInventoryMutation(
   admin: SupabaseClient,
   input: InventoryMutationInput
 ): Promise<InventoryMutationResult> {
-  if (!input.quantity && !["transfer", "cycle_count"].includes(input.action)) {
+  if (
+    (input.quantity === undefined || input.quantity === null) &&
+    !["transfer", "cycle_count"].includes(input.action)
+  ) {
     return { ok: false, reason: "Quantity is required." };
   }
 

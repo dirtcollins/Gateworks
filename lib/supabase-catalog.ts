@@ -1,6 +1,7 @@
 import type { Product, ProductImage, ProductVariant } from "@/lib/types";
 import { DEFAULT_STEEL_CWT_PRICE, applyTubingPricing } from "@/lib/pricing";
 import { getSupabaseClient } from "@/lib/supabase";
+import { getImageSet } from "@/lib/product-image";
 
 function shouldRequireSupabase() {
   return process.env.NODE_ENV === "production";
@@ -57,6 +58,10 @@ type ProductRow = {
     url: string;
     alt: string;
     sort_order: number;
+    thumb_url: string | null;
+    card_url: string | null;
+    medium_url: string | null;
+    full_url: string | null;
   }>;
 };
 
@@ -104,7 +109,13 @@ function mapProduct(row: ProductRow, steelCwtPrice = DEFAULT_STEEL_CWT_PRICE): P
     variantId: image.variant_id || undefined,
     url: image.url,
     alt: image.alt || row.title,
-    sortOrder: image.sort_order
+    sortOrder: image.sort_order,
+    sizes: getImageSet(image.url, {
+      thumb: image.thumb_url || undefined,
+      card: image.card_url || undefined,
+      medium: image.medium_url || undefined,
+      full: image.full_url || undefined
+    })
   }));
 
   return applyTubingPricing({
@@ -195,7 +206,11 @@ export async function fetchSupabaseProducts() {
         variant_id,
         url,
         alt,
-        sort_order
+        sort_order,
+        thumb_url,
+        card_url,
+        medium_url,
+        full_url
       )
     `
     )
@@ -267,7 +282,11 @@ export async function fetchSupabaseProduct(slug: string) {
         variant_id,
         url,
         alt,
-        sort_order
+        sort_order,
+        thumb_url,
+        card_url,
+        medium_url,
+        full_url
       )
     `
     )

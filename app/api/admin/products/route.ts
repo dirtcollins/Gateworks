@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { authorizeAdminRequest } from "@/lib/admin-auth";
 import { calculateTubingCwtPricing } from "@/lib/pricing";
+import { getImageSet } from "@/lib/product-image";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
 type AdminPatchBody =
@@ -11,7 +13,8 @@ type AdminPatchBody =
     }
   | {
       action: "update_variant";
-      variantId: string;
+      variantId?: string;
+      sku?: string;
       changes: Record<string, unknown>;
     }
   | {
@@ -66,6 +69,114 @@ const variantFields = new Set([
 ]);
 
 const imageFields = new Set(["url", "alt", "sort_order"]);
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function asUuid(value: string | null | undefined) {
+  return value && uuidPattern.test(value) ? value : null;
+}
+
+type ProductImagePayload = {
+  product_id: string;
+  url: string;
+  alt: string;
+  sort_order: number;
+  thumb_url?: string;
+  card_url?: string;
+  medium_url?: string;
+  full_url?: string;
+};
+
+function buildProductImagePayload(
+  productId: string,
+  image: {
+    url: string;
+    alt: string;
+    sort_order: number;
+  }
+): ProductImagePayload {
+  const imageSet = getImageSet(image.url);
+  return {
+    product_id: productId,
+    url: image.url,
+    alt: image.alt,
+    sort_order: image.sort_order,
+    thumb_url: imageSet.thumb,
+    card_url: imageSet.card,
+    medium_url: imageSet.medium,
+    full_url: imageSet.full
+  };
+}
+
+async function addProductImageWithFallback(admin: any, payload: ProductImagePayload) {
+  const extendedResult = await admin
+    .from("product_images")
+    .insert({
+      product_id: payload.product_id,
+      url: payload.url,
+      alt: payload.alt,
+      sort_order: payload.sort_order,
+      thumb_url: payload.thumb_url,
+      card_url: payload.card_url,
+      medium_url: payload.medium_url,
+      full_url: payload.full_url
+    })
+    .select()
+    .single();
+
+  if (!extendedResult.error) {
+    return extendedResult;
+  }
+
+  if (extendedResult.error.code !== "42703") {
+    return extendedResult;
+  }
+
+  return admin
+    .from("product_images")
+    .insert({
+      product_id: payload.product_id,
+      url: payload.url,
+      alt: payload.alt,
+      sort_order: payload.sort_order
+    })
+    .select()
+    .single();
+}
+
+async function patchProductImageWithFallback(
+  admin: any,
+  imageId: string,
+  changes: Record<string, unknown>
+) {
+  const imageUrl = typeof changes.url === "string" ? changes.url.trim() : null;
+  const includeImageSet = typeof imageUrl === "string" && imageUrl.length > 0;
+
+  const extendedChanges = includeImageSet
+    ? {
+        ...changes,
+        thumb_url: getImageSet(imageUrl).thumb,
+        card_url: getImageSet(imageUrl).card,
+        medium_url: getImageSet(imageUrl).medium,
+        full_url: getImageSet(imageUrl).full
+      }
+    : changes;
+
+  const extendedResult = await admin
+    .from("product_images")
+    .update(extendedChanges)
+    .eq("id", imageId);
+
+  if (!extendedResult.error) {
+    return extendedResult;
+  }
+
+  if (extendedResult.error.code !== "42703") {
+    return extendedResult;
+  }
+
+  return admin.from("product_images").update(changes).eq("id", imageId);
+}
 
 function pickAllowed(
   changes: Record<string, unknown>,
@@ -97,6 +208,25 @@ const cwtRecalculationFields = new Set([
   "material_density_lb_per_in3",
   "steel_cwt_price"
 ]);
+
+async function resolveVariantIdForUpdate(
+  admin: SupabaseClient,
+  body: Extract<AdminPatchBody, { action: "update_variant" }>
+) {
+  const directVariantId = asUuid(body.variantId);
+  if (directVariantId) return directVariantId;
+
+  if (!body.sku) return null;
+
+  const { data, error } = await admin
+    .from("product_variants")
+    .select("id")
+    .eq("sku", body.sku)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.id || null;
+}
 
 function needsCwtRecalculation(changes: Record<string, unknown>) {
   return Object.keys(changes).some((key) => cwtRecalculationFields.has(key));
@@ -151,18 +281,42 @@ export async function PATCH(request: NextRequest) {
 
     if (body.action === "update_variant") {
       const changes = pickAllowed(body.changes, variantFields);
-      const { error } = await admin
+      const variantId = await resolveVariantIdForUpdate(admin, body);
+
+      if (!variantId) {
+        return NextResponse.json(
+          {
+            ok: false,
+            reason:
+              "No matching product variant was found. Edit by SKU or open synced product row."
+          },
+          { status: 400 }
+        );
+      }
+
+      const { data: updatedVariant, error } = await admin
         .from("product_variants")
         .update(changes)
-        .eq("id", body.variantId);
+        .eq("id", variantId)
+        .select("id")
+        .maybeSingle();
 
       if (error) throw error;
+      if (!updatedVariant) {
+        return NextResponse.json(
+          {
+            ok: false,
+            reason: "No matching product variant was found."
+          },
+          { status: 400 }
+        );
+      }
       let persistedChanges = changes;
 
       if (needsCwtRecalculation(changes)) {
         const { data: variant, error: variantError } = await admin
-          .from("product_variants")
-          .select(
+            .from("product_variants")
+            .select(
             `
             width_in,
             height_in,
@@ -174,7 +328,7 @@ export async function PATCH(request: NextRequest) {
             pricing_method
           `
           )
-          .eq("id", body.variantId)
+          .eq("id", variantId)
           .maybeSingle();
 
         if (variantError) throw variantError;
@@ -211,7 +365,7 @@ export async function PATCH(request: NextRequest) {
             const { error: pricingError } = await admin
               .from("product_variants")
               .update(recalculatedChanges)
-              .eq("id", body.variantId);
+              .eq("id", variantId);
 
             if (pricingError) throw pricingError;
             persistedChanges = { ...changes, ...recalculatedChanges };
@@ -219,16 +373,18 @@ export async function PATCH(request: NextRequest) {
         }
       }
 
-      await writeAuditLog(body.action, body.variantId, persistedChanges, auth.actorId);
+      await writeAuditLog(
+        body.action,
+        variantId,
+        persistedChanges,
+        auth.actorId
+      );
       return NextResponse.json({ ok: true });
     }
 
     if (body.action === "update_image") {
       const changes = pickAllowed(body.changes, imageFields);
-      const { error } = await admin
-        .from("product_images")
-        .update(changes)
-        .eq("id", body.imageId);
+      const { error } = await patchProductImageWithFallback(admin, body.imageId, changes);
 
       if (error) throw error;
       await writeAuditLog(body.action, body.imageId, changes, auth.actorId);
@@ -236,16 +392,8 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (body.action === "add_image") {
-      const { data, error } = await admin
-        .from("product_images")
-        .insert({
-          product_id: body.productId,
-          url: body.image.url,
-          alt: body.image.alt,
-          sort_order: body.image.sort_order
-        })
-        .select()
-        .single();
+      const payload = buildProductImagePayload(body.productId, body.image);
+      const { data, error } = await addProductImageWithFallback(admin, payload);
 
       if (error) throw error;
       await writeAuditLog(body.action, body.productId, body.image, auth.actorId);

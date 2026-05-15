@@ -1,4 +1,5 @@
 import type { Product } from "@/lib/types";
+import { getImageSet } from "@/lib/product-image";
 
 export type InventoryStatus = "in_stock" | "low_stock" | "out_of_stock";
 export type InventoryEventType =
@@ -54,6 +55,20 @@ export type InventoryRow = {
   unitCost: number;
   unitPrice: number;
   lastUpdated: string;
+  productImage?: {
+    id: string;
+    productId: string;
+    variantId?: string;
+    url: string;
+    alt: string;
+    sortOrder: number;
+    sizes: {
+      thumb: string;
+      card: string;
+      medium: string;
+      full: string;
+    };
+  };
   history: InventoryAuditEvent[];
 };
 
@@ -184,6 +199,15 @@ export function buildInventoryRows(products: Product[]): InventoryRow[] {
         status,
         unitCost: Number((variant.price * 0.58).toFixed(2)),
         unitPrice: variant.price,
+        productImage: {
+          id: `${product.id}-image-${variant.id}`,
+          productId: product.id,
+          variantId: variant.id,
+          url: variant.image,
+          alt: `${product.title} ${variant.sku}`.trim(),
+          sortOrder: 1,
+          sizes: getImageSet(variant.image)
+        },
         lastUpdated: getLastUpdated(productIndex, variantIndex)
       };
 

@@ -63,6 +63,7 @@ type OrderRow = {
   tax_total: number | string;
   delivery_fee: number | string;
   total: number | string;
+  notes: string | null;
   status: OrderStatus;
   payment_status: PaymentStatus;
   is_quote_request: boolean;
@@ -122,6 +123,12 @@ function asUuid(value: string) {
 }
 
 function toClientOrder(row: OrderRow) {
+  const resolvedNotes = typeof row.notes === "string" ? row.notes : row.jobsite_address?.notes;
+  const mergedJobsiteAddress: Record<string, string> = {
+    ...(row.jobsite_address || {}),
+    notes: resolvedNotes || ""
+  };
+
   return {
     id: row.id,
     orderNumber: row.order_number,
@@ -160,7 +167,7 @@ function toClientOrder(row: OrderRow) {
     requestedDate: row.requested_date || "",
     requestedWindow: row.requested_window || "",
     jobName: row.job_name || "",
-    jobsiteAddress: row.jobsite_address || {},
+    jobsiteAddress: mergedJobsiteAddress,
     drawings: (row.customer_drawing_uploads || []).map((drawing) => ({
       id: drawing.id,
       fileName: drawing.file_name,
@@ -206,34 +213,40 @@ export async function GET(request: NextRequest) {
   }
 
   const userId = request.nextUrl.searchParams.get("userId");
+  const orderId = request.nextUrl.searchParams.get("orderId");
+  const orderNumber = request.nextUrl.searchParams.get("orderNumber");
   const limit = Number(request.nextUrl.searchParams.get("limit") || 100);
+  const includeItems = request.nextUrl.searchParams.get("includeItems") === "true";
+  const includeDrawings = request.nextUrl.searchParams.get("includeDrawings") === "true";
 
-  let query = admin
-    .from("orders")
-    .select(
-      `
-      id,
-      order_number,
-      site_user_id,
-      customer_name,
-      company_name,
-      email,
-      phone,
-      fulfillment_method,
-      requested_date,
-      requested_window,
-      job_name,
-      jobsite_address,
-      subtotal,
-      tax_total,
-      delivery_fee,
-      total,
-      status,
-      payment_status,
-      is_quote_request,
-      created_at,
-      updated_at,
-      order_items (
+  const selectFields = [
+    "id",
+    "order_number",
+    "site_user_id",
+    "customer_name",
+    "company_name",
+    "email",
+    "phone",
+    "fulfillment_method",
+    "requested_date",
+    "requested_window",
+    "job_name",
+    "jobsite_address",
+    "subtotal",
+    "tax_total",
+    "delivery_fee",
+    "total",
+    "status",
+    "payment_status",
+    "is_quote_request",
+    "notes",
+    "created_at",
+    "updated_at"
+  ];
+
+  if (includeItems) {
+    selectFields.push(
+      `order_items (
         id,
         sku,
         description,
@@ -247,8 +260,13 @@ export async function GET(request: NextRequest) {
         unit_price,
         line_total,
         item_payload
-      ),
-      customer_drawing_uploads (
+      )`
+    );
+  }
+
+  if (includeDrawings) {
+    selectFields.push(
+      `customer_drawing_uploads (
         id,
         file_name,
         file_size,
@@ -256,13 +274,21 @@ export async function GET(request: NextRequest) {
         storage_path,
         public_url,
         created_at
-      )
-    `
-    )
+      )`
+    );
+  }
+
+  let query = admin
+    .from("orders")
+    .select(selectFields.join(", "))
     .order("created_at", { ascending: false })
     .limit(Math.min(Math.max(limit, 1), 250));
 
-  if (userId) {
+  if (orderId) {
+    query = query.eq("id", orderId);
+  } else if (orderNumber) {
+    query = query.eq("order_number", orderNumber);
+  } else if (userId) {
     query = query.eq("site_user_id", userId);
   }
 

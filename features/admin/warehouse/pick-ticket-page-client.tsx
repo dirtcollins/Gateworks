@@ -26,7 +26,7 @@ import {
   pickTicketStatusLabels,
   sampleWarehouseOrders
 } from "@/features/admin/warehouse/warehouse-data";
-import { useOrderStore, type OrderRecord } from "@/lib/order-store";
+import { useOrderStore } from "@/lib/order-store";
 import {
   hydratePickTicketProgress,
   usePickTicketStore,
@@ -59,7 +59,6 @@ export function PickTicketPageClient({
   ticketId
 }: PickTicketPageClientProps) {
   const storedOrders = useOrderStore((state) => state.orders);
-  const setOrders = useOrderStore((state) => state.setOrders);
   const updateOrderStatus = useOrderStore((state) => state.updateOrderStatus);
   const pickTickets = usePickTicketStore((state) => state.tickets);
   const setLinePulled = usePickTicketStore((state) => state.setLinePulled);
@@ -71,30 +70,7 @@ export function PickTicketPageClient({
 
   useEffect(() => {
     hydratePickTicketProgress();
-
-    async function loadOrders() {
-      const response = await fetch("/api/orders?limit=250", { cache: "no-store" });
-      if (!response.ok) return;
-
-      const payload = (await response.json()) as {
-        orders?: OrderRecord[];
-        persisted?: boolean;
-        reason?: string;
-      };
-
-      if (payload.persisted && payload.orders) {
-        setOrders(payload.orders);
-        setBackendNotice("");
-      } else if (!payload.persisted) {
-        setBackendNotice(
-          payload.reason ||
-            "Supabase is not configured. Pick progress is saved in this browser only."
-        );
-      }
-    }
-
-    void loadOrders();
-  }, [setOrders]);
+  }, []);
 
   const operationalOrders = useMemo(() => {
     const orders = getOperationalOrders(storedOrders);

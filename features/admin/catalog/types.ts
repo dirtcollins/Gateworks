@@ -12,7 +12,8 @@ export type AdminPatchPayload =
     }
   | {
       action: "update_variant";
-      variantId: string;
+      variantId?: string;
+      sku?: string;
       changes: Record<string, unknown>;
     }
   | {

@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Star } from "lucide-react";
 import type { Product } from "@/lib/types";
+import { getProductImageForSize } from "@/lib/product-image";
 import { cn, formatCurrency } from "@/lib/utils";
 
 type ProductSummaryCardProps = {
@@ -10,7 +11,8 @@ type ProductSummaryCardProps = {
 };
 
 export function ProductSummaryCard({ product, layout = "grid" }: ProductSummaryCardProps) {
-  const image = product.images[0]?.url || product.variants[0]?.image || "/assets/logo.svg";
+  const imageSource = product.images[0]?.url || product.variants[0]?.image || "/assets/logo.svg";
+  const image = getProductImageForSize(imageSource, "card");
   const defaultVariant = product.variants[0];
   const isList = layout === "list";
   const priceLabel = product.price > 0 ? formatCurrency(product.price) : "Quote required";

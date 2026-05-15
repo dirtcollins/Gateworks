@@ -1,6 +1,7 @@
 import rawCatalog from "@/data/national_hardware_gate_products.json";
 import { applyTubingPricing } from "@/lib/pricing";
 import type { Category, Product, ProductVariant } from "@/lib/types";
+import { getImageSet } from "@/lib/product-image";
 import { slugify } from "@/lib/utils";
 
 type RawProduct = {
@@ -247,14 +248,18 @@ function buildProduct(groupSlug: string, groupItems: RawProduct[]): Product {
       `${first.website_name || title} for gates, fencing, and exterior construction work.${featureText}`.trim(),
     category,
     price: getDisplayPrice(variants),
-    images: imageUrls.map((url, index) => ({
-      id: `${groupSlug}-image-${index + 1}`,
-      productId: groupSlug,
-      variantId: index === 0 ? variants[0]?.id : undefined,
-      url,
-      alt: `${title} image ${index + 1}`,
-      sortOrder: index + 1
-    })),
+    images: imageUrls.map((url, index) => {
+      const imageSet = getImageSet(url);
+      return {
+        id: `${groupSlug}-image-${index + 1}`,
+        productId: groupSlug,
+        variantId: index === 0 ? variants[0]?.id : undefined,
+        url,
+        alt: `${title} image ${index + 1}`,
+        sortOrder: index + 1,
+        sizes: imageSet
+      };
+    }),
     variants,
     specifications: {
       Brand: first.brand || first.source || "Construction Supply",
@@ -606,13 +611,15 @@ function mergeProductData(fallback: Product, primary: Product): Product {
   primary.images.forEach((image) => imageMap.set(image.url, image));
   variants.forEach((variant, index) => {
     if (!imageMap.has(variant.image)) {
+      const imageSet = getImageSet(variant.image);
       imageMap.set(variant.image, {
         id: `${primary.id}-variant-image-${index + 1}`,
         productId: primary.id,
         variantId: variant.id,
         url: variant.image,
         alt: `${primary.title} image ${index + 1}`,
-        sortOrder: index + 1
+        sortOrder: index + 1,
+        sizes: imageSet
       });
     }
   });

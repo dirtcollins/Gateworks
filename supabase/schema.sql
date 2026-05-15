@@ -72,6 +72,12 @@ create table if not exists public.product_images (
   created_at timestamptz not null default now()
 );
 
+alter table public.product_images
+  add column if not exists thumb_url text,
+  add column if not exists card_url text,
+  add column if not exists medium_url text,
+  add column if not exists full_url text;
+
 create table if not exists public.product_reviews (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references public.products(id) on delete cascade,

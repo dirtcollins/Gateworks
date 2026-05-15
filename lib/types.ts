@@ -11,6 +11,12 @@ export type ProductImage = {
   url: string;
   alt: string;
   sortOrder: number;
+  sizes?: {
+    thumb: string;
+    card: string;
+    medium: string;
+    full: string;
+  };
 };
 
 export type ProductVariant = {
