@@ -7,6 +7,7 @@ import {
 } from "@/lib/catalog";
 import { ProductPageClient } from "@/components/product-page-client";
 import { fetchSupabaseProduct, fetchSupabaseProducts } from "@/lib/supabase-catalog";
+import { UserStorageScope } from "@/components/user-storage-scope";
 
 type ProductPageProps = {
   params: Promise<{
@@ -47,10 +48,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
     .slice(0, 8);
 
   return (
-    <ProductPageClient
-      product={product}
-      relatedProducts={relatedProducts.length ? relatedProducts : getRelatedProducts(product)}
-      products={activeProducts}
-    />
+    <>
+      <UserStorageScope />
+      <ProductPageClient
+        product={product}
+        relatedProducts={relatedProducts.length ? relatedProducts : getRelatedProducts(product)}
+        products={activeProducts}
+      />
+    </>
   );
 }

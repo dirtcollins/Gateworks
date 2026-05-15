@@ -2,65 +2,23 @@
 
 import Image from "next/image";
 import { type KeyboardEvent, useMemo, useState } from "react";
-import {
-  Check,
-  ImagePlus,
-  Minus,
-  PackageSearch,
-  Plus,
-  Search,
-  Trash2
-} from "lucide-react";
+import { Check, ImagePlus, Minus, Plus, Trash2 } from "lucide-react";
+import { persistAdminChange } from "@/features/admin/catalog/api";
+import { AdminProductList } from "@/features/admin/catalog/admin-product-list";
+import type {
+  AdminPatchPayload,
+  EditorMode,
+  OptionField,
+  ProductField
+} from "@/features/admin/catalog/types";
+import { cleanQuantity, getProductStock } from "@/features/admin/catalog/utils";
+import { formatPricingMethod } from "@/lib/pricing";
 import type { Product, ProductImage, ProductVariant } from "@/lib/types";
 import { cn, formatCurrency } from "@/lib/utils";
 
 type AdminDashboardProps = {
   products: Product[];
 };
-
-type ProductField = "title" | "description";
-type OptionField = keyof ProductVariant["options"];
-type EditorMode = "pricing" | "full";
-type AdminPatchPayload =
-  | {
-      action: "update_product";
-      productId: string;
-      changes: Record<string, unknown>;
-    }
-  | {
-      action: "update_variant";
-      variantId: string;
-      changes: Record<string, unknown>;
-    }
-  | {
-      action: "update_image";
-      imageId: string;
-      changes: Record<string, unknown>;
-    }
-  | {
-      action: "add_image";
-      productId: string;
-      image: {
-        url: string;
-        alt: string;
-        sort_order: number;
-      };
-    }
-  | {
-      action: "delete_image";
-      imageId: string;
-    };
-
-function getProductStock(product: Product) {
-  return product.variants.reduce(
-    (total, variant) => total + variant.inventoryQuantity,
-    0
-  );
-}
-
-function cleanQuantity(value: number) {
-  return Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
-}
 
 export function AdminDashboard({ products }: AdminDashboardProps) {
   const [catalog, setCatalog] = useState(products);
@@ -112,30 +70,6 @@ export function AdminDashboard({ products }: AdminDashboardProps) {
     0
   );
 
-  async function persistAdminChange(payload: AdminPatchPayload, message: string) {
-    try {
-      const response = await fetch("/api/admin/products", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
-      const result = (await response.json().catch(() => null)) as
-        | { reason?: string }
-        | null;
-
-      if (!response.ok) {
-        setSavedMessage(result?.reason || `${message} locally only`);
-        return;
-      }
-
-      setSavedMessage(`${message} · backend saved`);
-    } catch {
-      setSavedMessage(`${message} · local only`);
-    }
-  }
-
   function saveProduct(
     nextProduct: Product,
     message: string,
@@ -147,7 +81,9 @@ export function AdminDashboard({ products }: AdminDashboardProps) {
     setSavedMessage(message);
 
     if (payload) {
-      void persistAdminChange(payload, message);
+      void persistAdminChange(payload, message).then((result) =>
+        setSavedMessage(result.message)
+      );
     }
   }
 
@@ -453,73 +389,14 @@ export function AdminDashboard({ products }: AdminDashboardProps) {
       </div>
 
       <div className="grid min-h-0 items-stretch gap-5 lg:h-[calc(100vh-250px)] lg:grid-cols-[390px_1fr]">
-        <aside className="grid min-h-0 grid-rows-[auto_1fr] border border-jobsite-rail bg-white">
-          <div className="border-b border-jobsite-rail p-4">
-            <label className="relative block">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-jobsite-steel"
-                size={18}
-              />
-              <input
-                className="h-11 w-full border border-jobsite-rail bg-jobsite-paper pl-10 pr-3 text-sm outline-none focus:border-jobsite-ink"
-                placeholder="Search products or SKU"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
-          </div>
-
-          <div className="min-h-0 overflow-auto">
-            {filteredProducts.map((product, index) => {
-              const isSelected = selectedProduct?.id === product.id;
-              const image =
-                product.images[0]?.url || product.variants[0]?.image || "/assets/logo.svg";
-
-              return (
-                <button
-                  key={product.id}
-                  data-product-row={index}
-                  className={cn(
-                    "grid w-full grid-cols-[64px_1fr] gap-3 border-b border-jobsite-rail p-3 text-left outline-none hover:bg-jobsite-paper focus:ring-2 focus:ring-inset focus:ring-jobsite-ink",
-                    isSelected && "bg-jobsite-amber"
-                  )}
-                  type="button"
-                  onClick={() => setSelectedProductId(product.id)}
-                  onKeyDown={(event) => handleProductKeyDown(event, index)}
-                >
-                  <div className="relative aspect-square border border-jobsite-rail bg-white">
-                    <Image
-                      alt={product.title}
-                      className="object-contain p-1"
-                      fill
-                      sizes="64px"
-                      src={image}
-                    />
-                  </div>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-black text-jobsite-ink">
-                      {product.title}
-                    </span>
-                    <span className="mt-1 block text-xs font-semibold text-jobsite-steel">
-                      {product.category.name} / {product.variants.length} SKU
-                      {product.variants.length === 1 ? "" : "s"}
-                    </span>
-                    <span className="mt-1 block text-xs font-black text-jobsite-pine">
-                      {getProductStock(product)} units available
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-
-            {!filteredProducts.length ? (
-              <div className="grid place-items-center gap-2 p-10 text-center text-jobsite-steel">
-                <PackageSearch size={28} />
-                <p className="text-sm font-semibold">No products found.</p>
-              </div>
-            ) : null}
-          </div>
-        </aside>
+        <AdminProductList
+          filteredProducts={filteredProducts}
+          query={query}
+          selectedProductId={selectedProduct?.id}
+          onProductKeyDown={handleProductKeyDown}
+          onQueryChange={setQuery}
+          onSelectProduct={setSelectedProductId}
+        />
 
         <section className="min-h-0 overflow-auto border border-jobsite-rail bg-white">
           {selectedProduct ? (
@@ -859,6 +736,7 @@ export function AdminDashboard({ products }: AdminDashboardProps) {
                                 alt={image.alt}
                                 className="object-contain p-2"
                                 fill
+                                quality={45}
                                 sizes="96px"
                                 src={image.url}
                               />
@@ -922,6 +800,13 @@ export function AdminDashboard({ products }: AdminDashboardProps) {
                             </th>
                           ) : null}
                           <th className="border-b border-jobsite-rail px-3 py-3">Price</th>
+                          {editorMode === "pricing" ? (
+                            <>
+                              <th className="border-b border-jobsite-rail px-3 py-3">Method</th>
+                              <th className="border-b border-jobsite-rail px-3 py-3">Weight</th>
+                              <th className="border-b border-jobsite-rail px-3 py-3">CWT</th>
+                            </>
+                          ) : null}
                           <th className="border-b border-jobsite-rail px-3 py-3">Qty</th>
                           {editorMode === "full" ? (
                             <>
@@ -961,10 +846,12 @@ export function AdminDashboard({ products }: AdminDashboardProps) {
                                   step="0.01"
                                   type="number"
                                   value={variant.price}
+                                  readOnly={variant.pricing_method === "cwt_calculated"}
                                   onKeyDown={(event) =>
                                     handleGridKeyDown(event, rowIndex, 0)
                                   }
                                   onChange={(event) => {
+                                    if (variant.pricing_method === "cwt_calculated") return;
                                     const price = Number(event.target.value) || 0;
                                     updateVariant(
                                       variant.id,
@@ -978,6 +865,19 @@ export function AdminDashboard({ products }: AdminDashboardProps) {
                                   }}
                                 />
                               </td>
+                              {editorMode === "pricing" ? (
+                                <>
+                                  <td className="px-3 py-3 text-sm font-black text-jobsite-ink">
+                                    {formatPricingMethod(variant.pricing_method)}
+                                  </td>
+                                  <td className="px-3 py-3 text-sm font-semibold text-jobsite-steel">
+                                    {variant.calculated_weight_lb?.toFixed(2) || "-"} lb
+                                  </td>
+                                  <td className="px-3 py-3 text-sm font-semibold text-jobsite-steel">
+                                    {variant.steel_cwt_price ? formatCurrency(variant.steel_cwt_price) : "-"}
+                                  </td>
+                                </>
+                              ) : null}
                               <td className="px-3 py-3">
                                 <div className="flex items-center gap-2">
                                   <button

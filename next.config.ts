@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   images: {
+    deviceSizes: [640, 750, 828, 1080, 1200, 1536],
+    imageSizes: [32, 48, 64, 96, 128, 192, 256, 384],
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 86400,
+    qualities: [45, 60, 75, 90],
     remotePatterns: [
       {
         protocol: "https",
@@ -18,6 +23,14 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "www.hooverfence.com"
+      },
+      {
+        protocol: "https",
+        hostname: "images.thdstatic.com"
+      },
+      {
+        protocol: "https",
+        hostname: "www.milwaukeetool.com"
       }
     ]
   }

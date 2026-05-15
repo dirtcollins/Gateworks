@@ -4,11 +4,22 @@ const config: Config = {
   content: [
     "./app/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",
+    "./features/**/*.{ts,tsx}",
     "./lib/**/*.{ts,tsx}"
   ],
   theme: {
     extend: {
       colors: {
+        industrial: {
+          ink: "#111111",
+          steel: "#5c5a54",
+          muted: "#7c786f",
+          rail: "#d8d3ca",
+          paper: "#f3f0e9",
+          pine: "#2f6f4e",
+          amber: "#eee6d8",
+          red: "#b42318"
+        },
         jobsite: {
           ink: "#111111",
           steel: "#5c5a54",

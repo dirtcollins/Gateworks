@@ -18,6 +18,18 @@ export type ProductVariant = {
   productId: string;
   sku: string;
   price: number;
+  manual_price?: number | null;
+  calculated_price?: number;
+  rounded_price?: number;
+  final_price?: number;
+  pricing_method?: "manual" | "cwt_calculated";
+  width_in?: number;
+  height_in?: number;
+  wall_thickness_in?: number;
+  length_ft?: number;
+  material_density_lb_per_in3?: number;
+  steel_cwt_price?: number;
+  calculated_weight_lb?: number;
   inventory: "in_stock" | "out_of_stock";
   inventoryQuantity: number;
   image: string;
@@ -26,6 +38,7 @@ export type ProductVariant = {
     material?: string;
     finish?: string;
     color?: string;
+    wall?: string;
   };
 };
 
@@ -36,6 +49,13 @@ export type Product = {
   description: string;
   category: Category;
   price: number;
+  manual_price?: number | null;
+  calculated_price?: number;
+  rounded_price?: number;
+  final_price?: number;
+  pricing_method?: "manual" | "cwt_calculated";
+  steel_cwt_price?: number;
+  calculated_weight_lb?: number;
   images: ProductImage[];
   variants: ProductVariant[];
   specifications: Record<string, string>;
@@ -43,6 +63,7 @@ export type Product = {
 };
 
 export type CartItem = {
+  orderItemId?: string;
   productId: string;
   variantId: string;
   title: string;
@@ -50,5 +71,11 @@ export type CartItem = {
   image: string;
   price: number;
   quantity: number;
+  quantityNeeded?: number;
+  quantityPulled?: number;
+  pulled?: boolean;
+  pulledAt?: string;
+  pulledBy?: string;
+  pickNotes?: string;
   options: ProductVariant["options"];
 };

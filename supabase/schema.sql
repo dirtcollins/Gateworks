@@ -39,6 +39,18 @@ create table if not exists public.product_variants (
   product_id uuid not null references public.products(id) on delete cascade,
   sku text not null unique,
   price numeric(12, 2) not null check (price >= 0),
+  manual_price numeric(12, 2) check (manual_price is null or manual_price >= 0),
+  calculated_price numeric(12, 2) check (calculated_price is null or calculated_price >= 0),
+  rounded_price numeric(12, 2) check (rounded_price is null or rounded_price >= 0),
+  final_price numeric(12, 2) check (final_price is null or final_price >= 0),
+  pricing_method text not null default 'manual' check (pricing_method in ('manual', 'cwt_calculated')),
+  width_in numeric(12, 4),
+  height_in numeric(12, 4),
+  wall_thickness_in numeric(12, 4),
+  length_ft numeric(12, 4),
+  material_density_lb_per_in3 numeric(12, 6),
+  steel_cwt_price numeric(12, 2),
+  calculated_weight_lb numeric(12, 2),
   inventory_status text not null default 'in_stock' check (inventory_status in ('in_stock', 'out_of_stock')),
   inventory_quantity integer not null default 100 check (inventory_quantity >= 0),
   image_url text,
@@ -119,8 +131,34 @@ create table if not exists public.admin_audit_logs (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.admin_settings (
+  key text primary key,
+  value numeric(12, 4) not null,
+  label text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 alter table public.products
 add column if not exists brand_id uuid references public.brands(id) on delete set null;
+
+alter table public.product_variants
+add column if not exists manual_price numeric(12, 2) check (manual_price is null or manual_price >= 0),
+add column if not exists calculated_price numeric(12, 2) check (calculated_price is null or calculated_price >= 0),
+add column if not exists rounded_price numeric(12, 2) check (rounded_price is null or rounded_price >= 0),
+add column if not exists final_price numeric(12, 2) check (final_price is null or final_price >= 0),
+add column if not exists pricing_method text not null default 'manual' check (pricing_method in ('manual', 'cwt_calculated')),
+add column if not exists width_in numeric(12, 4),
+add column if not exists height_in numeric(12, 4),
+add column if not exists wall_thickness_in numeric(12, 4),
+add column if not exists length_ft numeric(12, 4),
+add column if not exists material_density_lb_per_in3 numeric(12, 6),
+add column if not exists steel_cwt_price numeric(12, 2),
+add column if not exists calculated_weight_lb numeric(12, 2);
+
+insert into public.admin_settings (key, value, label)
+values ('steel_cwt_price', 105, 'Steel CWT price')
+on conflict (key) do nothing;
 
 insert into public.brands (name, slug)
 values ('National Hardware', 'national-hardware')
@@ -187,6 +225,11 @@ create trigger admin_profiles_set_updated_at
 before update on public.admin_profiles
 for each row execute function public.set_updated_at();
 
+drop trigger if exists admin_settings_set_updated_at on public.admin_settings;
+create trigger admin_settings_set_updated_at
+before update on public.admin_settings
+for each row execute function public.set_updated_at();
+
 create or replace function public.is_admin()
 returns boolean
 language sql
@@ -213,6 +256,7 @@ alter table public.carts enable row level security;
 alter table public.cart_items enable row level security;
 alter table public.admin_profiles enable row level security;
 alter table public.admin_audit_logs enable row level security;
+alter table public.admin_settings enable row level security;
 
 drop policy if exists "Public can read active categories" on public.categories;
 create policy "Public can read active categories"
@@ -262,6 +306,19 @@ using (
       and products.status = 'active'
   )
 );
+
+drop policy if exists "Public can read admin settings" on public.admin_settings;
+create policy "Public can read admin settings"
+on public.admin_settings for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "Admins can manage admin settings" on public.admin_settings;
+create policy "Admins can manage admin settings"
+on public.admin_settings for all
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
 
 drop policy if exists "Public can read approved reviews" on public.product_reviews;
 create policy "Public can read approved reviews"
@@ -327,7 +384,7 @@ to authenticated
 using (public.is_admin());
 
 grant usage on schema public to anon, authenticated;
-grant select on public.categories, public.brands, public.products, public.product_variants, public.product_images, public.product_reviews to anon, authenticated;
+grant select on public.categories, public.brands, public.products, public.product_variants, public.product_images, public.product_reviews, public.admin_settings to anon, authenticated;
 grant select, insert, update on public.site_users to anon, authenticated;
 grant select, insert, update, delete on public.carts, public.cart_items to authenticated;
-grant select on public.admin_profiles, public.admin_audit_logs to authenticated;
+grant select on public.admin_profiles, public.admin_audit_logs, public.admin_settings to authenticated;

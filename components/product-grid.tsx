@@ -1,5 +1,5 @@
 import type { Product } from "@/lib/types";
-import { ProductCard } from "@/components/product-card";
+import { ProductSummaryCard } from "@/components/product-summary-card";
 
 type ProductGridProps = {
   products: Product[];
@@ -26,7 +26,11 @@ export function ProductGrid({ products, layout = "grid" }: ProductGridProps) {
       }
     >
       {products.map((product) => (
-        <ProductCard key={product.id} product={product} layout={layout} />
+        <ProductSummaryCard
+          key={product.id}
+          product={product}
+          layout={layout === "list" ? "list" : "grid"}
+        />
       ))}
     </div>
   );

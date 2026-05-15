@@ -1,4 +1,5 @@
 import { QuotePageClient } from "@/components/quote-page-client";
+import { UserStorageScope } from "@/components/user-storage-scope";
 
 type QuoteDetailsPageProps = {
   params: Promise<{
@@ -9,5 +10,10 @@ type QuoteDetailsPageProps = {
 export default async function QuoteDetailsPage({ params }: QuoteDetailsPageProps) {
   const { quoteId } = await params;
 
-  return <QuotePageClient quoteId={quoteId} />;
+  return (
+    <>
+      <UserStorageScope />
+      <QuotePageClient quoteId={quoteId} />
+    </>
+  );
 }

@@ -274,6 +274,7 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
                           alt={item.title}
                           className="object-contain p-2"
                           fill
+                          quality={60}
                           sizes="112px"
                           src={item.image}
                         />

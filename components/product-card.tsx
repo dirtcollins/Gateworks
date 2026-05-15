@@ -18,6 +18,7 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
   const defaultVariant = product.variants[0];
   const isList = layout === "list";
   const isRail = layout === "rail";
+  const priceLabel = product.price > 0 ? formatCurrency(product.price) : "Quote required";
   const addItem = useCartStore((state) => state.addItem);
   const [justAdded, setJustAdded] = useState(false);
 
@@ -61,6 +62,7 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
           isRail ? "p-3" : isList ? "p-4" : "p-5"
         )}
         fill
+        quality={75}
         sizes={isRail ? "220px" : isList ? "180px" : "(max-width: 768px) 50vw, 25vw"}
         src={image}
       />
@@ -98,10 +100,10 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
         <p
           className={cn(
             "font-extrabold text-jobsite-ink",
-            isRail ? "text-xl" : "text-2xl"
+            isRail ? "text-lg" : "text-2xl"
           )}
         >
-          {formatCurrency(product.price)}
+          {priceLabel}
         </p>
         <p className="text-xs font-semibold text-jobsite-pine">
           {defaultVariant?.inventoryQuantity ?? 100} in stock - {product.variants.length} option

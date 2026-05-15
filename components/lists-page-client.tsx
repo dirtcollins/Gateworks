@@ -106,6 +106,7 @@ export function ListsPageClient() {
                             alt={item.title}
                             className="object-contain p-2"
                             fill
+                            quality={60}
                             sizes="92px"
                             src={item.image}
                           />

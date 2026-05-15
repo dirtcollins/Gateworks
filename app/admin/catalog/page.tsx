@@ -1,0 +1,13 @@
+import { CatalogManager } from "@/features/admin/catalog/catalog-manager";
+import { products } from "@/lib/catalog";
+import { fetchSupabaseProducts } from "@/lib/supabase-catalog";
+
+export const metadata = {
+  title: "Catalog Admin | Gateworks"
+};
+
+export default async function AdminCatalogPage() {
+  const supabaseProducts = await fetchSupabaseProducts();
+
+  return <CatalogManager products={supabaseProducts || products} />;
+}
