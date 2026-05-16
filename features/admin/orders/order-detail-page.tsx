@@ -20,21 +20,26 @@ import {
   CircleDashed,
   CreditCard,
   FileText,
+  Package,
   Printer,
   RefreshCw,
   Trash2,
+  UserPlus,
   X,
   Truck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { OrderProgressBar } from "@/components/order-progress";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { PageShell } from "@/components/ui/page-shell";
 import { products as fallbackCatalogProducts } from "@/lib/catalog";
-import { useOrderStore, type OrderRecord } from "@/lib/order-store";
+import { useOrderStore, type OrderPayment, type OrderRecord } from "@/lib/order-store";
+import { useUserStore, type SavedUser } from "@/lib/user-store";
 import type { CartItem, Product, ProductVariant } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 import { type FulfillmentMethod, type OrderStatus, type PaymentStatus } from "@/lib/platform-backend";
+import { customerDirectory, type CustomerRecord } from "@/lib/customers";
 
 type OrderDetailPageProps = {
   orderId: string;
@@ -45,6 +50,7 @@ type OrderDetailPageProps = {
 
 type OrderItemView = {
   key: string;
+  image: string;
   product: string;
   variant: string;
   quantity: number;
@@ -58,6 +64,7 @@ type OrderItemView = {
 };
 
 type DraftDiscountMode = "amount" | "percent";
+type CustomerPopupTab = "customer" | "billing" | "shipping" | "more";
 
 type VariantOptionKey = keyof ProductVariant["options"];
 
@@ -68,9 +75,75 @@ type DraftNote = {
   createdAt: string;
 };
 
+type SiteUserClient = {
+  id: string;
+  displayName: string;
+  lastUsedAt?: string;
+};
+
 const staffRoster = ["Maya Ortiz", "Cody Lee", "Jordan Blake", "Priya Mehta"];
 
 const TAX_RATE = 0.0825;
+const unitOptions = ["EA", "FT", "SET", "ROLL", "BOX", "PCS"];
+
+function getProductImageUrl(product: Product, variant?: ProductVariant | null) {
+  return (
+    variant?.image ||
+    product.images?.[0]?.sizes?.thumb ||
+    product.images?.[0]?.url ||
+    ""
+  );
+}
+
+function isProductImageUrl(value?: string) {
+  return Boolean(value && value !== "/assets/logo.svg");
+}
+
+function getCatalogSearchResultKey(result: CatalogSearchResult) {
+  return `${result.product.id}-${result.variant.id}`;
+}
+
+function makeShopperCustomer(user: SavedUser): CustomerRecord {
+  return {
+    id: `shopper-${user.id}`,
+    name: user.displayName,
+    company: user.displayName,
+    email: user.email,
+    phone: "",
+    billingAddress: "Add billing address",
+    jobsiteAddress: "Add jobsite or delivery address",
+    terms: "Due on receipt"
+  };
+}
+
+function makeSiteUserCustomer(user: SiteUserClient): CustomerRecord {
+  return {
+    id: `site-user-${user.id}`,
+    name: user.displayName,
+    company: user.displayName,
+    email: "",
+    phone: "",
+    billingAddress: "Add billing address",
+    jobsiteAddress: "Add jobsite or delivery address",
+    terms: "Due on receipt"
+  };
+}
+
+function mergeCustomerRecords(customers: CustomerRecord[]) {
+  const customersByKey = new Map<string, CustomerRecord>();
+
+  for (const customer of customers) {
+    const key = customer.email
+      ? `email:${customer.email.toLowerCase()}`
+      : `id:${customer.id}`;
+
+    if (!customersByKey.has(key)) {
+      customersByKey.set(key, customer);
+    }
+  }
+
+  return Array.from(customersByKey.values());
+}
 
 type CatalogSearchResult = {
   product: Product;
@@ -300,28 +373,28 @@ function AppModal({
       />
       <div
         ref={modalRef}
-        className="relative w-full max-w-lg rounded-2xl border border-industrial-rail bg-white p-4 shadow-2xl"
+        className="relative w-full max-w-5xl overflow-hidden rounded-2xl border border-black/10 bg-[#f7f7f4] shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-label={title}
       >
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm font-black uppercase tracking-[0.14em] text-industrial-ink">{title}</p>
+        <div className="flex items-center justify-between border-b border-black/10 bg-white px-6 py-4">
+          <p className="text-2xl font-semibold tracking-[-0.03em] text-industrial-ink">{title}</p>
           <button
             aria-label="Close popup"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-industrial-muted hover:text-industrial-ink hover:bg-industrial-paper"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md text-industrial-muted hover:text-industrial-ink hover:bg-industrial-paper"
             onClick={requestClose}
             type="button"
           >
-            <X size={14} />
+            <X size={28} strokeWidth={1.6} />
           </button>
         </div>
-        <div className="grid gap-3">{children}</div>
-        <div className="mt-3 flex justify-end gap-2 pt-2">
-          <Button onClick={requestClose} size="sm" variant="secondary" type="button">
+        <div className="h-[620px] overflow-y-auto px-6 py-6">{children}</div>
+        <div className="flex justify-end gap-3 border-t border-black/10 bg-white px-6 py-4">
+          <Button className="min-w-32" onClick={requestClose} size="sm" variant="secondary" type="button">
             {cancelLabel}
           </Button>
-          <Button onClick={() => onConfirmRef.current()} size="sm" type="button">
+          <Button className="min-w-32" onClick={() => onConfirmRef.current()} size="sm" type="button">
             {confirmLabel}
           </Button>
         </div>
@@ -332,7 +405,7 @@ function AppModal({
 
 const sampleOrder: OrderRecord = {
   id: "sample-order-2001",
-  orderNumber: "GW-2001",
+  orderNumber: "Order-10021",
   userId: "sample",
   customerName: "Jessie Metal Supply",
   companyName: "Jessie Metal Supply",
@@ -345,7 +418,7 @@ const sampleOrder: OrderRecord = {
       variantId: "var-square-tube-2x4",
       title: "Square tubing",
       sku: "SQ-TUBE-2X4",
-      image: "/assets/logo.svg",
+      image: "/assets/product-images/50-tca3s3-p.png",
       price: 48.5,
       quantity: 10,
       quantityNeeded: 10,
@@ -360,7 +433,7 @@ const sampleOrder: OrderRecord = {
       variantId: "var-rect-tube",
       title: "Rectangle tubing",
       sku: "RECT-TUBE-2X3",
-      image: "/assets/logo.svg",
+      image: "/assets/product-images/49-tca3l2s3-p.png",
       price: 62.0,
       quantity: 6,
       quantityNeeded: 6,
@@ -375,7 +448,7 @@ const sampleOrder: OrderRecord = {
       variantId: "var-sheet",
       title: "Sheet metal",
       sku: "SH-MTL-14GA",
-      image: "/assets/logo.svg",
+      image: "/assets/product-images/48-tca2s3-p.png",
       price: 95,
       quantity: 4,
       quantityNeeded: 4,
@@ -390,7 +463,7 @@ const sampleOrder: OrderRecord = {
       variantId: "var-hinges",
       title: "Heavy gate hinges",
       sku: "HNG-16",
-      image: "/assets/logo.svg",
+      image: "/assets/product-images/03-ml3tp-p.png",
       price: 18.4,
       quantity: 18,
       quantityNeeded: 18,
@@ -405,7 +478,7 @@ const sampleOrder: OrderRecord = {
       variantId: "var-latch",
       title: "Latches",
       sku: "LCT-12",
-      image: "/assets/logo.svg",
+      image: "/assets/product-images/21-6149-latch.png",
       price: 9.75,
       quantity: 32,
       quantityNeeded: 32,
@@ -420,7 +493,7 @@ const sampleOrder: OrderRecord = {
       variantId: "var-cap",
       title: "Post caps",
       sku: "CAP-20",
-      image: "/assets/logo.svg",
+      image: "/assets/product-images/43-7403.png",
       price: 12.25,
       quantity: 12,
       quantityNeeded: 12,
@@ -435,7 +508,7 @@ const sampleOrder: OrderRecord = {
       variantId: "var-hardware",
       title: "Gate hardware set",
       sku: "GH-40",
-      image: "/assets/logo.svg",
+      image: "/assets/product-images/16-lakqu2-kit.png",
       price: 24.6,
       quantity: 8,
       quantityNeeded: 8,
@@ -512,7 +585,7 @@ function createDraftOrder(overrides: Partial<OrderRecord> = {}): OrderRecord {
   const now = new Date().toISOString();
   return {
     id: `order-draft-${Date.now()}`,
-    orderNumber: "GW-NEW",
+    orderNumber: "Order-NEW",
     userId: "admin-user",
     customerName: "New Customer",
     companyName: "New Customer",
@@ -600,6 +673,7 @@ function toOrderItemView(item: CartItem, pullState: PullMap): OrderItemView {
 
   return {
     key: lineKey,
+    image: isProductImageUrl(item.image) ? item.image : "",
     product: item.title,
     variant: optionSummary || "default",
     quantity: item.quantity,
@@ -726,6 +800,56 @@ function scoreCatalogVariantMatch(
   return baseScore + tokenMatches + (tokenMatches === queryTokens.length ? 30 : 0);
 }
 
+function getCatalogProduct(products: Product[], productId: string) {
+  return products.find((product) => product.id === productId) || null;
+}
+
+function getCatalogVariant(product: Product, variantId: string) {
+  return product.variants.find((variant) => variant.id === variantId) || null;
+}
+
+function findBestCatalogMatch(catalogItems: Product[], query: string) {
+  const normalizedQuery = normalizeProductSearchText(query);
+  if (!normalizedQuery) return null;
+  const queryTokens = tokenizeProductQuery(normalizedQuery);
+  let best: { score: number; product: Product } | null = null;
+
+  for (const product of catalogItems) {
+    const score = scoreCatalogMatch(product, normalizedQuery, queryTokens);
+    if (!score) continue;
+    if (!best || score > best.score) {
+      best = { score, product };
+      if (score >= 1000) break;
+    }
+  }
+
+  return best;
+}
+
+function findQuickAddCatalogMatches(catalogItems: Product[], query: string) {
+  const normalizedQuery = normalizeProductSearchText(query);
+  const queryTokens = tokenizeProductQuery(normalizedQuery);
+
+  if (!normalizedQuery) {
+    return catalogItems.map((product) => ({ product, score: 0 }));
+  }
+
+  return catalogItems
+    .map((product) => ({ product, score: scoreCatalogMatch(product, normalizedQuery, queryTokens) }))
+    .filter((item) => item.score > 0)
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      return left.product.title.localeCompare(right.product.title);
+    });
+}
+
+function unitFromVariant(variant: ProductVariant | undefined | null) {
+  if (!variant) return "EA";
+  if (variant.options.length && variant.options.length !== "Standard") return "FT";
+  if (variant.options.material?.toLowerCase() === "sets") return "SET";
+  return "EA";
+}
+
 function findCatalogVariantMatches(catalogItems: Product[], query: string) {
   const normalizedQuery = normalizeProductSearchText(query);
   const queryTokens = tokenizeProductQuery(normalizedQuery);
@@ -813,6 +937,16 @@ function formatOrderNotesForStorage(notes: DraftNote[]) {
     .join("\n\n");
 }
 
+function formatNewOrderNotes(messageOnOrder: string, deliveryNotes: string, extraNotes: DraftNote[]) {
+  return [
+    messageOnOrder.trim() ? `Message on order:\n${messageOnOrder.trim()}` : "",
+    deliveryNotes.trim() ? `Jobsite or delivery notes:\n${deliveryNotes.trim()}` : "",
+    formatOrderNotesForStorage(extraNotes)
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 function getVariantDisplaySize(variant: ProductVariant) {
   return variant.options.length || variant.options.wall || "Standard";
 }
@@ -836,12 +970,12 @@ function makePullMap(order: OrderRecord) {
 }
 
 function makeDraftLine(overrides?: Partial<CartItem>) {
-  return {
+  const baseLine: CartItem = {
     productId: `manual-${Date.now()}`,
     variantId: `manual-variant-${Date.now() + 1}`,
     title: "",
     sku: "",
-    image: "/assets/logo.svg",
+    image: "",
     price: 0,
     quantity: 1,
     quantityNeeded: 1,
@@ -849,6 +983,15 @@ function makeDraftLine(overrides?: Partial<CartItem>) {
     pulled: false,
     pickNotes: "",
     options: {
+      ...(overrides?.options || {})
+    }
+  };
+
+  return {
+    ...baseLine,
+    ...overrides,
+    options: {
+      ...baseLine.options,
       ...(overrides?.options || {})
     }
   };
@@ -902,12 +1045,32 @@ export function OrderDetailPage({
   const catalogItems = externalCatalogProducts?.length
     ? externalCatalogProducts
     : fallbackCatalogProducts;
+  const catalogImageBySku = useMemo(() => {
+    const images = new Map<string, string>();
+
+    for (const product of catalogItems) {
+      for (const variant of product.variants) {
+        const image = getProductImageUrl(product, variant);
+        if (image) images.set(variant.sku, image);
+      }
+    }
+
+    return images;
+  }, [catalogItems]);
+  const resolveOrderItemImage = (item: CartItem) =>
+    isProductImageUrl(item.image) ? item.image : catalogImageBySku.get(item.sku) || "";
+  const withResolvedOrderItemImages = (items: CartItem[]) =>
+    items.map((item) => ({
+      ...item,
+      image: resolveOrderItemImage(item)
+    }));
   const storedOrders = useOrderStore((state) => state.orders);
   const setOrders = useOrderStore((state) => state.setOrders);
   const createOrder = useOrderStore((state) => state.createOrder);
   const upsertOrder = useOrderStore((state) => state.upsertOrder);
   const updateOrderStatus = useOrderStore((state) => state.updateOrderStatus);
   const updatePaymentStatus = useOrderStore((state) => state.updatePaymentStatus);
+  const savedShopperAccounts = useUserStore((state) => state.savedUsers);
   const router = useRouter();
   const [backendNotice, setBackendNotice] = useState("");
   const [actionNotice, setActionNotice] = useState("");
@@ -919,6 +1082,16 @@ export function OrderDetailPage({
   const [draftDeliveryFee, setDraftDeliveryFee] = useState("0");
   const [draftCustomerNotes, setDraftCustomerNotes] = useState("");
   const [draftInternalNotes, setDraftInternalNotes] = useState("");
+  const [customerPopupTab, setCustomerPopupTab] = useState<CustomerPopupTab>("customer");
+  const [draftCustomerFirstName, setDraftCustomerFirstName] = useState("");
+  const [draftCustomerLastName, setDraftCustomerLastName] = useState("");
+  const [draftTaxExempt, setDraftTaxExempt] = useState(false);
+  const [draftPaymentTerms, setDraftPaymentTerms] = useState("Due on receipt");
+  const [sameAsBillingAddress, setSameAsBillingAddress] = useState(true);
+  const [draftShippingAddress, setDraftShippingAddress] = useState("");
+  const [draftShippingCity, setDraftShippingCity] = useState("");
+  const [draftShippingState, setDraftShippingState] = useState("");
+  const [draftShippingZip, setDraftShippingZip] = useState("");
   const [draftCustomerName, setDraftCustomerName] = useState("");
   const [draftCompanyName, setDraftCompanyName] = useState("");
   const [draftEmail, setDraftEmail] = useState("");
@@ -936,15 +1109,27 @@ export function OrderDetailPage({
   const [draftOrderNoteInput, setDraftOrderNoteInput] = useState("");
   const [draftPaymentStatus, setDraftPaymentStatus] =
     useState<PaymentStatus>("unpaid");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("Cash");
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [paymentReference, setPaymentReference] = useState("");
+  const [paymentNote, setPaymentNote] = useState("");
+  const [isCustomerPickerOpen, setIsCustomerPickerOpen] = useState(false);
+  const [siteUserCustomers, setSiteUserCustomers] = useState<CustomerRecord[]>([]);
   const [pulledMap, setPulledMap] = useState<PullMap>({});
   const [quickAddProductQuery, setQuickAddProductQuery] = useState("");
   const [quickAddProductId, setQuickAddProductId] = useState("");
   const [quickAddVariantId, setQuickAddVariantId] = useState("");
   const [quickAddQuantity, setQuickAddQuantity] = useState("1");
+  const [quickAddUnit, setQuickAddUnit] = useState("EA");
   const [quickAddPrice, setQuickAddPrice] = useState("0");
   const [quickAddResultIndex, setQuickAddResultIndex] = useState(0);
+  const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
   const [activePopup, setActivePopup] = useState<PopupId | null>(null);
   const popupTriggerRef = useRef<HTMLElement | null>(null);
+  const productSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const productSearchContainerRef = useRef<HTMLDivElement | null>(null);
+  const createDraftInitializedRef = useRef(false);
   const modalSnapshotRef = useRef<ModalSnapshot>({
     customerName: "",
     customerCompanyName: "",
@@ -968,11 +1153,30 @@ export function OrderDetailPage({
   const isBillingPopupOpen = activePopup === "billing";
   const isDeliveryPopupOpen = activePopup === "delivery";
 
+  const availableCustomers = useMemo(
+    () =>
+      mergeCustomerRecords([
+        ...savedShopperAccounts.map((user) => makeShopperCustomer(user)),
+        ...siteUserCustomers,
+        ...customerDirectory
+      ]),
+    [savedShopperAccounts, siteUserCustomers]
+  );
+
   const draftOrderTemplate = useMemo(
     () => (createMode ? createDraftOrder({ id: orderId }) : null),
     [createMode, orderId]
   );
-  const fallbackOrder = createMode ? draftOrderTemplate || sampleOrders[0] : sampleOrders[0];
+  const fallbackOrder = useMemo(
+    () =>
+      createMode
+        ? draftOrderTemplate || sampleOrders[0]
+        : {
+            ...sampleOrders[0],
+            id: orderId
+          },
+    [createMode, draftOrderTemplate, orderId]
+  );
   const order = useMemo(() => {
     const resolved =
       (storedOrders.length ? storedOrders : sampleOrders).find(
@@ -1009,9 +1213,60 @@ export function OrderDetailPage({
   }, [setOrders]);
 
   useEffect(() => {
+    let isMounted = true;
+
+    async function loadSiteUsers() {
+      const response = await fetch("/api/site-users");
+      if (!response.ok) return;
+
+      const payload = (await response.json()) as { users?: SiteUserClient[] };
+      if (!isMounted) return;
+
+      setSiteUserCustomers(
+        (payload.users || [])
+          .filter((user) => user.id && user.displayName)
+          .map((user) => makeSiteUserCustomer(user))
+      );
+    }
+
+    void loadSiteUsers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isProductSearchOpen) return;
+
+    function closeProductSearchFromOutside(event: MouseEvent | TouchEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (productSearchContainerRef.current?.contains(target)) return;
+      setIsProductSearchOpen(false);
+    }
+
+    function closeProductSearchWithEscape(event: globalThis.KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setIsProductSearchOpen(false);
+      productSearchInputRef.current?.blur();
+    }
+
+    document.addEventListener("mousedown", closeProductSearchFromOutside);
+    document.addEventListener("touchstart", closeProductSearchFromOutside);
+    document.addEventListener("keydown", closeProductSearchWithEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", closeProductSearchFromOutside);
+      document.removeEventListener("touchstart", closeProductSearchFromOutside);
+      document.removeEventListener("keydown", closeProductSearchWithEscape);
+    };
+  }, [isProductSearchOpen]);
+
+  useEffect(() => {
     setPulledMap(makePullMap(order));
-    if (!isEditing) {
-      setDraftItems(order.items.map((item) => ({ ...item })));
+    if (!createMode && !isEditing) {
+      setDraftItems(withResolvedOrderItemImages(order.items));
       setDraftCustomerNotes(order.jobsiteAddress.notes || "");
       setDraftInternalNotes("");
       setDraftOrderNotes(parseOrderNotes(order.jobsiteAddress.notes || ""));
@@ -1032,8 +1287,9 @@ export function OrderDetailPage({
       setDraftDeliveryNotes(order.jobsiteAddress.notes || "");
       setDraftPaymentStatus(order.paymentStatus || "unpaid");
     }
-    if (createMode && isEditing) {
-      setDraftItems(order.items.map((item) => ({ ...item })));
+    if (createMode && isEditing && !createDraftInitializedRef.current) {
+      createDraftInitializedRef.current = true;
+      setDraftItems(withResolvedOrderItemImages(order.items));
       setDraftCustomerNotes(order.jobsiteAddress.notes || "");
       setDraftInternalNotes("");
       setDraftOrderNotes(parseOrderNotes(order.jobsiteAddress.notes || ""));
@@ -1057,27 +1313,32 @@ export function OrderDetailPage({
     if (searchParams.get("edit") === "1") {
       setIsEditing(true);
     }
-  }, [order, isEditing, searchParams, createMode]);
+  }, [order, isEditing, searchParams, createMode, catalogImageBySku]);
 
   const hasRealData = storedOrders.some((storedOrder) => storedOrder.id === order.id);
+  const filteredCatalogProducts = useMemo(() => {
+    return quickAddProductQuery.trim()
+      ? findQuickAddCatalogMatches(catalogItems, quickAddProductQuery).map((entry) => entry.product)
+      : [...catalogItems].sort((left, right) => left.title.localeCompare(right.title));
+  }, [catalogItems, quickAddProductQuery]);
   const quickAddCatalogResults = useMemo<CatalogSearchResult[]>(
     () => findCatalogVariantMatches(catalogItems, quickAddProductQuery).slice(0, 60),
     [catalogItems, quickAddProductQuery]
   );
 
   const quickAddHasResults = quickAddCatalogResults.length > 0;
-  const activeCatalogResult = useMemo(() => {
-    if (!quickAddProductId || !quickAddVariantId) return null;
-
-    return (
-      quickAddCatalogResults.find(
-        (entry) => entry.product.id === quickAddProductId && entry.variant.id === quickAddVariantId
-      ) || null
-    );
-  }, [quickAddCatalogResults, quickAddProductId, quickAddVariantId]);
-
-  const activeCatalogProduct = activeCatalogResult?.product || null;
-  const activeCatalogVariant = activeCatalogResult?.variant || undefined;
+  const productSearchResults = quickAddCatalogResults.slice(0, 10);
+  const activeCatalogProduct = useMemo(() => {
+    if (quickAddProductId) return getCatalogProduct(catalogItems, quickAddProductId);
+    if (!quickAddProductQuery.trim()) return null;
+    return findBestCatalogMatch(catalogItems, quickAddProductQuery)?.product || null;
+  }, [catalogItems, quickAddProductId, quickAddProductQuery]);
+  const availableVariants = activeCatalogProduct?.variants || [];
+  const activeCatalogVariant = useMemo(() => {
+    if (!activeCatalogProduct) return null;
+    return getCatalogVariant(activeCatalogProduct, quickAddVariantId) || activeCatalogProduct.variants[0] || null;
+  }, [activeCatalogProduct, quickAddVariantId]);
+  const quickAddVariantLabel = formatVariantSummary(activeCatalogVariant || undefined);
   const draftSubtotal = useMemo(
     () => draftItems.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0),
     [draftItems]
@@ -1108,18 +1369,32 @@ export function OrderDetailPage({
   const totalQuantity = lineItems.reduce((sum, item) => sum + item.totalQuantity, 0);
   const remainingQuantity = totalQuantity - pulledQuantity;
   const pickTicketStatus = remainingQuantity === 0 ? "Complete" : "In progress";
-  const draftTax = createMode
-    ? draftSubtotal * TAX_RATE
+  const draftTax = draftTaxExempt
+    ? 0
+    : createMode
+      ? draftSubtotal * TAX_RATE
     : order.subtotal > 0
       ? (order.tax / order.subtotal) * draftSubtotal
       : draftSubtotal * 0.0834;
   const draftTotal = draftSubtotal + draftTax + draftDeliveryCharge - draftDiscountAmount;
-  const draftOrderNotesText = useMemo(() => formatOrderNotesForStorage(draftOrderNotes), [draftOrderNotes]);
-  const summarySubtotal = isEditing ? draftSubtotal : order.subtotal;
-  const summaryTax = isEditing ? draftTax : order.tax;
-  const summaryTotal = isEditing ? draftTotal : order.total;
+  const draftOrderNotesText = useMemo(
+    () => formatNewOrderNotes(draftCustomerNotes, draftDeliveryNotes, draftOrderNotes),
+    [draftCustomerNotes, draftDeliveryNotes, draftOrderNotes]
+  );
+  const summarySubtotal = draftSubtotal;
+  const summaryTax = draftTax;
+  const invoiceTotal = draftTotal;
+  const summaryTotal = invoiceTotal;
+  const recordedPayments = order.payments || [];
+  const recordedPaymentTotal = recordedPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const balanceDue = Math.max(0, summaryTotal - recordedPaymentTotal);
   const timelineEvents = toStatusTimeline(order);
-  const canMarkReady = order.status === "submitted" || order.status === "confirmed" || order.status === "picking";
+  const isReadyStatus = order.status === "ready_for_pickup" || order.status === "out_for_delivery";
+  const canToggleReady =
+    order.status === "submitted" ||
+    order.status === "confirmed" ||
+    order.status === "picking" ||
+    isReadyStatus;
   const canMarkPickupOrDelivery =
     order.status === "ready_for_pickup" ||
     order.status === "out_for_delivery";
@@ -1138,18 +1413,39 @@ export function OrderDetailPage({
       const fallbackVariant = activeCatalogProduct.variants[0];
       setQuickAddVariantId(fallbackVariant?.id || "");
       setQuickAddPrice((fallbackVariant?.price || 0).toFixed(2));
+      setQuickAddUnit(unitFromVariant(fallbackVariant));
     }
   }, [activeCatalogProduct, quickAddVariantId]);
 
+  useEffect(() => {
+    const normalized = quickAddProductQuery.trim().toLowerCase();
+    if (!normalized || quickAddProductId) return;
+
+    const fallbackProduct = filteredCatalogProducts[0];
+    if (!fallbackProduct) {
+      setQuickAddProductId("");
+      setQuickAddVariantId("");
+      setQuickAddPrice("0");
+      setQuickAddUnit("EA");
+      return;
+    }
+
+    const fallbackVariant = fallbackProduct.variants[0];
+    setQuickAddProductId(fallbackProduct.id);
+    setQuickAddVariantId(fallbackVariant?.id || "");
+    setQuickAddPrice((fallbackVariant?.price || 0).toFixed(2));
+    setQuickAddUnit(unitFromVariant(fallbackVariant));
+  }, [quickAddProductId, quickAddProductQuery, filteredCatalogProducts]);
+
   function beginEditing() {
-    setDraftItems(order.items.map((item) => ({ ...item })));
+    setDraftItems(withResolvedOrderItemImages(order.items));
     setDraftCustomerNotes(order.jobsiteAddress.notes || "");
     setIsEditing(true);
     setActionNotice("Editing order items. Save to keep changes, cancel to revert.");
   }
 
   function exitEditing() {
-    setDraftItems(order.items.map((item) => ({ ...item })));
+    setDraftItems(withResolvedOrderItemImages(order.items));
     setDraftCustomerNotes(order.jobsiteAddress.notes || "");
     setIsEditing(false);
     setActionNotice("Edit mode canceled.");
@@ -1177,10 +1473,27 @@ export function OrderDetailPage({
       items: updatedItems,
       subtotal: draftSubtotal,
       tax: draftTax,
+      deliveryFee: draftDeliveryCharge,
       total: draftTotal,
+      customerName: draftCustomerName.trim() || order.customerName,
+      companyName: draftCompanyName.trim() || draftCustomerName.trim() || order.companyName,
+      email: draftEmail.trim(),
+      phone: draftPhone.trim(),
+      fulfillmentMethod: draftFulfillmentMethod,
+      requestedDate: draftRequestedDate,
+      requestedWindow: draftRequestedWindow,
+      paymentStatus: draftPaymentStatus,
       jobsiteAddress: {
         ...order.jobsiteAddress,
-        notes: draftCustomerNotes
+        name: draftCustomerName.trim() || order.jobsiteAddress.name,
+        company: draftCompanyName.trim() || draftCustomerName.trim() || order.jobsiteAddress.company,
+        email: draftEmail.trim(),
+        phone: draftPhone.trim(),
+        addressLine1: sameAsBillingAddress ? draftAddress : draftShippingAddress,
+        city: sameAsBillingAddress ? draftCity : draftShippingCity,
+        state: sameAsBillingAddress ? draftState : draftShippingState,
+        postalCode: sameAsBillingAddress ? draftZip : draftShippingZip,
+        notes: draftOrderNotesText
       },
       activity: [
         {
@@ -1204,6 +1517,88 @@ export function OrderDetailPage({
     setDraftItems(updatedItems);
   }
 
+  function getPaymentStatusForPaidAmount(paidAmount: number, orderTotal: number): PaymentStatus {
+    if (paidAmount <= 0) return "unpaid";
+    if (paidAmount >= orderTotal) return "paid";
+    return "partial";
+  }
+
+  async function recordPayment() {
+    if (createMode) {
+      setActionNotice("Create the order before recording payments.");
+      return;
+    }
+
+    const amount = Number.parseFloat(paymentAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setActionNotice("Enter a payment amount greater than zero.");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const localPayment: OrderPayment = {
+      id: `payment-${Date.now()}`,
+      amount,
+      method: paymentMethod.trim() || "Payment",
+      paidAt: paymentDate ? new Date(`${paymentDate}T12:00:00`).toISOString() : now,
+      reference: paymentReference.trim(),
+      note: paymentNote.trim(),
+      createdAt: now
+    };
+    const nextPayments = [localPayment, ...recordedPayments];
+    const nextPaymentTotal = nextPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const nextPaymentStatus = getPaymentStatusForPaidAmount(nextPaymentTotal, summaryTotal);
+    const updatedOrder: OrderRecord = {
+      ...order,
+      payments: nextPayments,
+      paymentStatus: nextPaymentStatus,
+      updatedAt: now,
+      activity: [
+        {
+          id: `payment-${Date.now()}`,
+          label: "Payment recorded",
+          detail: `${formatCurrency(amount)} ${localPayment.method} payment recorded.`,
+          createdAt: now
+        },
+        ...order.activity
+      ]
+    };
+
+    upsertOrder(updatedOrder);
+    setDraftPaymentStatus(nextPaymentStatus);
+    setPaymentAmount("");
+    setPaymentReference("");
+    setPaymentNote("");
+    setActionNotice(`Recorded ${formatCurrency(amount)} payment.`);
+
+    void fetch("/api/orders", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orderId: order.id,
+        payment: {
+          amount,
+          method: localPayment.method,
+          paidAt: localPayment.paidAt,
+          reference: localPayment.reference,
+          note: localPayment.note
+        }
+      })
+    })
+      .then((response) => response.json())
+      .then((payload: { persisted?: boolean; reason?: string; paymentStatus?: PaymentStatus }) => {
+        if (payload.paymentStatus) setDraftPaymentStatus(payload.paymentStatus);
+        setBackendNotice(
+          payload.persisted
+            ? ""
+            : payload.reason || "Payment was recorded locally. Backend payment save is not connected."
+        );
+      })
+      .catch(() => {
+        setBackendNotice("Payment was recorded locally. Backend payment save failed.");
+      });
+  }
+
   function buildDraftOrderRecord(nextStatus: "draft" | "submitted", nextPaymentStatus: PaymentStatus) {
     const normalizedItems = normalizeDraftItems(draftItems);
 
@@ -1213,6 +1608,10 @@ export function OrderDetailPage({
 
     const orderDate = draftRequestedDate || new Date().toISOString().slice(0, 10);
     const requestedWindow = draftRequestedWindow || "12:00 PM - 2:00 PM";
+    const orderAddress = sameAsBillingAddress ? draftAddress : draftShippingAddress;
+    const orderCity = sameAsBillingAddress ? draftCity : draftShippingCity;
+    const orderState = sameAsBillingAddress ? draftState : draftShippingState;
+    const orderZip = sameAsBillingAddress ? draftZip : draftShippingZip;
 
     return createOrder({
       userId: "admin-user",
@@ -1230,11 +1629,11 @@ export function OrderDetailPage({
         company: draftCompanyName.trim() || draftCustomerName.trim(),
         email: draftEmail.trim(),
         phone: draftPhone.trim(),
-        addressLine1: draftAddress,
+        addressLine1: orderAddress,
         addressLine2: "",
-        city: draftCity,
-        state: draftState,
-        postalCode: draftZip,
+        city: orderCity,
+        state: orderState,
+        postalCode: orderZip,
         notes: draftOrderNotesText
       },
       drawings: [],
@@ -1334,30 +1733,108 @@ export function OrderDetailPage({
     setDraftItems((items) => items.filter((_, itemIndex) => itemIndex !== index));
   }
 
+  function addCatalogSearchResult(result: CatalogSearchResult) {
+    const product = result.product;
+    const variant = result.variant;
+    const image = getProductImageUrl(product, variant);
+    const lineKey = getCatalogSearchResultKey(result);
+    const addQuantity = 1;
+
+    setDraftItems((items) => {
+      const existingIndex = items.findIndex((item) => `${item.productId}-${item.variantId}` === lineKey);
+
+      if (existingIndex >= 0) {
+        return items.map((item, index) =>
+          index === existingIndex
+            ? {
+                ...item,
+                quantity: (Number(item.quantity) || 0) + addQuantity,
+                quantityNeeded: (Number(item.quantityNeeded) || Number(item.quantity) || 0) + addQuantity
+              }
+            : item
+        );
+      }
+
+      return [
+        ...items,
+        makeDraftLine({
+          productId: product.id,
+          variantId: variant.id,
+          title: product.title,
+          sku: variant.sku,
+          image,
+          quantity: addQuantity,
+          quantityNeeded: addQuantity,
+          price: getVariantDisplayPrice(variant),
+          options: {
+            ...variant.options,
+            length: formatVariantSummary(variant) || getVariantDisplaySize(variant)
+          },
+          pickNotes: ""
+        })
+      ];
+    });
+
+    setQuickAddProductQuery("");
+    setQuickAddProductId("");
+    setQuickAddVariantId("");
+    setQuickAddPrice("0");
+    setIsProductSearchOpen(false);
+    setActionNotice(`Added ${product.title} to order.`);
+    productSearchInputRef.current?.blur();
+  }
+
   function handleQuickAddProductInput(value: string) {
     setQuickAddProductQuery(value);
+    setIsProductSearchOpen(true);
+    setQuickAddResultIndex(0);
+    const bestMatch = findBestCatalogMatch(catalogItems, value);
 
-    if (!value.trim()) {
+    if (!bestMatch) {
       setQuickAddProductId("");
       setQuickAddVariantId("");
       setQuickAddPrice("0");
-      setQuickAddResultIndex(0);
+      setQuickAddUnit("EA");
       return;
     }
+
+    const nextProduct = bestMatch.product;
+    const nextVariant = nextProduct.variants[0];
+    setQuickAddProductId(nextProduct.id);
+    setQuickAddVariantId(nextVariant?.id || "");
+    setQuickAddPrice((nextVariant?.price || 0).toFixed(2));
+    setQuickAddUnit(unitFromVariant(nextVariant));
+  }
+
+  function selectQuickAddProduct(product: Product | null) {
+    if (!product) {
+      setQuickAddProductId("");
+      setQuickAddVariantId("");
+      setQuickAddPrice("0");
+      setQuickAddUnit("EA");
+      return;
+    }
+
+    const nextVariant = product.variants[0];
+    setQuickAddProductId(product.id);
+    setQuickAddProductQuery(product.title);
+    setQuickAddVariantId(nextVariant?.id || "");
+    setQuickAddPrice((nextVariant?.price || 0).toFixed(2));
+    setQuickAddUnit(unitFromVariant(nextVariant));
   }
 
   function selectQuickAddResult(result: CatalogSearchResult | null, resultIndex = 0) {
     if (!result) {
-      setQuickAddProductId("");
-      setQuickAddVariantId("");
-      setQuickAddPrice("0");
+      selectQuickAddProduct(null);
       setQuickAddResultIndex(0);
       return;
     }
 
     setQuickAddProductId(result.product.id);
+    setQuickAddProductQuery(result.product.title);
     setQuickAddVariantId(result.variant.id);
-    setQuickAddPrice(toMoneyInputValue(result.variant.price));
+    setQuickAddPrice((result.variant.price || 0).toFixed(2));
+    setQuickAddUnit(unitFromVariant(result.variant));
     setQuickAddResultIndex(resultIndex);
   }
 
@@ -1370,23 +1847,15 @@ export function OrderDetailPage({
     if (quickAddResultIndex >= quickAddCatalogResults.length) {
       setQuickAddResultIndex(0);
     }
-
-    if (!quickAddProductId || !quickAddVariantId) {
-      const first = quickAddCatalogResults[0];
-      if (first) {
-        selectQuickAddResult(first, 0);
-      }
-    }
-  }, [quickAddCatalogResults, quickAddHasResults, quickAddProductId, quickAddVariantId, quickAddResultIndex]);
+  }, [quickAddCatalogResults, quickAddHasResults, quickAddResultIndex]);
 
   function getQuickAddStatusNote() {
     if (!quickAddProductQuery.trim()) {
-      return "Search for a product to load live catalog options.";
+      return "Search or choose a catalog product to load live pricing.";
     }
 
-    if (!activeCatalogProduct) {
-      return "No matching catalog products found for this search.";
-    }
+    if (!activeCatalogProduct) return "No matching catalog product found.";
+    if (!activeCatalogVariant) return "Select a variant to load pricing.";
 
     return "";
   }
@@ -1396,6 +1865,7 @@ export function OrderDetailPage({
     setQuickAddProductId("");
     setQuickAddVariantId("");
     setQuickAddQuantity("1");
+    setQuickAddUnit("EA");
     setQuickAddPrice("0");
   }
 
@@ -1438,36 +1908,18 @@ export function OrderDetailPage({
 
     if (event.key === "Enter") {
       event.preventDefault();
-      const active = quickAddCatalogResults[quickAddResultIndex] || quickAddCatalogResults[0];
-      if (active) {
-        addDraftItem(active);
-      }
+      addDraftItem();
     }
   }
 
-  function addDraftItem(result?: CatalogSearchResult) {
-    const selected = result || activeCatalogResult;
-
-    if (!selected) {
-      if (quickAddHasResults) {
-        const fallback = quickAddCatalogResults[0];
-        if (fallback) {
-          addDraftItem(fallback);
-          return;
-        }
-      }
-
-      setActionNotice("Select a real catalog product before adding.");
-      return;
-    }
-
-    const product = selected.product;
+  function addDraftItem() {
+    const product = activeCatalogProduct;
     if (!product) {
       setActionNotice("Select a real catalog product before adding.");
       return;
     }
 
-    const variant = selected.variant;
+    const variant = activeCatalogVariant;
     if (!variant) {
       setActionNotice("Select a product variant before adding.");
       return;
@@ -1486,7 +1938,7 @@ export function OrderDetailPage({
       price: Number.isFinite(priceValue) ? Math.max(0, priceValue) : getVariantDisplayPrice(variant),
       options: {
         ...variant.options,
-        length: getVariantDisplaySize(variant)
+        length: formatVariantSummary(variant) || getVariantDisplaySize(variant)
       },
       pickNotes: ""
     });
@@ -1516,6 +1968,12 @@ export function OrderDetailPage({
   }
 
   function markReady() {
+    if (isReadyStatus) {
+      persistOrderStatus("picking", "Marked not ready from order detail.");
+      setActionNotice("Order moved back to picking.");
+      return;
+    }
+
     const readyStatus =
       order.fulfillmentMethod === "pickup" ? "ready_for_pickup" : "out_for_delivery";
     persistOrderStatus(readyStatus, "Marked ready from order detail.");
@@ -1643,8 +2101,25 @@ export function OrderDetailPage({
   }
 
   function saveCustomerPopup() {
+    const composedName = [draftCustomerFirstName, draftCustomerLastName]
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join(" ");
+    const nextCustomerName = composedName || draftCompanyName.trim();
+
+    if (nextCustomerName && (!draftCustomerName.trim() || draftCustomerName === "New Customer")) {
+      setDraftCustomerName(nextCustomerName);
+    }
+
+    if (sameAsBillingAddress) {
+      setDraftShippingAddress(draftAddress);
+      setDraftShippingCity(draftCity);
+      setDraftShippingState(draftState);
+      setDraftShippingZip(draftZip);
+    }
+
     closeOrderDraftPopups();
-    setActionNotice("Customer details updated.");
+    setActionNotice("Customer added to order.");
   }
 
   function saveBillingPopup() {
@@ -1657,40 +2132,967 @@ export function OrderDetailPage({
     setActionNotice("Delivery details updated.");
   }
 
+  function parseCustomerAddress(value: string) {
+    const [addressLine = "", cityLine = ""] = value.split("\n");
+    const parts = cityLine.trim().split(/\s+/).filter(Boolean);
+
+    return {
+      addressLine,
+      city: parts.length > 2 ? parts.slice(0, -2).join(" ") : "",
+      state: parts.length > 1 ? parts.at(-2) || "" : "",
+      postalCode: parts.length ? parts.at(-1) || "" : ""
+    };
+  }
+
+  function applyCustomerToDraft(customer: CustomerRecord) {
+    const billingAddress = parseCustomerAddress(customer.billingAddress);
+    const jobsiteAddress = parseCustomerAddress(customer.jobsiteAddress);
+    const [firstName = "", ...lastNameParts] = customer.name.split(" ");
+
+    setDraftCustomerName(customer.name);
+    setDraftCustomerFirstName(firstName);
+    setDraftCustomerLastName(lastNameParts.join(" "));
+    setDraftCompanyName(customer.company);
+    setDraftEmail(customer.email);
+    setDraftPhone(customer.phone);
+    setDraftAddress(billingAddress.addressLine || jobsiteAddress.addressLine);
+    setDraftCity(billingAddress.city || jobsiteAddress.city);
+    setDraftState(billingAddress.state || jobsiteAddress.state);
+    setDraftZip(billingAddress.postalCode || jobsiteAddress.postalCode);
+    setDraftShippingAddress(jobsiteAddress.addressLine || billingAddress.addressLine);
+    setDraftShippingCity(jobsiteAddress.city || billingAddress.city);
+    setDraftShippingState(jobsiteAddress.state || billingAddress.state);
+    setDraftShippingZip(jobsiteAddress.postalCode || billingAddress.postalCode);
+    setDraftPaymentTerms(customer.terms || "Due on receipt");
+    setSameAsBillingAddress(customer.billingAddress === customer.jobsiteAddress);
+    setIsCustomerPickerOpen(false);
+    setActionNotice(`${customer.company || customer.name} added to order.`);
+  }
+
+  function startNewCustomerDraft() {
+    popupTriggerRef.current = (document.activeElement as HTMLElement | null) || null;
+    setCustomerPopupTab("customer");
+    setDraftCustomerName("");
+    setDraftCustomerFirstName("");
+    setDraftCustomerLastName("");
+    setDraftCompanyName("");
+    setDraftEmail("");
+    setDraftPhone("");
+    setDraftAddress("");
+    setDraftCity("");
+    setDraftState("");
+    setDraftZip("");
+    setDraftTaxExempt(false);
+    setDraftPaymentTerms("Due on receipt");
+    setSameAsBillingAddress(true);
+    setDraftShippingAddress("");
+    setDraftShippingCity("");
+    setDraftShippingState("");
+    setDraftShippingZip("");
+    setDraftCustomerNotes("");
+    setDraftDeliveryNotes("");
+    setIsCustomerPickerOpen(false);
+    setActivePopup("customer");
+  }
+
+  if (true) {
+    return (
+      <>
+      <main className="px-3 py-4 md:px-6 md:py-6">
+        <div className="mx-auto grid max-w-[1280px] gap-4">
+          {!createMode ? (
+            <section className="overflow-hidden rounded-xl border border-black/10 bg-white/90 shadow-sm backdrop-blur-xl">
+              <div className="grid gap-4 border-b border-black/10 bg-[#fafaf8] p-4 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.9fr)] lg:items-end">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-industrial-muted">
+                    Gateworks operations
+                  </p>
+                  <h1 className="mt-2 text-3xl font-black leading-none tracking-[-0.04em] text-industrial-ink md:text-5xl">
+                    {order.orderNumber}
+                  </h1>
+                  <p className="mt-3 text-sm font-medium text-industrial-steel">
+                    {order.customerName} · {order.jobName || "Customer order"}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className="inline-flex h-8 items-center rounded-full border border-black/10 bg-white px-3 text-[11px] font-black uppercase tracking-[0.14em] text-industrial-ink shadow-sm">
+                      {statusLabel[order.status]}
+                    </span>
+                    <span className={`inline-flex h-8 items-center rounded-full border px-3 text-[11px] font-black uppercase tracking-[0.14em] shadow-sm ${paymentPillStyles[draftPaymentStatus]}`}>
+                      {paymentLabels[draftPaymentStatus]}
+                    </span>
+                    <span className="inline-flex h-8 items-center rounded-full border border-black/10 bg-white px-3 text-[11px] font-black uppercase tracking-[0.14em] text-industrial-ink shadow-sm">
+                      {fulfillmentLabels[order.status]}
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-black/10 bg-white p-4 shadow-sm">
+                  <OrderProgressBar fulfillmentMethod={order.fulfillmentMethod} status={order.status} />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 border-b border-black/10 bg-white px-4 py-3">
+                <Link
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-xs font-black uppercase tracking-[0.12em] text-industrial-ink transition hover:border-industrial-ink"
+                  href={backHref}
+                >
+                  <ArrowLeft size={14} />
+                  Back to orders
+                </Link>
+                <button
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-xs font-black uppercase tracking-[0.12em] text-industrial-ink transition hover:border-industrial-ink"
+                  onClick={printPickTicket}
+                  type="button"
+                >
+                  <Printer size={14} />
+                  Print pick ticket
+                </button>
+                <button
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-xs font-black uppercase tracking-[0.12em] text-industrial-ink transition hover:border-industrial-ink disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={!canToggleReady}
+                  onClick={markReady}
+                  type="button"
+                >
+                  <CircleDashed size={14} />
+                  {isReadyStatus ? "Mark not ready" : "Mark ready"}
+                </button>
+                <button
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-xs font-black uppercase tracking-[0.12em] text-industrial-ink transition hover:border-industrial-ink disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={!canMarkPickupOrDelivery}
+                  onClick={markPickedUpOrDelivered}
+                  type="button"
+                >
+                  <CheckCircle2 size={14} />
+                  {order.fulfillmentMethod === "pickup" ? "Mark picked up" : "Mark delivered"}
+                </button>
+                <button
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-industrial-ink px-3 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:bg-jobsite-pine"
+                  onClick={saveOrderEdits}
+                  type="button"
+                >
+                  <Save size={14} />
+                  Save changes
+                </button>
+                <details className="relative">
+                  <summary className="inline-flex h-9 cursor-pointer items-center rounded-lg border border-black/10 bg-white px-3 text-xs font-black uppercase tracking-[0.12em] text-industrial-ink transition hover:border-industrial-ink">
+                    More actions
+                  </summary>
+                  <div className="absolute right-0 z-30 mt-2 w-60 rounded-lg border border-black/10 bg-white p-2 shadow-lg">
+                    <button
+                      className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-semibold text-industrial-ink transition hover:bg-[#f7f7f4]"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(order.id);
+                        setActionNotice("Order ID copied.");
+                      }}
+                      type="button"
+                    >
+                      Copy order id
+                    </button>
+                    <button
+                      className="mt-1 flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-semibold text-industrial-ink transition hover:bg-[#f7f7f4]"
+                      onClick={() =>
+                        void navigator.clipboard.writeText(`${order.orderNumber} - ${order.customerName}`)
+                      }
+                      type="button"
+                    >
+                      Copy customer reference
+                    </button>
+                  </div>
+                </details>
+              </div>
+
+              <div className="grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-lg border border-emerald-900/10 bg-emerald-50/70 px-3 py-2.5">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-industrial-muted">Order total</p>
+                  <p className="mt-0.5 text-xl font-black leading-tight text-industrial-ink">{formatCurrency(summaryTotal)}</p>
+                  <p className="text-xs leading-tight text-industrial-steel">{paymentLabels[draftPaymentStatus]}</p>
+                </div>
+                <div className="rounded-lg border border-black/10 bg-white px-3 py-2.5">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-industrial-muted">Line items</p>
+                  <p className="mt-0.5 text-xl font-black leading-tight text-industrial-ink">{draftItems.length}</p>
+                  <p className="text-xs leading-tight text-industrial-steel">Material rows on this order</p>
+                </div>
+                <div className="rounded-lg border border-indigo-900/10 bg-indigo-50/70 px-3 py-2.5">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-industrial-muted">Pulled</p>
+                  <p className="mt-0.5 text-xl font-black leading-tight text-industrial-ink">{pulledQuantity}/{totalQuantity}</p>
+                  <p className="text-xs leading-tight text-industrial-steel">{pickTicketStatus}</p>
+                </div>
+                <div className="rounded-lg border border-violet-900/10 bg-violet-50/70 px-3 py-2.5">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-industrial-muted">Fulfillment</p>
+                  <p className="mt-0.5 text-xl font-black capitalize leading-tight text-industrial-ink">{draftFulfillmentMethod}</p>
+                  <p className="text-xs leading-tight text-industrial-steel">{draftRequestedDate || order.requestedDate || "No date set"}</p>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          <section className="overflow-hidden rounded-lg border border-black/10 bg-white/86 shadow-sm backdrop-blur-xl">
+            <div className="flex flex-col gap-3 border-b border-black/10 bg-[#fafaf8] p-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <Link
+                  className="inline-flex items-center gap-2 text-sm font-medium text-industrial-muted hover:text-industrial-ink"
+                  href={backHref}
+                >
+                  <ArrowLeft size={16} />
+                  All orders
+                </Link>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-black/10 bg-white px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">
+                    {createMode ? "Draft" : statusLabel[order.status]}
+                  </span>
+                  <span className="text-sm font-medium text-industrial-muted">{order.orderNumber}</span>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {createMode ? (
+                  <>
+                    <button
+                      className="inline-flex h-10 items-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-sm font-medium text-industrial-ink shadow-sm transition hover:bg-[#f7f7f4]"
+                      disabled={isSubmittingOrder}
+                      onClick={() => void handleCreateOrderSubmit("draft")}
+                      type="button"
+                    >
+                      <Save size={16} />
+                      Save Draft
+                    </button>
+                    <button
+                      className="inline-flex h-10 items-center gap-2 rounded-lg bg-industrial-ink px-3 text-sm font-semibold text-white transition hover:bg-jobsite-pine disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={isSubmittingOrder}
+                      onClick={() => void handleCreateOrderSubmit("submitted")}
+                      type="button"
+                    >
+                      <CheckCircle2 size={16} />
+                      Create Order
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="inline-flex h-10 items-center gap-2 rounded-lg bg-industrial-ink px-3 text-sm font-semibold text-white transition hover:bg-jobsite-pine"
+                    onClick={saveOrderEdits}
+                    type="button"
+                  >
+                    <Save size={16} />
+                    Save Changes
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {(actionNotice || backendNotice) ? (
+              <div className="border-b border-black/10 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+                {actionNotice || backendNotice}
+              </div>
+            ) : null}
+
+            <div className="p-4 md:p-6">
+              <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-[0.1em] text-industrial-muted" htmlFor="order-title">
+                    Order title
+                  </label>
+                  <input
+                    className="mt-2 w-full rounded-lg border border-transparent bg-[#f7f7f4] px-3 py-3 text-2xl font-semibold text-industrial-ink outline-none focus:border-black/10 focus:bg-white"
+                    id="order-title"
+                    onChange={(event) => setDraftCompanyName(event.target.value)}
+                    value={draftCompanyName || draftCustomerName || "New order"}
+                  />
+                </div>
+                <div className="rounded-lg border border-black/10 bg-[#f7f7f4] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-industrial-muted">
+                    Amount due
+                  </p>
+                  <p className="mt-1 text-3xl font-semibold text-industrial-ink">
+                    {formatCurrency(balanceDue)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 rounded-lg border border-black/10 bg-white p-3 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.95fr)]">
+                <section>
+                  <h2 className="text-xs font-black uppercase tracking-[0.12em] text-industrial-muted">Bill to</h2>
+                  <div className="relative mt-3">
+                    <button
+                      className="flex min-h-[68px] w-full items-center justify-between gap-3 rounded-lg border border-black/10 bg-[#f8f7f2] px-3 text-left transition hover:border-black/20 hover:bg-white"
+                      onClick={() => setIsCustomerPickerOpen((isOpen) => !isOpen)}
+                      type="button"
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <span className="grid size-9 shrink-0 place-items-center rounded-full border border-black/10 bg-white text-industrial-muted">
+                          <UserPlus size={19} strokeWidth={1.7} />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-[11px] font-black uppercase tracking-[0.14em] text-industrial-muted">
+                            Bill to
+                          </span>
+                          <span className="block truncate text-sm font-semibold text-industrial-ink">
+                            Add a Customer
+                          </span>
+                          <span className="block truncate text-xs text-industrial-muted">
+                            {draftCompanyName || draftCustomerName || "Select an existing customer or create a new one"}
+                          </span>
+                        </span>
+                      </span>
+                      <span className="shrink-0 rounded-full border border-black/10 bg-white px-2.5 py-1 text-[11px] font-semibold text-industrial-ink">
+                        Select
+                      </span>
+                    </button>
+                    {isCustomerPickerOpen ? (
+                      <div className="absolute left-0 right-0 z-30 mt-2 overflow-hidden rounded-lg border border-black/10 bg-white shadow-xl">
+                        <button
+                          className="flex w-full items-center gap-3 border-b border-black/10 bg-[#fafaf8] px-4 py-3 text-left text-sm font-semibold text-blue-700 hover:bg-white"
+                          onClick={startNewCustomerDraft}
+                          type="button"
+                        >
+                          <UserPlus size={18} />
+                          Create a New Customer
+                        </button>
+                        <div className="max-h-72 overflow-y-auto">
+                          {availableCustomers.map((customer) => (
+                            <button
+                              className="grid w-full gap-1 border-b border-black/10 px-4 py-3 text-left text-sm hover:bg-[#fafaf8]"
+                              key={customer.id}
+                              onClick={() => applyCustomerToDraft(customer)}
+                              type="button"
+                            >
+                              <span className="font-semibold text-industrial-ink">{customer.company || customer.name}</span>
+                              <span className="text-xs text-industrial-muted">
+                                {customer.name} · {customer.email}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                  {draftCustomerName || draftCompanyName || draftEmail || draftPhone ? (
+                    <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-black/10 bg-white px-3 py-2 text-xs">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-industrial-ink">{draftCompanyName || draftCustomerName}</p>
+                        <p className="truncate text-industrial-muted">
+                          {[draftCustomerName, draftEmail, draftPhone].filter(Boolean).join(" · ")}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-[#edf7f2] px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-jobsite-pine">
+                        Selected
+                      </span>
+                    </div>
+                  ) : null}
+                </section>
+                <section>
+                  <h2 className="text-xs font-black uppercase tracking-[0.12em] text-industrial-muted">Order details</h2>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <InvoiceInput label="Order no." value={order.orderNumber} onChange={() => undefined} readOnly compact />
+                  <label className="block text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">
+                    Fulfillment
+                    <select
+                      className="mt-1 h-9 w-full rounded-lg border border-black/10 bg-[#f7f7f4] px-3 text-sm text-industrial-ink outline-none focus:bg-white"
+                      onChange={(event) => setDraftFulfillmentMethod(event.target.value as FulfillmentMethod)}
+                      value={draftFulfillmentMethod}
+                    >
+                      <option value="pickup">Pickup</option>
+                      <option value="delivery">Delivery</option>
+                    </select>
+                  </label>
+                  <InvoiceInput
+                    label="Requested date"
+                    type="date"
+                    value={draftRequestedDate}
+                    onChange={setDraftRequestedDate}
+                    compact
+                  />
+                  <InvoiceInput
+                    label="Requested window"
+                    value={draftRequestedWindow}
+                    onChange={setDraftRequestedWindow}
+                    compact
+                  />
+                  <label className="block text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted sm:col-span-2">
+                    Payment status
+                    <select
+                      className="mt-1 h-9 w-full rounded-lg border border-black/10 bg-[#f7f7f4] px-3 text-sm text-industrial-ink outline-none focus:bg-white"
+                      onChange={(event) => setDraftPaymentStatus(event.target.value as PaymentStatus)}
+                      value={draftPaymentStatus}
+                    >
+                      {Object.entries(paymentLabels).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  </div>
+                </section>
+              </div>
+
+              <Card className="mt-5">
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Package size={18} />
+                    <h3 className="text-lg font-black text-industrial-ink">Products</h3>
+                  </div>
+                </CardHeader>
+                <CardBody>
+                  <div className="relative border-b border-industrial-rail pb-4" ref={productSearchContainerRef}>
+                    <input
+                      ref={productSearchInputRef}
+                      className="h-11 w-full rounded-lg border border-industrial-rail bg-white px-3 text-sm font-semibold text-industrial-ink outline-none transition placeholder:text-industrial-muted focus:border-industrial-ink"
+                      onChange={(event) => handleQuickAddProductInput(event.target.value)}
+                      onFocus={() => setIsProductSearchOpen(true)}
+                      placeholder="Search products..."
+                      value={quickAddProductQuery}
+                    />
+
+                    {isProductSearchOpen ? (
+                      <div className="absolute left-0 right-0 top-12 z-40 max-h-96 overflow-y-auto rounded-xl border border-black/10 bg-white shadow-xl">
+                        {productSearchResults.length ? (
+                          productSearchResults.map((result) => {
+                            const imageUrl = getProductImageUrl(result.product, result.variant);
+                            const resultKey = getCatalogSearchResultKey(result);
+
+                            return (
+                              <button
+                                className="grid w-full grid-cols-[48px_minmax(0,1fr)_90px_90px] items-center gap-3 border-b border-industrial-rail px-3 py-2 text-left text-sm hover:bg-[#f7f7f4]"
+                                key={resultKey}
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => addCatalogSearchResult(result)}
+                                type="button"
+                              >
+                                <span className="grid size-12 place-items-center overflow-hidden rounded-md border border-industrial-rail bg-[#f7f7f4]">
+                                  {imageUrl ? (
+                                    <img
+                                      alt={result.product.title}
+                                      className="h-full w-full object-contain p-1"
+                                      src={imageUrl}
+                                    />
+                                  ) : (
+                                    <span className="text-[10px] font-black uppercase tracking-[0.08em] text-industrial-muted">
+                                      No img
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="block truncate font-black text-industrial-ink">{result.product.title}</span>
+                                  <span className="block truncate text-xs text-industrial-steel">SKU {result.variant.sku}</span>
+                                </span>
+                                <span className="text-right font-black text-industrial-ink">
+                                  {formatCurrency(getVariantDisplayPrice(result.variant))}
+                                </span>
+                                <span className="text-right text-xs font-semibold text-industrial-muted">
+                                  {getVariantInventoryText(result.variant)}
+                                </span>
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <div className="px-3 py-6 text-sm font-semibold text-industrial-muted">
+                            No products found
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="mt-4 w-full min-w-[980px] text-left text-sm">
+                      <thead className="border-b border-industrial-rail bg-white">
+                        <tr>
+                          <th className="px-3 py-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">Product Image</th>
+                          <th className="px-3 py-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">Product</th>
+                          <th className="px-3 py-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">SKU</th>
+                          <th className="px-3 py-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">Qty</th>
+                          <th className="px-3 py-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">Unit Price</th>
+                          <th className="px-3 py-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">Line Total</th>
+                          <th className="px-3 py-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">Remove</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {draftItems.length ? (
+                          draftItems.map((item, index) => (
+                            <tr className="border-b border-industrial-rail/70" key={item.orderItemId || `${item.productId}-${item.variantId}-${index}`}>
+                              <td className="px-3 py-3">
+                                <span className="grid size-12 place-items-center overflow-hidden rounded-md border border-industrial-rail bg-[#f7f7f4]">
+                                  {item.image ? (
+                                    <img
+                                      alt={item.title}
+                                      className="h-full w-full object-contain p-1"
+                                      src={item.image}
+                                    />
+                                  ) : (
+                                    <span className="text-[10px] font-black uppercase tracking-[0.08em] text-industrial-muted">
+                                      No img
+                                    </span>
+                                  )}
+                                </span>
+                              </td>
+                              <td className="px-3 py-3 font-black text-industrial-ink">{item.title}</td>
+                              <td className="px-3 py-3 text-industrial-steel">{item.sku}</td>
+                              <td className="px-3 py-3">
+                                <input
+                                  className="h-9 w-20 rounded border border-industrial-rail bg-white px-2 text-right text-sm font-semibold text-industrial-ink outline-none focus:border-industrial-ink"
+                                  inputMode="decimal"
+                                  onChange={(event) => updateDraftItem(index, "quantity", Number(event.target.value))}
+                                  value={item.quantity}
+                                />
+                              </td>
+                              <td className="px-3 py-3">
+                                <input
+                                  className="h-9 w-28 rounded border border-industrial-rail bg-white px-2 text-right text-sm font-semibold text-industrial-ink outline-none focus:border-industrial-ink"
+                                  inputMode="decimal"
+                                  onChange={(event) => updateDraftItem(index, "price", Number(event.target.value))}
+                                  value={item.price}
+                                />
+                              </td>
+                              <td className="px-3 py-3 font-black text-industrial-ink">
+                                {formatCurrency((Number(item.price) || 0) * (Number(item.quantity) || 0))}
+                              </td>
+                              <td className="px-3 py-3">
+                                <button
+                                  aria-label={`Remove ${item.title}`}
+                                  className="grid size-9 place-items-center rounded-lg border border-industrial-rail text-industrial-muted transition hover:border-red-700 hover:text-red-700"
+                                  onClick={() => removeDraftItem(index)}
+                                  type="button"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td className="px-3 py-6 text-sm text-industrial-steel" colSpan={7}>
+                              No products added yet. Search products above to add order line items.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardBody>
+              </Card>
+
+              <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_360px]">
+                <section className="rounded-lg border border-black/10 bg-white p-4">
+                  <InvoiceTextarea
+                    label="Message on order"
+                    value={draftCustomerNotes}
+                    onChange={setDraftCustomerNotes}
+                  />
+                  <InvoiceTextarea
+                    label="Jobsite or delivery notes"
+                    value={draftDeliveryNotes}
+                    onChange={setDraftDeliveryNotes}
+                  />
+                  <p className="mt-2 text-xs font-semibold text-industrial-muted">
+                    These notes are saved with the order when you click {createMode ? "Save Draft or Create Order" : "Save Changes"}.
+                  </p>
+                </section>
+                <div className="grid gap-4">
+                  <section className="rounded-lg border border-black/10 bg-white p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">Payments</p>
+                        <p className="mt-1 text-sm text-industrial-steel">Record cash, check, card, ACH, or other manual payments.</p>
+                      </div>
+                      <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] ${paymentPillStyles[draftPaymentStatus]}`}>
+                        {paymentLabels[draftPaymentStatus]}
+                      </span>
+                    </div>
+                    <div className="mt-4 grid grid-cols-3 overflow-hidden rounded-lg border border-black/10 bg-[#f7f7f4]">
+                      <div className="border-r border-black/10 p-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-industrial-muted">Invoice total</p>
+                        <p className="mt-1 text-lg font-black text-industrial-ink">{formatCurrency(invoiceTotal)}</p>
+                      </div>
+                      <div className="border-r border-black/10 p-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-industrial-muted">Paid</p>
+                        <p className="mt-1 text-lg font-black text-industrial-ink">{formatCurrency(recordedPaymentTotal)}</p>
+                      </div>
+                      <div className="p-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-industrial-muted">Balance</p>
+                        <p className="mt-1 text-lg font-black text-industrial-ink">{formatCurrency(balanceDue)}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-2">
+                      <div className="grid grid-cols-[1fr_120px] gap-2">
+                        <Input
+                          className="h-9 rounded border-black/10 bg-[#f7f7f4] text-sm normal-case"
+                          inputMode="decimal"
+                          onChange={(event) => setPaymentAmount(event.target.value)}
+                          placeholder="Payment amount"
+                          value={paymentAmount}
+                        />
+                        <Input
+                          className="h-9 rounded border-black/10 bg-[#f7f7f4] text-sm normal-case"
+                          onChange={(event) => setPaymentDate(event.target.value)}
+                          type="date"
+                          value={paymentDate}
+                        />
+                      </div>
+                      <div className="grid grid-cols-[1fr_1fr] gap-2">
+                        <Select
+                          aria-label="Payment method"
+                          className="h-9 rounded border-black/10 bg-[#f7f7f4] text-sm"
+                          onChange={(event) => setPaymentMethod(event.target.value)}
+                          value={paymentMethod}
+                        >
+                          <option value="Cash">Cash</option>
+                          <option value="Check">Check</option>
+                          <option value="Credit card">Credit card</option>
+                          <option value="ACH">ACH</option>
+                          <option value="Wire">Wire</option>
+                          <option value="Other">Other</option>
+                        </Select>
+                        <Input
+                          className="h-9 rounded border-black/10 bg-[#f7f7f4] text-sm normal-case"
+                          onChange={(event) => setPaymentReference(event.target.value)}
+                          placeholder="Reference #"
+                          value={paymentReference}
+                        />
+                      </div>
+                      <Input
+                        className="h-9 rounded border-black/10 bg-[#f7f7f4] text-sm normal-case"
+                        onChange={(event) => setPaymentNote(event.target.value)}
+                        placeholder="Payment note"
+                        value={paymentNote}
+                      />
+                      <button
+                        className="inline-flex h-9 items-center justify-center rounded-lg bg-industrial-ink px-3 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:bg-jobsite-pine disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={createMode}
+                        onClick={() => void recordPayment()}
+                        type="button"
+                      >
+                        Record payment
+                      </button>
+                    </div>
+                    <div className="mt-4 border-t border-black/10 pt-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-industrial-muted">Payments recorded</span>
+                        <span className="font-black text-industrial-ink">{formatCurrency(recordedPaymentTotal)}</span>
+                      </div>
+                      <div className="mt-2 grid max-h-32 gap-2 overflow-y-auto">
+                        {recordedPayments.length ? (
+                          recordedPayments.map((payment) => (
+                            <div className="rounded-lg border border-black/10 bg-[#f7f7f4] px-3 py-2 text-xs" key={payment.id}>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-black text-industrial-ink">{formatCurrency(payment.amount)}</span>
+                                <span className="text-industrial-muted">{new Date(payment.paidAt).toLocaleDateString()}</span>
+                              </div>
+                              <p className="mt-1 truncate font-semibold text-industrial-steel">
+                                {payment.method}{payment.reference ? ` · ${payment.reference}` : ""}
+                              </p>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-xs font-semibold text-industrial-muted">No payments recorded yet.</p>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-lg border border-black/10 bg-white p-4">
+                    <SummaryRow label="Subtotal" value={formatCurrency(summarySubtotal)} />
+                    <SummaryRow label="Tax" value={formatCurrency(summaryTax)} />
+                    <div className="grid grid-cols-[1fr_120px] items-center gap-3 py-1.5 text-sm">
+                      <span className="text-industrial-muted">Delivery</span>
+                      <Input
+                        className="h-9 rounded border-black/10 bg-[#f7f7f4] text-right text-sm normal-case"
+                        inputMode="decimal"
+                        onChange={(event) => setDraftDeliveryFee(event.target.value)}
+                        value={draftDeliveryFee}
+                      />
+                    </div>
+                    <div className="grid grid-cols-[1fr_110px_120px] items-center gap-2 py-1.5 text-sm">
+                      <span className="text-industrial-muted">{draftDiscountLabel}</span>
+                      <Select
+                        aria-label="Discount type"
+                        className="h-9 rounded border-black/10 bg-[#f7f7f4] text-sm"
+                        onChange={(event) => setDraftDiscountMode(event.target.value as DraftDiscountMode)}
+                        value={draftDiscountMode}
+                      >
+                        <option value="amount">Amount</option>
+                        <option value="percent">Percent</option>
+                      </Select>
+                      <Input
+                        className="h-9 rounded border-black/10 bg-[#f7f7f4] text-right text-sm normal-case"
+                        inputMode="decimal"
+                        onChange={(event) => setDraftDiscount(event.target.value)}
+                        placeholder={draftDiscountMode === "percent" ? "0" : "0.00"}
+                        value={draftDiscount}
+                      />
+                    </div>
+                    <SummaryRow label="Invoice total" value={formatCurrency(invoiceTotal)} />
+                    <SummaryRow label="Payments" value={formatCurrency(recordedPaymentTotal)} />
+                    <div className="mt-3 flex items-center justify-between border-t border-black/10 pt-3">
+                      <span className="text-base font-semibold text-industrial-ink">Balance due</span>
+                      <span className="text-2xl font-semibold text-industrial-ink">{formatCurrency(balanceDue)}</span>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </section>
+
+        </div>
+      </main>
+      {isCustomerPopupOpen ? (
+        <AppModal
+          focusReturnRef={popupTriggerRef}
+          initialFocusSelector="[data-modal-autofocus]"
+          isDirty={() => isPopupDirty("customer")}
+          open
+          title="New customer"
+          onClose={closeOrderDraftPopups}
+          onCancel={closeOrderDraftPopups}
+          onConfirm={saveCustomerPopup}
+          confirmLabel="Save"
+        >
+          <div className="grid h-full gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
+            <aside className="grid content-start gap-2 rounded-xl border border-black/10 bg-white p-2">
+              {[
+                ["customer", "Customer Info"],
+                ["billing", "Billing Info"],
+                ["shipping", "Shipping Info"],
+                ["more", "More"]
+              ].map(([tab, label]) => (
+                <button
+                  className={`rounded-lg px-3 py-3 text-left text-sm font-semibold transition ${
+                    customerPopupTab === tab
+                      ? "bg-industrial-ink text-white shadow-sm"
+                      : "text-industrial-steel hover:bg-[#f7f7f4] hover:text-industrial-ink"
+                  }`}
+                  key={tab}
+                  onClick={() => setCustomerPopupTab(tab as CustomerPopupTab)}
+                  type="button"
+                >
+                  {label}
+                </button>
+              ))}
+            </aside>
+
+            <section className="h-full overflow-hidden rounded-xl border border-black/10 bg-white">
+              <div className="border-b border-black/10 px-5 py-4">
+                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-industrial-muted">
+                  {customerPopupTab === "customer"
+                    ? "Customer Info"
+                    : customerPopupTab === "billing"
+                      ? "Billing Info"
+                      : customerPopupTab === "shipping"
+                        ? "Shipping Info"
+                        : "More"}
+                </p>
+                <h3 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-industrial-ink">
+                  {customerPopupTab === "customer"
+                    ? "Who is this customer?"
+                    : customerPopupTab === "billing"
+                      ? "How should billing work?"
+                      : customerPopupTab === "shipping"
+                        ? "Where should orders go?"
+                        : "Customer settings"}
+                </h3>
+              </div>
+              <div className="h-[500px] overflow-y-auto p-5">
+            {customerPopupTab === "customer" ? (
+              <div className="grid gap-4">
+                <InvoiceInput
+                  label="Company name"
+                  value={draftCompanyName}
+                  onChange={setDraftCompanyName}
+                  placeholder="Business or company"
+                />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <InvoiceInput
+                    label="First name"
+                    value={draftCustomerFirstName}
+                    onChange={setDraftCustomerFirstName}
+                    placeholder="First name"
+                  />
+                  <InvoiceInput
+                    label="Last name"
+                    value={draftCustomerLastName}
+                    onChange={setDraftCustomerLastName}
+                    placeholder="Last name"
+                  />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <InvoiceInput
+                    label="Phone number"
+                    value={draftPhone}
+                    onChange={setDraftPhone}
+                    placeholder="Phone"
+                  />
+                  <InvoiceInput
+                    label="Email"
+                    value={draftEmail}
+                    onChange={setDraftEmail}
+                    placeholder="customer@example.com"
+                  />
+                </div>
+                <InvoiceTextarea
+                  label="Customer notes"
+                  value={draftCustomerNotes}
+                  onChange={setDraftCustomerNotes}
+                />
+              </div>
+            ) : null}
+
+            {customerPopupTab === "billing" ? (
+              <div className="grid gap-4">
+                <InvoiceInput
+                  label="Billing address"
+                  value={draftAddress}
+                  onChange={setDraftAddress}
+                  placeholder="Street address"
+                />
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_110px_140px]">
+                  <InvoiceInput label="Billing city" value={draftCity} onChange={setDraftCity} />
+                  <InvoiceInput label="Billing state" value={draftState} onChange={setDraftState} />
+                  <InvoiceInput label="Billing zip" value={draftZip} onChange={setDraftZip} />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="grid gap-2 rounded-lg border border-black/10 bg-[#f8f7f2] p-4 text-sm font-semibold text-industrial-ink">
+                    <span className="text-xs font-black uppercase tracking-[0.12em] text-industrial-muted">
+                      Tax exempt
+                    </span>
+                    <select
+                      className="h-11 rounded-lg border border-black/10 bg-white px-3 text-sm outline-none"
+                      onChange={(event) => setDraftTaxExempt(event.target.value === "yes")}
+                      value={draftTaxExempt ? "yes" : "no"}
+                    >
+                      <option value="no">No</option>
+                      <option value="yes">Yes</option>
+                    </select>
+                  </label>
+                  <InvoiceInput
+                    label="Payment terms"
+                    value={draftPaymentTerms}
+                    onChange={setDraftPaymentTerms}
+                    placeholder="Due on receipt"
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {customerPopupTab === "shipping" ? (
+              <div className="grid gap-4">
+                <label className="flex items-center gap-3 rounded-lg border border-black/10 bg-[#f8f7f2] px-4 py-3 text-sm font-semibold text-industrial-ink">
+                  <input
+                    checked={sameAsBillingAddress}
+                    className="size-4"
+                    onChange={(event) => setSameAsBillingAddress(event.target.checked)}
+                    type="checkbox"
+                  />
+                  Same as Billing Address
+                </label>
+                <InvoiceInput
+                  label="Shipping address"
+                  value={sameAsBillingAddress ? draftAddress : draftShippingAddress}
+                  onChange={setDraftShippingAddress}
+                  placeholder="Street address"
+                  readOnly={sameAsBillingAddress}
+                />
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_110px_140px]">
+                  <InvoiceInput
+                    label="Shipping city"
+                    value={sameAsBillingAddress ? draftCity : draftShippingCity}
+                    onChange={setDraftShippingCity}
+                    readOnly={sameAsBillingAddress}
+                  />
+                  <InvoiceInput
+                    label="Shipping state"
+                    value={sameAsBillingAddress ? draftState : draftShippingState}
+                    onChange={setDraftShippingState}
+                    readOnly={sameAsBillingAddress}
+                  />
+                  <InvoiceInput
+                    label="Shipping zip"
+                    value={sameAsBillingAddress ? draftZip : draftShippingZip}
+                    onChange={setDraftShippingZip}
+                    readOnly={sameAsBillingAddress}
+                  />
+                </div>
+                <InvoiceTextarea
+                  label="Delivery notes"
+                  value={draftDeliveryNotes}
+                  onChange={setDraftDeliveryNotes}
+                />
+              </div>
+            ) : null}
+
+            {customerPopupTab === "more" ? (
+              <div className="grid gap-4">
+                <InvoiceTextarea
+                  label="Customer notes"
+                  value={draftCustomerNotes}
+                  onChange={setDraftCustomerNotes}
+                />
+                <InvoiceInput
+                  label="Payment terms"
+                  value={draftPaymentTerms}
+                  onChange={setDraftPaymentTerms}
+                  placeholder="Due on receipt"
+                />
+                <label className="flex items-center gap-3 rounded-lg border border-black/10 bg-[#f8f7f2] px-4 py-3 text-sm font-semibold text-industrial-ink">
+                  <input
+                    checked={draftTaxExempt}
+                    className="size-4"
+                    onChange={(event) => setDraftTaxExempt(event.target.checked)}
+                    type="checkbox"
+                  />
+                  Customer is tax exempt
+                </label>
+              </div>
+            ) : null}
+              </div>
+            </section>
+          </div>
+        </AppModal>
+      ) : null}
+      </>
+    );
+  }
+
   return (
     <PageShell
-      className="max-w-none px-3 py-3 md:px-6 md:py-4"
+      className="max-w-none px-4 py-4 md:px-6 md:py-6"
     >
       <div className="grid gap-5">
-        <section className="grid gap-2 rounded-xl border border-industrial-rail bg-white p-2 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0 space-y-1">
+        <section className="overflow-hidden rounded-xl border-2 border-industrial-ink/10 bg-gradient-to-br from-industrial-paper via-white to-[#f4f1e8] shadow-sm">
+          <div className="grid gap-4 p-4 md:p-5">
+            <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-industrial-muted">
                 Gateworks Operations
               </p>
-              <h1 className="text-xl font-black leading-tight text-industrial-ink md:text-2xl">
+              <h1 className="mt-1 text-2xl font-black leading-tight text-industrial-ink md:text-4xl">
                 {`Order ${order.orderNumber}`}
               </h1>
-              <p className="text-xs leading-5 text-industrial-steel">
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-industrial-steel">
                 {createMode
                   ? `${order.companyName || "New Customer"} · draft order`
                   : `${order.customerName} · ${order.jobName || "Customer order"}`}
               </p>
-              <div className="mt-1 grid gap-1.5 sm:flex sm:flex-wrap">
-                <span className="inline-flex items-center rounded-full border border-industrial-rail bg-white px-2 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-industrial-ink">
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap gap-2">
+                <span className="inline-flex items-center whitespace-nowrap rounded-full border border-industrial-rail bg-white px-3 py-2 text-[11px] font-black uppercase tracking-[0.1em] text-industrial-ink shadow-sm">
                   {createMode ? "Draft order" : statusLabel[order.status]}
                 </span>
-                <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-black uppercase tracking-[0.1em] ${paymentPillStyles[createMode ? draftPaymentStatus : order.paymentStatus]}`}>
+                <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-3 py-2 text-[11px] font-black uppercase tracking-[0.1em] shadow-sm ${paymentPillStyles[createMode ? draftPaymentStatus : order.paymentStatus]}`}>
                   {createMode ? draftPaymentStatus : paymentLabels[order.paymentStatus]}
                 </span>
-                <span className="inline-flex items-center rounded-full border border-industrial-rail bg-white px-2 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-industrial-ink">
+                <span className="inline-flex items-center whitespace-nowrap rounded-full border border-industrial-rail bg-white px-3 py-2 text-[11px] font-black uppercase tracking-[0.1em] text-industrial-ink shadow-sm">
                   {createMode ? "Create mode" : fulfillmentLabels[order.status]}
                 </span>
+                </div>
+                {!createMode ? (
+                  <div className="min-w-[280px] flex-1 rounded-lg border border-industrial-rail bg-white/85 px-3 py-2 shadow-sm">
+                    <OrderProgressBar
+                      fulfillmentMethod={order.fulfillmentMethod}
+                      status={order.status}
+                    />
+                  </div>
+                ) : null}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center">
               <Link
-                className="inline-flex h-8 items-center gap-2 rounded-md border border-industrial-rail bg-white px-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-ink transition hover:border-industrial-ink"
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-industrial-rail bg-white px-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-ink transition hover:border-industrial-ink"
                 href={backHref}
               >
                 <ArrowLeft size={14} />
@@ -1699,7 +3101,7 @@ export function OrderDetailPage({
               {createMode ? (
                 <>
                   <Button
-                    className="h-8"
+                    className="h-9"
                     disabled={isSubmittingOrder}
                     onClick={() => void handleCreateOrderSubmit("submitted")}
                     size="sm"
@@ -1708,7 +3110,7 @@ export function OrderDetailPage({
                     Create Order
                   </Button>
                   <Button
-                    className="h-8"
+                    className="h-9"
                     disabled={isSubmittingOrder}
                     onClick={() => void handleCreateOrderSubmit("draft")}
                     size="sm"
@@ -1720,22 +3122,22 @@ export function OrderDetailPage({
                 </>
               ) : (
                 <>
-                  <Button className="h-8" onClick={printPickTicket} size="sm" type="button">
+                  <Button className="h-9" onClick={printPickTicket} size="sm" type="button">
                     <Printer size={14} />
                     Print Pick Ticket
                   </Button>
                   <Button
-                    className="h-8"
-                    disabled={!canMarkReady}
+                    className="h-9"
+                    disabled={!canToggleReady}
                     onClick={markReady}
                     size="sm"
                     type="button"
                   >
                     <CircleDashed size={14} />
-                    Mark Ready
+                    {isReadyStatus ? "Mark Not Ready" : "Mark Ready"}
                   </Button>
                   <Button
-                    className="h-8"
+                    className="h-9"
                     disabled={!canMarkPickupOrDelivery}
                     onClick={markPickedUpOrDelivered}
                     size="sm"
@@ -1746,18 +3148,18 @@ export function OrderDetailPage({
                   </Button>
                   {isEditing ? (
                     <>
-                      <Button className="h-8" onClick={saveOrderEdits} size="sm" type="button">
+                      <Button className="h-9" onClick={saveOrderEdits} size="sm" type="button">
                         <Save size={14} />
                         Save changes
                       </Button>
-                      <Button className="h-8" onClick={exitEditing} size="sm" variant="secondary" type="button">
+                      <Button className="h-9" onClick={exitEditing} size="sm" variant="secondary" type="button">
                         <X size={14} />
                         Cancel
                       </Button>
                     </>
                   ) : (
                     <Button
-                      className="h-8"
+                      className="h-9"
                       onClick={beginEditing}
                       size="sm"
                       type="button"
@@ -1770,7 +3172,7 @@ export function OrderDetailPage({
               )}
               <details className={`relative ${createMode ? "hidden" : ""}`}>
                 <summary
-                  className="inline-flex h-8 cursor-pointer items-center rounded-md border border-industrial-rail bg-white px-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-ink transition hover:border-industrial-ink"
+                  className="inline-flex h-9 cursor-pointer items-center rounded-md border border-industrial-rail bg-white px-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-ink transition hover:border-industrial-ink"
                 >
                   More actions
                 </summary>
@@ -1800,17 +3202,48 @@ export function OrderDetailPage({
           </div>
 
           {(actionNotice || backendNotice) ? (
-            <p className="rounded-md border border-industrial-rail bg-industrial-paper px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-industrial-ink">
+            <p className="border-t border-industrial-rail bg-white/80 px-4 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-industrial-ink md:px-5">
               {actionNotice || backendNotice}
             </p>
           ) : null}
         </section>
 
-        <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Card className="bg-emerald-50/70">
+            <CardBody>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">Order total</p>
+              <p className="mt-1 text-3xl font-black text-industrial-ink">{formatCurrency(summaryTotal)}</p>
+              <p className="text-xs text-industrial-steel">{createMode ? "Draft value" : paymentLabels[order.paymentStatus]}</p>
+            </CardBody>
+          </Card>
+          <Card className="bg-amber-50/70">
+            <CardBody>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">Line items</p>
+              <p className="mt-1 text-3xl font-black text-industrial-ink">{lineItems.length}</p>
+              <p className="text-xs text-industrial-steel">Material rows on this order</p>
+            </CardBody>
+          </Card>
+          <Card className="bg-indigo-50/70">
+            <CardBody>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">Pulled</p>
+              <p className="mt-1 text-3xl font-black text-industrial-ink">{pulledQuantity}/{totalQuantity}</p>
+              <p className="text-xs text-industrial-steel">{pickTicketStatus}</p>
+            </CardBody>
+          </Card>
+          <Card className="bg-violet-50/70">
+            <CardBody>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">Fulfillment</p>
+              <p className="mt-1 text-3xl font-black capitalize text-industrial-ink">{createMode ? draftFulfillmentMethod : order.fulfillmentMethod}</p>
+              <p className="text-xs text-industrial-steel">{createMode ? draftRequestedDate || "No date set" : order.requestedDate}</p>
+            </CardBody>
+          </Card>
+        </section>
+
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="grid gap-5">
             {createMode ? (
               <section className="grid gap-3 lg:grid-cols-3">
-                <Card>
+                <Card className="rounded-xl">
                   <CardHeader className="flex items-start justify-between">
                     <div>
                     <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
@@ -1834,7 +3267,7 @@ export function OrderDetailPage({
                     <p className="text-industrial-steel">{draftEmail || "No email"}</p>
                   </CardBody>
                 </Card>
-                <Card>
+                <Card className="rounded-xl">
                   <CardHeader className="flex items-start justify-between">
                     <div>
                     <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
@@ -1860,7 +3293,7 @@ export function OrderDetailPage({
                     </p>
                   </CardBody>
                 </Card>
-                <Card>
+                <Card className="rounded-xl">
                   <CardHeader className="flex items-start justify-between">
                     <div>
                     <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
@@ -1893,20 +3326,25 @@ export function OrderDetailPage({
                 </Card>
               </section>
             ) : (
-              <section className="grid gap-5 lg:grid-cols-2">
-                <Card>
+              <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                <Card className="rounded-xl">
                   <CardHeader>
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
-                      Customer information
-                    </p>
-                    <h2 className="text-xl font-black text-industrial-ink">Customer</h2>
-                  </CardHeader>
-                  <CardBody className="grid gap-3 text-sm">
                     <div>
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
+                        Customer information
+                      </p>
+                      <h2 className="text-xl font-black text-industrial-ink">Customer</h2>
+                    </div>
+                    <span className="rounded-full border border-industrial-rail bg-industrial-paper px-2 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-industrial-muted">
+                      Account
+                    </span>
+                  </CardHeader>
+                  <CardBody className="grid gap-4 text-sm md:grid-cols-2">
+                    <div className="rounded-lg border border-industrial-rail bg-industrial-paper p-3">
                       <p className="font-black text-industrial-ink">{order.customerName}</p>
                       <p className="text-industrial-steel">{order.companyName}</p>
                     </div>
-                    <div>
+                    <div className="rounded-lg border border-industrial-rail bg-white p-3">
                       <p className="text-xs font-black uppercase tracking-[0.12em] text-industrial-muted">
                         Contact
                       </p>
@@ -1915,14 +3353,16 @@ export function OrderDetailPage({
                     </div>
                   </CardBody>
                 </Card>
-                <Card>
+                <Card className="rounded-xl">
                   <CardHeader>
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
-                      Billing information
-                    </p>
-                    <h2 className="text-xl font-black text-industrial-ink">Billing</h2>
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
+                        Billing information
+                      </p>
+                      <h2 className="text-xl font-black text-industrial-ink">Billing</h2>
+                    </div>
                   </CardHeader>
-                  <CardBody className="grid gap-2 text-sm">
+                  <CardBody className="grid gap-2 text-sm leading-6">
                     <p className="text-industrial-ink">Payment profile: Account profile (operational view)</p>
                     <p className="text-industrial-ink">Tax status: Standard rate</p>
                     <p className="text-industrial-ink">Internal payer: {order.userId}</p>
@@ -1934,9 +3374,9 @@ export function OrderDetailPage({
             )}
 
             {createMode ? null : (
-              <section className="grid gap-4 rounded-2xl border border-industrial-rail bg-white p-3 shadow-sm">
-                <div className="grid gap-2 border-b border-industrial-rail pb-3 md:grid-cols-2">
-                  <div>
+              <section className="grid gap-4 rounded-xl border border-industrial-rail bg-white p-4 shadow-sm">
+                <div className="grid gap-3 border-b border-industrial-rail pb-4 md:grid-cols-2">
+                  <div className="rounded-lg border border-industrial-rail bg-industrial-paper p-3">
                     <p className="text-xs font-black uppercase tracking-[0.12em] text-industrial-muted">
                       Fulfillment method
                     </p>
@@ -1948,7 +3388,7 @@ export function OrderDetailPage({
                     </p>
                   </div>
                   {deliveryAddressAvailable ? (
-                    <div>
+                    <div className="rounded-lg border border-industrial-rail bg-white p-3">
                       <p className="text-xs font-black uppercase tracking-[0.12em] text-industrial-muted">
                         Delivery address
                       </p>
@@ -1961,7 +3401,7 @@ export function OrderDetailPage({
                       </p>
                     </div>
                   ) : (
-                    <div>
+                    <div className="rounded-lg border border-industrial-rail bg-white p-3">
                       <p className="text-xs font-black uppercase tracking-[0.12em] text-industrial-muted">
                         Pickup details
                       </p>
@@ -1991,7 +3431,7 @@ export function OrderDetailPage({
               </section>
             )}
 
-            <Card>
+            <Card className="overflow-hidden rounded-xl">
               <CardHeader className="flex-wrap">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
@@ -2054,7 +3494,6 @@ export function OrderDetailPage({
                             onMouseEnter={() => setQuickAddResultIndex(index)}
                             onClick={() => {
                               selectQuickAddResult(result, index);
-                              addDraftItem(result);
                             }}
                           >
                             <img
@@ -2089,7 +3528,7 @@ export function OrderDetailPage({
               ) : null}
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1200px] text-left text-sm">
-                  <thead className="sticky top-0 z-10 bg-white">
+                  <thead className="sticky top-0 z-10 bg-industrial-paper">
                     <tr className="border-b border-industrial-rail/70">
                       <th className="px-4 py-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">
                         Product
@@ -2148,10 +3587,23 @@ export function OrderDetailPage({
                     {createMode
                       ? draftItems.map((item, index) => (
                           <tr
-                            className="border-b border-industrial-rail/60 hover:bg-industrial-paper transition"
+                            className="border-b border-industrial-rail/60 transition hover:bg-industrial-paper"
                             key={`create-${index}-${item.productId}-${item.variantId}`}
                           >
-                            <td className="min-w-64 px-4 py-3 font-black text-industrial-ink">{item.title}</td>
+                            <td className="min-w-72 px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <img
+                                  src={item.image || "/assets/logo.svg"}
+                                  alt={item.title}
+                                  className="h-10 w-10 rounded-md border border-industrial-rail bg-white object-contain p-1"
+                                />
+                                <Input
+                                  className="h-10"
+                                  onChange={(event) => updateDraftItem(index, "title", event.target.value)}
+                                  value={draftItems[index]?.title || ""}
+                                />
+                              </div>
+                            </td>
                             <td className="px-4 py-3 text-industrial-steel">{item.sku}</td>
                             <td className="px-4 py-3 text-industrial-steel">{formatCartItemSize(item.options)}</td>
                             <td className="px-4 py-3">
@@ -2189,9 +3641,23 @@ export function OrderDetailPage({
                       : isEditing
                         ? lineItems.map((item, index) => (
                           <tr
-                            className="border-b border-industrial-rail/60 hover:bg-industrial-paper transition"
+                            className="border-b border-industrial-rail/60 transition hover:bg-industrial-paper"
                             key={`edit-${index}-${item.key}`}
                           >
+                            <td className="min-w-72 px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <img
+                                  src={item.image || "/assets/logo.svg"}
+                                  alt={item.product}
+                                  className="h-10 w-10 rounded-md border border-industrial-rail bg-white object-contain p-1"
+                                />
+                                <Input
+                                  className="h-10"
+                                  onChange={(event) => updateDraftItem(index, "title", event.target.value)}
+                                  value={draftItems[index]?.title || ""}
+                                />
+                              </div>
+                            </td>
                             <td className="min-w-64 px-4 py-3">
                               <Input
                                 className="h-10"
@@ -2246,10 +3712,19 @@ export function OrderDetailPage({
                         ))
                         : lineItems.map((item) => (
                           <tr
-                            className="border-b border-industrial-rail/60 hover:bg-industrial-paper transition"
+                            className="border-b border-industrial-rail/60 transition hover:bg-industrial-paper"
                             key={`view-${item.key}`}
                           >
-                            <td className="min-w-64 px-4 py-3 font-black text-industrial-ink">{item.product}</td>
+                            <td className="min-w-72 px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <img
+                                  src={item.image || "/assets/logo.svg"}
+                                  alt={item.product}
+                                  className="h-10 w-10 rounded-md border border-industrial-rail bg-white object-contain p-1"
+                                />
+                                <span className="font-black text-industrial-ink">{item.product}</span>
+                              </div>
+                            </td>
                             <td className="min-w-64 px-4 py-3 text-industrial-steel">{item.variant}</td>
                             <td className="px-4 py-3 text-industrial-ink">{item.quantity}</td>
                             <td className="px-4 py-3 text-industrial-steel">{item.unit}</td>
@@ -2264,7 +3739,7 @@ export function OrderDetailPage({
               </div>
             </Card>
 
-            <Card>
+            <Card className="rounded-xl">
               <CardHeader>
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
@@ -2276,7 +3751,7 @@ export function OrderDetailPage({
               <CardBody className="grid gap-3">
                 {timelineEvents.length ? (
                   timelineEvents.map((event) => (
-                    <div className="grid gap-1 border border-industrial-rail p-3" key={event.id}>
+                    <div className="grid gap-1 rounded-lg border border-industrial-rail bg-white p-3" key={event.id}>
                       <p className="text-xs font-black uppercase tracking-[0.12em] text-industrial-muted">
                         {formatDateTime(event.createdAt)}
                       </p>
@@ -2295,7 +3770,7 @@ export function OrderDetailPage({
 
           {createMode ? (
             <aside className="grid gap-4 self-start">
-              <Card>
+              <Card className="rounded-xl">
                 <CardHeader>
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
                     Payment summary
@@ -2345,7 +3820,7 @@ export function OrderDetailPage({
                   </div>
                 </CardBody>
               </Card>
-              <Card>
+              <Card className="rounded-xl">
                 <CardHeader>
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
                     Notes
@@ -2411,14 +3886,14 @@ export function OrderDetailPage({
               </Card>
             </aside>
           ) : (
-            <aside className="grid gap-4 self-start">
-              <Card>
+            <aside className="grid gap-4 self-start xl:sticky xl:top-4">
+              <Card className="overflow-hidden rounded-xl border-2 border-industrial-ink/10">
                 <CardHeader>
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">Fulfillment</p>
                   <h2 className="text-xl font-black text-industrial-ink">Warehouse panel</h2>
                 </CardHeader>
                 <CardBody className="grid gap-3 text-sm">
-                  <div className="grid gap-2 border border-industrial-rail p-3">
+                  <div className="grid gap-2 rounded-lg border border-industrial-rail bg-industrial-paper p-3">
                     <p className="text-xs font-black uppercase tracking-[0.12em] text-industrial-muted">Pick ticket status</p>
                     <p className="text-2xl font-black text-industrial-ink">{pickTicketStatus}</p>
                   </div>
@@ -2451,7 +3926,7 @@ export function OrderDetailPage({
                 </CardBody>
               </Card>
 
-            <Card>
+            <Card className="rounded-xl">
               <CardHeader>
                 <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
                   Payment summary
@@ -2479,7 +3954,7 @@ export function OrderDetailPage({
                   <span className="font-black text-industrial-ink">Total</span>
                   <span className="text-xl font-black text-industrial-ink">{formatCurrency(summaryTotal)}</span>
                 </div>
-                <div className="grid gap-1 border border-industrial-rail p-3">
+                <div className="grid gap-1 rounded-lg border border-industrial-rail bg-industrial-paper p-3">
                   <p className="text-xs font-black uppercase tracking-[0.12em] text-industrial-muted">Payment method</p>
                   <p className="flex items-center gap-2 text-sm text-industrial-steel">
                     <CreditCard size={14} />
@@ -2491,7 +3966,7 @@ export function OrderDetailPage({
               </CardBody>
             </Card>
 
-            <Card>
+            <Card className="rounded-xl">
               <CardHeader>
                 <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
                   Actions
@@ -2581,7 +4056,7 @@ export function OrderDetailPage({
               </CardBody>
             </Card>
 
-            <Card>
+            <Card className="rounded-xl">
               <CardHeader>
                 <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
                   Delivery route note
@@ -2785,5 +4260,67 @@ export function OrderDetailPage({
         ) : null}
       </div>
     </PageShell>
+  );
+}
+
+function InvoiceInput({
+  label,
+  value,
+  type = "text",
+  readOnly = false,
+  placeholder = "",
+  compact = false,
+  onChange
+}: {
+  label: string;
+  value: string;
+  type?: string;
+  readOnly?: boolean;
+  placeholder?: string;
+  compact?: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className={compact ? "block" : "mt-3 block"}>
+      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">{label}</span>
+      <input
+        className={`${compact ? "h-9" : "h-10"} mt-1 w-full rounded-lg border border-black/10 bg-[#f7f7f4] px-3 text-sm text-industrial-ink outline-none focus:bg-white read-only:text-industrial-muted`}
+        readOnly={readOnly}
+        placeholder={placeholder}
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
+
+function InvoiceTextarea({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="mt-3 block first:mt-0">
+      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">{label}</span>
+      <textarea
+        className="mt-1 min-h-20 w-full resize-y rounded-lg border border-black/10 bg-[#f7f7f4] px-3 py-2 text-sm leading-6 text-industrial-ink outline-none focus:bg-white"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between py-1.5 text-sm">
+      <span className="text-industrial-muted">{label}</span>
+      <span className="font-medium text-industrial-ink">{value}</span>
+    </div>
   );
 }

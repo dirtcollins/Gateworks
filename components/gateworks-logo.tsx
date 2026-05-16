@@ -1,3 +1,4 @@
+import Image from "next/image";
 import clsx from "clsx";
 
 type GateworksLogoProps = {
@@ -18,13 +19,14 @@ export function GateworksLogo({
   const variantClass = variant === "dark" ? "brightness-0 invert" : "";
 
   return (
-    <img
+    <Image
       alt="Gateworks"
       className={clsx("h-auto w-auto object-contain", variantClass, className)}
-      height={height}
       src="/assets/logo.svg"
       width={width}
-      loading={priority ? "eager" : "lazy"}
+      height={height}
+      priority={priority}
+      unoptimized
     />
   );
 }

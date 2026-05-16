@@ -4,7 +4,7 @@
 
 :root {
   color-scheme: light;
-  --truewerk-font: "Avenir Next", Avenir, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --truewerk-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
 }
 
 * {
@@ -12,10 +12,11 @@
 }
 
 body {
-  background: #f3f0e9;
-  color: #111111;
+  background: #f7f7f4;
+  color: #171717;
   font-family: var(--truewerk-font);
   margin: 0;
+  min-height: 100vh;
 }
 
 button,
@@ -55,4 +56,8 @@ textarea {
 .truewerk-cta > * {
   position: relative;
   z-index: 1;
+}
+
+::selection {
+  background: rgba(47, 111, 78, 0.18);
 }

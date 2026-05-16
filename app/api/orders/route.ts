@@ -6,7 +6,7 @@ import {
 import { authorizeAdminRequest } from "@/lib/admin-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import type { FulfillmentMethod, OrderStatus, PaymentStatus } from "@/lib/platform-backend";
-import type { CustomerDrawing } from "@/lib/order-store";
+import type { CustomerDrawing, OrderPayment } from "@/lib/order-store";
 
 type OrderPayload = {
   id: string;
@@ -71,6 +71,18 @@ type OrderRow = {
   updated_at: string;
   order_items?: OrderItemRow[];
   customer_drawing_uploads?: CustomerDrawingRow[];
+  payments?: PaymentRow[];
+};
+
+type PaymentRow = {
+  id: string;
+  status: PaymentStatus;
+  provider: string;
+  provider_payment_id: string | null;
+  method: string | null;
+  amount: number | string;
+  paid_at: string | null;
+  created_at: string;
 };
 
 type OrderItemRow = {
@@ -113,10 +125,51 @@ type PatchOrderPayload = {
   status?: OrderStatus;
   paymentStatus?: PaymentStatus;
   convertToOrder?: boolean;
+  payment?: {
+    amount?: number;
+    method?: string;
+    paidAt?: string;
+    reference?: string;
+    note?: string;
+  };
 };
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const orderNumberFloor = 10026;
+
+function parseOrderSequence(orderNumber: string | null | undefined) {
+  const value = Number(String(orderNumber || "").replace(/\D/g, ""));
+  return Number.isFinite(value) ? value : 0;
+}
+
+function normalizeDocumentNumber(orderNumber: string, isQuoteRequest: boolean) {
+  if (orderNumber.startsWith("Order-") || orderNumber.startsWith("Quote-")) return orderNumber;
+  const sequence = parseOrderSequence(orderNumber);
+  if (!sequence) return orderNumber;
+  return `${isQuoteRequest ? "Quote" : "Order"}-${sequence}`;
+}
+
+async function getNextDocumentNumber(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdminClient>>,
+  prefix: "Order" | "Quote",
+  isQuoteRequest: boolean
+) {
+  const { data, error } = await admin
+    .from("orders")
+    .select("order_number,is_quote_request")
+    .order("created_at", { ascending: false })
+    .limit(1000);
+
+  if (error) throw error;
+
+  const highest = (data || []).reduce((currentHighest, row) => {
+    if (Boolean(row.is_quote_request) !== isQuoteRequest) return currentHighest;
+    return Math.max(currentHighest, parseOrderSequence(row.order_number));
+  }, orderNumberFloor);
+
+  return `${prefix}-${highest + 1}`;
+}
 
 function asUuid(value: string) {
   return uuidPattern.test(value) ? value : null;
@@ -131,7 +184,7 @@ function toClientOrder(row: OrderRow) {
 
   return {
     id: row.id,
-    orderNumber: row.order_number,
+    orderNumber: normalizeDocumentNumber(row.order_number, row.is_quote_request),
     userId: row.site_user_id || "guest",
     customerName: row.customer_name || "",
     companyName: row.company_name || "",
@@ -143,7 +196,7 @@ function toClientOrder(row: OrderRow) {
       variantId: item.item_payload?.variantId || item.id,
       title: item.item_payload?.title || item.description,
       sku: item.sku,
-      image: item.item_payload?.image || "/assets/logo.svg",
+      image: item.item_payload?.image === "/assets/logo.svg" ? "" : item.item_payload?.image || "",
       price: Number(item.unit_price),
       weightLbs:
         typeof item.item_payload?.weightLbs === "number"
@@ -177,6 +230,15 @@ function toClientOrder(row: OrderRow) {
       publicUrl: drawing.public_url || undefined,
       uploadedAt: drawing.created_at
     })),
+    payments: (row.payments || []).map((payment): OrderPayment => ({
+      id: payment.id,
+      amount: Number(payment.amount),
+      method: payment.method || "Payment",
+      paidAt: payment.paid_at || payment.created_at,
+      reference: payment.provider_payment_id || "",
+      note: "",
+      createdAt: payment.created_at
+    })),
     pickupContact: row.customer_name || "",
     subtotal: Number(row.subtotal),
     tax: Number(row.tax_total),
@@ -196,6 +258,63 @@ function toClientOrder(row: OrderRow) {
       }
     ]
   };
+}
+
+type ResolvedOrderItem = OrderPayload["items"][number] & {
+  resolvedVariantId: string;
+};
+
+async function resolveOrderItemVariantIds(
+  admin: Awaited<ReturnType<typeof getSupabaseAdminClient>>,
+  items: OrderPayload["items"]
+) {
+  const variantResolutions = new Map<string, string>();
+  const skusNeedingResolution = Array.from(
+    new Set(
+      items
+        .filter((item) => !asUuid(item.variantId))
+        .map((item) => item.sku)
+        .filter(Boolean)
+    )
+  );
+
+  if (skusNeedingResolution.length) {
+    const { data, error } = await admin
+      .from("product_variants")
+      .select("id, sku")
+      .in("sku", skusNeedingResolution);
+
+    if (error) {
+      throw error;
+    }
+
+    (data || []).forEach((record) => {
+      const row = record as { id?: string; sku?: string };
+
+      if (row.sku && row.id) {
+        variantResolutions.set(row.sku, row.id);
+      }
+    });
+  }
+
+  return items.map((item) => {
+    const normalizedVariantId = asUuid(item.variantId);
+    const fallbackVariantId = variantResolutions.get(item.sku);
+
+    if (!normalizedVariantId && !fallbackVariantId) {
+      throw new Error(
+        `Order item variant could not be resolved for SKU ${item.sku}. Please sync catalog variants before checkout.`
+      );
+    }
+
+    const resolvedVariantId = normalizedVariantId || fallbackVariantId;
+
+    if (!resolvedVariantId) {
+      throw new Error(`Order item variant could not be resolved for SKU ${item.sku}.`);
+    }
+
+    return { ...item, resolvedVariantId };
+  }) as ResolvedOrderItem[];
 }
 
 export async function GET(request: NextRequest) {
@@ -278,6 +397,19 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  selectFields.push(
+    `payments (
+      id,
+      status,
+      provider,
+      provider_payment_id,
+      method,
+      amount,
+      paid_at,
+      created_at
+    )`
+  );
+
   let query = admin
     .from("orders")
     .select(selectFields.join(", "))
@@ -323,23 +455,31 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    if (payload.userId) {
+    const safeUserId = (payload.userId || "guest").trim();
+
+    if (safeUserId) {
       await admin.from("site_users").upsert(
         {
-          id: payload.userId,
+          id: safeUserId,
           display_name: payload.customerName || payload.userId,
-          normalized_name: (payload.customerName || payload.userId).toLowerCase(),
+          normalized_name: safeUserId.toLowerCase(),
           last_used_at: new Date().toISOString()
         },
         { onConflict: "id" }
       );
     }
 
+    const orderNumber = await getNextDocumentNumber(
+      admin,
+      payload.isQuoteRequest ? "Quote" : "Order",
+      payload.isQuoteRequest
+    );
+
     const { data: order, error: orderError } = await admin
       .from("orders")
       .insert({
-        order_number: payload.orderNumber,
-        site_user_id: payload.userId || "guest",
+        order_number: orderNumber,
+        site_user_id: safeUserId || "guest",
         customer_name: payload.customerName,
         company_name: payload.companyName,
         customer_email: payload.email,
@@ -359,17 +499,19 @@ export async function POST(request: NextRequest) {
         is_quote_request: payload.isQuoteRequest,
         notes: payload.jobsiteAddress?.notes || null
       })
-      .select("id")
+      .select("id, order_number")
       .single();
 
     if (orderError) throw orderError;
 
     if (payload.items.length && order?.id) {
+      const resolvedItems = await resolveOrderItemVariantIds(admin, payload.items);
+
       const { error: itemsError } = await admin.from("order_items").insert(
-        payload.items.map((item) => ({
+        resolvedItems.map((item) => ({
           order_id: order.id,
           product_id: asUuid(item.productId),
-          variant_id: asUuid(item.variantId),
+          variant_id: item.resolvedVariantId,
           sku: item.sku,
           description: item.title,
           quantity: item.quantity,
@@ -378,20 +520,56 @@ export async function POST(request: NextRequest) {
           pulled: false,
           unit_price: item.price,
           line_total: item.price * item.quantity,
-          item_payload: item
+          item_payload: {
+            ...item,
+            variantId: item.resolvedVariantId
+          }
         }))
       );
 
-      if (itemsError) throw itemsError;
+    if (itemsError) throw itemsError;
     }
 
-    return NextResponse.json({ ok: true, persisted: true, orderId: order?.id });
+    return NextResponse.json({
+      ok: true,
+      persisted: true,
+      orderId: order?.id,
+      orderNumber: order?.order_number
+    });
   } catch (error) {
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String((error as { message?: unknown }).message ?? "Unknown order write error.")
+        : "Unknown order write error.";
+    const details =
+      error &&
+      typeof error === "object" &&
+      "details" in error &&
+      typeof (error as { details?: unknown }).details === "string"
+        ? String((error as { details?: unknown }).details)
+        : null;
+    const hint =
+      error &&
+      typeof error === "object" &&
+      "hint" in error &&
+      typeof (error as { hint?: unknown }).hint === "string"
+        ? String((error as { hint?: unknown }).hint)
+        : null;
+    const code =
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      typeof (error as { code?: unknown }).code === "string"
+        ? String((error as { code?: unknown }).code)
+        : null;
+
     return NextResponse.json(
       {
         ok: false,
         persisted: false,
-        reason: error instanceof Error ? error.message : "Unknown order write error."
+        reason: [message, details, hint, code]
+          .filter(Boolean)
+          .join(" | ")
       },
       { status: 500 }
     );
@@ -421,6 +599,99 @@ export async function PATCH(request: NextRequest) {
       { ok: false, reason: "orderId is required." },
       { status: 400 }
     );
+  }
+
+  if (payload.payment) {
+    const amount = Number(payload.payment.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return NextResponse.json(
+        { ok: false, reason: "Payment amount must be greater than zero." },
+        { status: 400 }
+      );
+    }
+
+    const { data: orderRow, error: orderReadError } = await admin
+      .from("orders")
+      .select("id,total")
+      .eq("id", payload.orderId)
+      .single();
+
+    if (orderReadError) {
+      return NextResponse.json(
+        { ok: false, persisted: false, reason: orderReadError.message },
+        { status: 500 }
+      );
+    }
+
+    const { data: existingPayments, error: paymentReadError } = await admin
+      .from("payments")
+      .select("amount")
+      .eq("order_id", payload.orderId);
+
+    if (paymentReadError) {
+      return NextResponse.json(
+        { ok: false, persisted: false, reason: paymentReadError.message },
+        { status: 500 }
+      );
+    }
+
+    const paidBefore = (existingPayments || []).reduce(
+      (sum, payment) => sum + Number(payment.amount || 0),
+      0
+    );
+    const nextPaid = paidBefore + amount;
+    const orderTotal = Number(orderRow?.total || 0);
+    const nextPaymentStatus: PaymentStatus = nextPaid <= 0 ? "unpaid" : nextPaid >= orderTotal ? "paid" : "partial";
+
+    const { data: paymentRow, error: paymentInsertError } = await admin
+      .from("payments")
+      .insert({
+        order_id: payload.orderId,
+        status: "paid",
+        provider: "manual",
+        provider_payment_id: payload.payment.reference || null,
+        method: payload.payment.method || "Manual payment",
+        amount,
+        paid_at: payload.payment.paidAt || new Date().toISOString()
+      })
+      .select("id,status,provider,provider_payment_id,method,amount,paid_at,created_at")
+      .single();
+
+    if (paymentInsertError) {
+      return NextResponse.json(
+        { ok: false, persisted: false, reason: paymentInsertError.message },
+        { status: 500 }
+      );
+    }
+
+    const { error: statusUpdateError } = await admin
+      .from("orders")
+      .update({ payment_status: nextPaymentStatus })
+      .eq("id", payload.orderId);
+
+    if (statusUpdateError) {
+      return NextResponse.json(
+        { ok: false, persisted: false, reason: statusUpdateError.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      persisted: true,
+      paymentStatus: nextPaymentStatus,
+      payment: paymentRow
+        ? {
+            id: paymentRow.id,
+            amount: Number(paymentRow.amount),
+            method: paymentRow.method || "Payment",
+            paidAt: paymentRow.paid_at || paymentRow.created_at,
+            reference: paymentRow.provider_payment_id || "",
+            note: "",
+            createdAt: paymentRow.created_at
+          }
+        : null
+    });
   }
 
   const updates: Record<string, string | boolean> = {};

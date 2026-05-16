@@ -1,11 +1,10 @@
 export function SiteFooter() {
   return (
-    <footer className="border-t border-industrial-rail bg-white">
-      <div className="mx-auto flex max-w-[1500px] flex-col gap-2 px-4 py-8 text-sm text-industrial-steel sm:flex-row sm:items-center sm:justify-between">
-        <p>Gateworks operating platform for ornamental iron and gate supply teams.</p>
-        <p>Next.js, TypeScript, Tailwind, Supabase, Vercel.</p>
+    <footer className="px-4 pb-5">
+      <div className="mx-auto flex max-w-[1280px] flex-col gap-2 border-t border-black/10 pt-4 text-xs text-industrial-muted sm:flex-row sm:items-center sm:justify-between">
+        <p>Gateworks operating platform</p>
+        <p>Products, quotes, carts, and operations</p>
       </div>
     </footer>
   );
 }
-

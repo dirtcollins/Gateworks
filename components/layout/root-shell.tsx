@@ -18,11 +18,12 @@ export function RootShell({ children }: RootShellProps) {
   }
 
   return (
-    <>
+    <div className="min-h-screen bg-transparent text-industrial-ink lg:grid lg:grid-cols-[276px_minmax(0,1fr)]">
       <SiteHeader />
-      {children}
-      <SiteFooter />
-    </>
+      <div className="flex min-h-screen flex-col lg:max-h-screen lg:overflow-y-auto">
+        <div className="flex-1">{children}</div>
+        <SiteFooter />
+      </div>
+    </div>
   );
 }
-

@@ -52,7 +52,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       }
       description="Search and order gate hardware, metal supply, ornamental iron, welding supplies, fence materials, and contractor-ready stock."
       eyebrow="Gateworks Supply"
-      title="Contractor ordering catalog"
+      title="Contractor ordering products"
     >
       <SearchBar categories={categories} category={category} query={query} />
 

@@ -86,7 +86,7 @@ function resolvePickImage(item: CartItem) {
 export const sampleWarehouseOrders: OrderRecord[] = [
   {
     id: "warehouse-sample-1",
-    orderNumber: "GW-2401",
+    orderNumber: "Order-102401",
     userId: "sample",
     customerName: "Rafael Torres",
     companyName: "Torres Ironworks",
@@ -162,7 +162,7 @@ export const sampleWarehouseOrders: OrderRecord[] = [
   },
   {
     id: "warehouse-sample-2",
-    orderNumber: "GW-2402",
+    orderNumber: "Order-102402",
     userId: "sample",
     customerName: "Elena Ruiz",
     companyName: "Ruiz Gate Co.",

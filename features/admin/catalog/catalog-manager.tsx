@@ -584,7 +584,7 @@ export function CatalogManager({
 
   function handleImageUploadFiles(files: FileList | null) {
     const firstFile = files?.item(0);
-    addImageFromFile(firstFile);
+    addImageFromFile(firstFile ?? null);
   }
 
   useEffect(() => {
@@ -1399,6 +1399,8 @@ export function CatalogManager({
               contractorPrice: item.contractorPrice,
               taxable: item.taxable,
               missingFields: item.missingFields,
+              isDeleted: item.isDeleted,
+              deletedAt: item.deletedAt,
               documents: item.documents,
               auditEvents: [
                 createAudit("CWT setting update", `Recalculated steel prices at $${nextPrice} CWT.`),
@@ -1532,7 +1534,7 @@ export function CatalogManager({
                     return (
                       <tr
                         className={cn("group border-t border-industrial-rail hover:bg-industrial-paper", selected?.id === item.id && "bg-industrial-paper")}
-                        onKeyDown={(event) => handleQuickEditKeyDown(event as KeyboardEvent<HTMLInputElement | HTMLSelectElement>, item)}
+                        onKeyDown={(event) => handleQuickEditKeyDown(event as unknown as KeyboardEvent<HTMLInputElement | HTMLSelectElement>, item)}
                         data-quick-edit-row={item.id}
                         key={item.id}
                       >

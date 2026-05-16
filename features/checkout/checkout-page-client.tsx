@@ -124,85 +124,108 @@ export function CheckoutPageClient() {
     setError("");
     setIsSubmitting(true);
 
-    const drawings: CustomerDrawing[] = drawingFiles.map((file) => ({
-      id: `drawing-${file.name}-${file.lastModified}`.replace(/[^a-zA-Z0-9-_]+/g, "-"),
-      fileName: file.name,
-      fileSize: file.size,
-      fileType: file.type || "application/octet-stream",
-      uploadedAt: new Date().toISOString()
-    }));
+    try {
+      const drawings: CustomerDrawing[] = drawingFiles.map((file) => ({
+        id: `drawing-${file.name}-${file.lastModified}`.replace(/[^a-zA-Z0-9-_]+/g, "-"),
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type || "application/octet-stream",
+        uploadedAt: new Date().toISOString()
+      }));
 
-    const order = createOrder({
-      userId,
-      customerName: address.name,
-      companyName: address.company,
-      email: address.email,
-      phone: address.phone,
-      items,
-      fulfillmentMethod,
-      requestedDate,
-      requestedWindow,
-      jobName,
-      jobsiteAddress: address,
-      drawings,
-      pickupContact: address.name,
-      subtotal,
-      tax,
-      deliveryFee,
-      total,
-      status: isQuoteRequest ? "draft" : "submitted",
-      paymentStatus: isQuoteRequest ? "unpaid" : "unpaid",
-      isQuoteRequest
-    });
+      const order = createOrder({
+        userId,
+        customerName: address.name,
+        companyName: address.company,
+        email: address.email,
+        phone: address.phone,
+        items,
+        fulfillmentMethod,
+        requestedDate,
+        requestedWindow,
+        jobName,
+        jobsiteAddress: address,
+        drawings,
+        pickupContact: address.name,
+        subtotal,
+        tax,
+        deliveryFee,
+        total,
+        status: isQuoteRequest ? "draft" : "submitted",
+        paymentStatus: isQuoteRequest ? "unpaid" : "unpaid",
+        isQuoteRequest
+      });
 
-    const orderResponse = await fetch("/api/orders", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(order)
-    }).catch(() => null);
-
-    const orderPayload = (await orderResponse?.json().catch(() => null)) as
-      | { persisted?: boolean; reason?: string }
-      | null;
-
-    if (!orderResponse?.ok || !orderPayload?.persisted) {
-      setError(orderPayload?.reason || "Order could not be saved to Supabase.");
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (drawingFiles.length) {
-      const formData = new FormData();
-      formData.set("orderNumber", order.orderNumber);
-      formData.set("userId", userId);
-      formData.set("customerName", address.name);
-      for (const file of drawingFiles) {
-        formData.append("drawings", file);
-      }
-
-      const drawingResponse = await fetch("/api/customer-drawings", {
+      const orderResponse = await fetch("/api/orders", {
         method: "POST",
-        body: formData
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(order)
       }).catch(() => null);
 
-      const drawingPayload = (await drawingResponse?.json().catch(() => null)) as
-        | { persisted?: boolean; reason?: string }
-        | null;
-
-      if (!drawingResponse?.ok || !drawingPayload?.persisted) {
-        setError(
-          drawingPayload?.reason ||
-            "Order saved, but drawings could not be uploaded to Supabase."
-        );
-        setIsSubmitting(false);
+      if (!orderResponse) {
+        setError("Could not reach /api/orders. Please check that the local server is running.");
         return;
       }
-    }
 
-    setSubmittedOrderNumber(order.orderNumber);
-    clearCart();
-    setDrawingFiles([]);
-    setIsSubmitting(false);
+      const orderPayload = (await orderResponse?.json().catch(() => null)) as
+        | { persisted?: boolean; reason?: string; orderNumber?: string }
+        | null;
+      const submittedOrderNumber = orderPayload?.orderNumber || order.orderNumber;
+
+      if (!orderResponse?.ok || !orderPayload?.persisted) {
+        const fallbackReason = `Order API responded with ${orderResponse.status} ${orderResponse.statusText}.`;
+        setError(orderPayload?.reason || "Order could not be saved to Supabase.");
+        if (!orderPayload?.reason && orderResponse.status >= 500) {
+          setError(`${fallbackReason} Please try again or check the server logs.`);
+        }
+        return;
+      }
+
+      if (drawingFiles.length) {
+        const formData = new FormData();
+        formData.set("orderNumber", submittedOrderNumber);
+        formData.set("userId", userId);
+        formData.set("customerName", address.name);
+        for (const file of drawingFiles) {
+          formData.append("drawings", file);
+        }
+
+        const drawingResponse = await fetch("/api/customer-drawings", {
+          method: "POST",
+          body: formData
+        }).catch(() => null);
+
+        if (!drawingResponse) {
+          setError("Could not reach /api/customer-drawings. Please try again.");
+          return;
+        }
+
+        const drawingPayload = (await drawingResponse?.json().catch(() => null)) as
+          | { persisted?: boolean; reason?: string }
+          | null;
+
+        if (!drawingResponse?.ok || !drawingPayload?.persisted) {
+          const fallbackReason = `Drawings API responded with ${drawingResponse.status} ${drawingResponse.statusText}.`;
+          setError(
+            drawingPayload?.reason ||
+              `Order saved, but drawings could not be uploaded to Supabase. ${fallbackReason}`
+          );
+          return;
+        }
+      }
+
+      setSubmittedOrderNumber(submittedOrderNumber);
+      clearCart();
+      setDrawingFiles([]);
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to submit order. Please try again."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   if (submittedOrderNumber) {

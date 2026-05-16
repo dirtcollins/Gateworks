@@ -32,6 +32,16 @@ export type CustomerDrawing = {
   uploadedAt: string;
 };
 
+export type OrderPayment = {
+  id: string;
+  amount: number;
+  method: string;
+  paidAt: string;
+  reference: string;
+  note: string;
+  createdAt: string;
+};
+
 export type OrderRecord = {
   id: string;
   orderNumber: string;
@@ -52,6 +62,7 @@ export type OrderRecord = {
   tax: number;
   deliveryFee: number;
   total: number;
+  payments?: OrderPayment[];
   status: OrderStatus;
   paymentStatus: PaymentStatus;
   isQuoteRequest: boolean;
@@ -87,13 +98,29 @@ function orderDefaults() {
   return { orders: [] };
 }
 
-function getNextOrderNumber(orders: OrderRecord[]) {
+function getNextDocumentNumber(orders: OrderRecord[], prefix: "Order" | "Quote") {
   const highest = orders.reduce((currentHighest, order) => {
+    const expectedQuote = prefix === "Quote";
+    if (Boolean(order.isQuoteRequest) !== expectedQuote) return currentHighest;
     const number = Number(order.orderNumber.replace(/\D/g, ""));
     return Number.isFinite(number) ? Math.max(currentHighest, number) : currentHighest;
-  }, 2000);
+  }, 10026);
 
-  return `GW-${highest + 1}`;
+  return `${prefix}-${highest + 1}`;
+}
+
+function normalizeDocumentNumber(orderNumber: string, isQuoteRequest: boolean) {
+  if (orderNumber.startsWith("Order-") || orderNumber.startsWith("Quote-")) return orderNumber;
+  const sequence = Number(orderNumber.replace(/\D/g, ""));
+  if (!Number.isFinite(sequence) || sequence <= 0) return orderNumber;
+  return `${isQuoteRequest ? "Quote" : "Order"}-${sequence}`;
+}
+
+function normalizeOrderRecord(order: OrderRecord): OrderRecord {
+  return {
+    ...order,
+    orderNumber: normalizeDocumentNumber(order.orderNumber, Boolean(order.isQuoteRequest))
+  };
 }
 
 function makeActivity(label: string, detail: string) {
@@ -113,13 +140,13 @@ export const useOrderStore = create<OrderState>()(
       hasRemoteOrdersLoaded: false,
       setRemoteOrdersLoading: (value) => set({ isRemoteOrdersLoading: value }),
       setRemoteOrdersLoaded: (value) => set({ hasRemoteOrdersLoaded: value }),
-      setOrders: (orders) => set({ orders }),
+      setOrders: (orders) => set({ orders: orders.map(normalizeOrderRecord) }),
       createOrder: (order) => {
         const now = new Date().toISOString();
-        const record: OrderRecord = {
+          const record: OrderRecord = {
           ...order,
           id: `order-${Date.now()}`,
-          orderNumber: getNextOrderNumber(get().orders),
+          orderNumber: getNextDocumentNumber(get().orders, order.isQuoteRequest ? "Quote" : "Order"),
           createdAt: now,
           updatedAt: now,
           activity: [
@@ -130,7 +157,7 @@ export const useOrderStore = create<OrderState>()(
           ]
         };
 
-        set((state) => ({ orders: [record, ...state.orders] }));
+        set((state) => ({ orders: [normalizeOrderRecord(record), ...state.orders] }));
         return record;
       },
       updateOrderStatus: (orderId, status, detail) =>
@@ -175,14 +202,14 @@ export const useOrderStore = create<OrderState>()(
 
           if (index >= 0) {
             next[index] = {
-              ...order,
+              ...normalizeOrderRecord(order),
               id: state.orders[index].id,
               updatedAt: new Date().toISOString()
             };
             return { orders: next };
           }
 
-          return { orders: [order, ...state.orders] };
+          return { orders: [normalizeOrderRecord(order), ...state.orders] };
         }),
       clearOrders: () => set({ orders: [] })
     }),
@@ -202,5 +229,8 @@ export function hydrateOrdersForUser(userId: string) {
   );
 
   useOrderStore.persist.setOptions({ name: scopedStoreName });
-  useOrderStore.setState(persistedState);
+  useOrderStore.setState({
+    ...persistedState,
+    orders: (persistedState.orders || []).map(normalizeOrderRecord)
+  });
 }

@@ -129,19 +129,19 @@ const moduleWorkflows: Record<string, ModuleWorkflow> = {
       title: "Quote requests",
       items: [
         {
-          label: "GW-Q-1042 / Anderson Fabrication",
+          label: "Quote-10042 / Anderson Fabrication",
           detail: "Ornamental panels, hinges, latch hardware, and delivery quote.",
           status: "Needs pricing",
           value: formatCurrency(6420)
         },
         {
-          label: "GW-Q-1041 / Valley Gate Co.",
+          label: "Quote-10041 / Valley Gate Co.",
           detail: "Repeat order request from saved cart with contractor terms.",
           status: "Ready to send",
           value: formatCurrency(3280)
         },
         {
-          label: "GW-Q-1040 / Counter walk-in",
+          label: "Quote-10040 / Counter walk-in",
           detail: "Square tubing, flat bar, paint, concrete anchors.",
           status: "Draft",
           value: formatCurrency(890)
@@ -177,19 +177,19 @@ const moduleWorkflows: Record<string, ModuleWorkflow> = {
       title: "Payment queue",
       items: [
         {
-          label: "GW-I-7782 / Jessie Metal Supply",
-          detail: "Net 30 invoice tied to pickup order GW-2001.",
+          label: "Invoice-17782 / Jessie Metal Supply",
+          detail: "Net 30 invoice tied to pickup order Order-10021.",
           status: "Unpaid",
           value: formatCurrency(1991.8)
         },
         {
-          label: "GW-I-7781 / Ortega Iron Works",
+          label: "Invoice-17781 / Ortega Iron Works",
           detail: "Deposit collected, balance due before delivery release.",
           status: "Partial",
           value: formatCurrency(4260)
         },
         {
-          label: "GW-I-7779 / Cash account",
+          label: "Invoice-17779 / Cash account",
           detail: "Refund review for returned latch hardware.",
           status: "Refund review",
           value: formatCurrency(184)
@@ -321,7 +321,7 @@ const moduleWorkflows: Record<string, ModuleWorkflow> = {
       title: "Pick tickets",
       items: [
         {
-          label: "PICK-4421 / GW-2001",
+          label: "PICK-4421 / Order-10021",
           detail: "Tubing rack A-14, gate hardware bin C-03, paint cage.",
           status: "Picking",
           value: "14 lines"

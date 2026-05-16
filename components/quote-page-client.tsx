@@ -2,28 +2,27 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowRight,
-  Building2,
-  CalendarDays,
+  ArrowLeft,
   CheckCircle2,
   Download,
-  FileText,
+  Search,
   Mail,
-  MapPin,
+  Plus,
   Printer,
-  Share2,
-  ShoppingCart,
-  Trash2,
-  Truck
+  Save,
+  Send,
+  X,
+  Trash2
 } from "lucide-react";
 import { QuantitySelector } from "@/components/quantity-selector";
 import { useCartStore } from "@/lib/cart-store";
 import { products } from "@/lib/catalog";
+import type { Product } from "@/lib/types";
 import { useQuoteStore } from "@/lib/quote-store";
 import { cn, formatCurrency } from "@/lib/utils";
+import { customerDirectory, getCustomerById } from "@/lib/customers";
 
 const taxRate = 0.0825;
 
@@ -32,7 +31,7 @@ type QuotePageClientProps = {
 };
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "long",
+  month: "short",
   day: "numeric",
   year: "numeric"
 });
@@ -54,40 +53,44 @@ function getQuoteItemProductSlug(item: { productId: string; variantId: string; s
   );
 }
 
+function fieldValue(value: string | undefined, fallback: string) {
+  return value && value.trim() ? value : fallback;
+}
+
 export function QuotePageClient({ quoteId }: QuotePageClientProps) {
   const [actionMessage, setActionMessage] = useState("");
-  const { quotes, removeItem, updateQuantity, clearQuote, setActiveQuote } =
-    useQuoteStore();
+  const {
+    quotes,
+    removeItem,
+    updateQuantity,
+    addItem,
+    clearQuote,
+    saveQuote,
+    setActiveQuote,
+    updateQuoteDetails
+  } = useQuoteStore();
   const addCartItem = useCartStore((state) => state.addItem);
   const quote = quotes.find((quoteRecord) => quoteRecord.id === quoteId);
-  const items = quote?.items || [];
-  const subtotal = items.reduce(
-    (total, item) => total + item.price * item.quantity,
-    0
-  );
-  const estimatedTax = subtotal * taxRate;
-  const deliveryFee = subtotal >= 100 || subtotal === 0 ? 0 : 14.95;
-  const total = subtotal + estimatedTax + deliveryFee;
-  const totalQuantity = items.reduce((totalItems, item) => totalItems + item.quantity, 0);
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [quickAddQuery, setQuickAddQuery] = useState("");
+  const [quickAddQuantity, setQuickAddQuantity] = useState("1");
+  const [focusTargetVariantId, setFocusTargetVariantId] = useState<string | null>(null);
+  const [focusToken, setFocusToken] = useState(0);
+  const quoteItemQtyRef = useRef<HTMLInputElement>(null);
 
   if (!quote) {
     return (
-      <main className="mx-auto grid min-h-[520px] max-w-[900px] place-items-center px-4 py-12 text-center">
-        <div className="border border-jobsite-rail bg-white p-10">
-          <div className="mx-auto grid size-14 place-items-center border border-jobsite-rail bg-jobsite-paper text-jobsite-ink">
-            <FileText size={25} />
-          </div>
-          <h1 className="mt-5 text-3xl font-black text-jobsite-ink">
-            Quote not found
-          </h1>
-          <p className="mt-2 text-sm font-semibold text-jobsite-steel">
+      <main className="grid min-h-[520px] place-items-center px-4 py-12 text-center">
+        <div className="rounded-lg border border-black/10 bg-white/85 p-10 shadow-sm">
+          <h1 className="text-3xl font-semibold text-industrial-ink">Quote not found</h1>
+          <p className="mt-2 text-sm text-industrial-muted">
             This quote may have been deleted or created in another browser.
           </p>
           <Link
-            className="truewerk-cta mt-5 inline-flex h-12 items-center justify-center bg-jobsite-ink px-6 text-sm font-black uppercase tracking-[0.1em] text-white"
+            className="mt-5 inline-flex h-11 items-center justify-center rounded-lg bg-industrial-ink px-5 text-sm font-semibold text-white"
             href="/quotes"
           >
-            <span>View all quotes</span>
+            View all quotes
           </Link>
         </div>
       </main>
@@ -95,409 +98,563 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
   }
 
   const currentQuote = quote;
-  const quoteDate = formatDate(currentQuote.createdAt);
-  const expirationDate = formatDate(currentQuote.expiresAt);
-
-  function addQuoteToCart() {
-    items.forEach((item) => addCartItem(item));
+  const selectedCustomerId = currentQuote.customerId || "";
+  useEffect(() => {
     setActiveQuote(currentQuote.id);
-    showActionMessage("Quote items added to cart.");
-  }
+  }, [currentQuote.id, setActiveQuote]);
+  const items = currentQuote.items;
+  const subtotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
+  const estimatedTax = subtotal * taxRate;
+  const deliveryFee = subtotal >= 100 || subtotal === 0 ? 0 : 14.95;
+  const total = subtotal + estimatedTax + deliveryFee;
+  const amountPaid = 0;
+  const balanceDue = total - amountPaid;
+  const totalQuantity = items.reduce((totalItems, item) => totalItems + item.quantity, 0);
+  const quoteNumber = currentQuote.quoteNumber || currentQuote.id.toUpperCase();
+  const invoiceNumber = currentQuote.invoiceNumber || quoteNumber.replace("Q-", "INV-");
+  const status = currentQuote.status || "draft";
+  const quickAddResults = useMemo(() => {
+    const normalized = quickAddQuery.trim().toLowerCase();
+
+    if (!normalized) {
+      return products.slice(0, 8);
+    }
+
+    return products.filter((product) => {
+      if (product.title.toLowerCase().includes(normalized)) {
+        return true;
+      }
+
+      if (product.category.name.toLowerCase().includes(normalized)) {
+        return true;
+      }
+
+      return product.variants.some((variant) => variant.sku.toLowerCase().includes(normalized));
+    });
+  }, [quickAddQuery]);
+  const sortedCustomers = useMemo(
+    () => [...customerDirectory].sort((left, right) => left.name.localeCompare(right.name)),
+    []
+  );
+
+  useEffect(() => {
+    if (!focusTargetVariantId || !focusToken) return;
+
+    const handle = window.setTimeout(() => {
+      if (!quoteItemQtyRef.current) return;
+
+      quoteItemQtyRef.current.focus();
+      quoteItemQtyRef.current.select();
+    }, 0);
+
+    return () => window.clearTimeout(handle);
+  }, [focusTargetVariantId, focusToken]);
 
   function showActionMessage(message: string) {
     setActionMessage(message);
     window.setTimeout(() => setActionMessage(""), 2400);
   }
 
+  function updateField(field: Parameters<typeof updateQuoteDetails>[1]) {
+    updateQuoteDetails(currentQuote.id, field);
+  }
+
+  function handleSaveQuote() {
+    saveQuote(currentQuote.id);
+    showActionMessage("Quote saved.");
+  }
+
+  function updateFromCustomerSelection(customerId: string) {
+    const customer = getCustomerById(customerId);
+
+    if (!customer) {
+      updateField({ customerId: "" });
+      return;
+    }
+
+    updateField({
+      customerId: customer.id,
+      customerName: customer.name,
+      customerEmail: customer.email,
+      billingAddress: customer.billingAddress,
+      jobsiteAddress: customer.jobsiteAddress,
+      terms: customer.terms
+    });
+  }
+
+  function addQuoteToCart() {
+    items.forEach((item) => addCartItem(item));
+    setActiveQuote(currentQuote.id);
+    showActionMessage("Invoice lines added to cart.");
+  }
+
   function printQuote() {
     window.print();
   }
 
-  async function shareQuote() {
-    const quoteUrl = window.location.href;
-
-    try {
-      await navigator.clipboard.writeText(quoteUrl);
-      showActionMessage("Quote link copied.");
-    } catch {
-      showActionMessage("Quote link could not be copied.");
-    }
+  function emailQuote() {
+    updateQuoteDetails(currentQuote.id, { status: "sent" });
+    const subject = encodeURIComponent(`${invoiceNumber} for ${currentQuote.name}`);
+    const body = encodeURIComponent(
+      `${fieldValue(currentQuote.customerName, "Customer")}\n${invoiceNumber}\nBalance due: ${formatCurrency(balanceDue)}\n${window.location.href}`
+    );
+    window.location.href = `mailto:${currentQuote.customerEmail || ""}?subject=${subject}&body=${body}`;
   }
 
-  function emailQuote() {
-    const subject = encodeURIComponent(`${currentQuote.name} - ${currentQuote.quoteNumber}`);
-    const body = encodeURIComponent(
-      `${currentQuote.name}\nQuote ${currentQuote.quoteNumber}\nEstimated total: ${formatCurrency(total)}\n${window.location.href}`
+  function pickDefaultQuoteVariant(product: Product) {
+    const bestVariant = product.variants.find((variant) => variant.inventory === "in_stock");
+
+    return bestVariant || product.variants[0];
+  }
+
+  function addCatalogItem(product: Product) {
+    const variant = pickDefaultQuoteVariant(product);
+
+    if (!variant) {
+      return;
+    }
+
+    const parsedQuantity = Math.max(1, Number.parseInt(quickAddQuantity, 10) || 1);
+    addItem(
+      {
+        productId: product.id,
+        variantId: variant.id,
+        title: product.title,
+        sku: variant.sku,
+        image: variant.image || product.images[0]?.url || "/assets/logo.svg",
+        price: variant.price,
+        weightLbs: variant.calculated_weight_lb,
+        cwtPrice: variant.steel_cwt_price,
+        pricingMethod: variant.pricing_method,
+        quantity: parsedQuantity,
+        options: variant.options
+      },
+      currentQuote.id
     );
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+
+    setFocusTargetVariantId(variant.id);
+    setFocusToken((value) => value + 1);
+    setQuickAddQuantity("1");
+    setQuickAddQuery("");
+    setIsQuickAddOpen(true);
+    showActionMessage(`Added ${product.title} to invoice.`);
+  }
+
+  function closeQuickAdd() {
+    setIsQuickAddOpen(false);
+    setQuickAddQuery("");
+    setQuickAddQuantity("1");
+    setFocusTargetVariantId(null);
   }
 
   return (
-    <main className="bg-jobsite-paper">
-      <section className="border-b border-jobsite-rail bg-white">
-        <div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-6 lg:grid-cols-[1fr_auto] lg:items-end">
-          <div>
-            <div className="flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-jobsite-steel">
-              <Link className="hover:text-jobsite-ink" href="/">
-                Products
+    <main className="px-3 py-4 md:px-6 md:py-6">
+      <div className="mx-auto grid max-w-[1280px] gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="overflow-hidden rounded-lg border border-black/10 bg-white/86 shadow-sm backdrop-blur-xl">
+          <div className="flex flex-col gap-3 border-b border-black/10 bg-[#fafaf8] p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <Link
+                className="inline-flex items-center gap-2 text-sm font-medium text-industrial-muted hover:text-industrial-ink"
+                href="/quotes"
+              >
+                <ArrowLeft size={16} />
+                All invoices
               </Link>
-              <span>/</span>
-              <Link className="hover:text-jobsite-ink" href="/quotes">
-                Job Quotes
-              </Link>
-              <span>/</span>
-              <span>{currentQuote.quoteNumber}</span>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-black/10 bg-white px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">
+                  {status}
+                </span>
+                <span className="text-sm font-medium text-industrial-muted">{quoteNumber}</span>
+              </div>
             </div>
-            <h1 className="mt-3 text-3xl font-black text-jobsite-ink md:text-5xl">
-              {currentQuote.name}
-            </h1>
-            <p className="mt-2 text-lg font-black text-jobsite-steel">
-              Quote {currentQuote.quoteNumber}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2 text-sm font-bold">
-              <span className="inline-flex items-center gap-2 border border-jobsite-pine bg-white px-3 py-2 text-jobsite-pine">
-                <CheckCircle2 size={17} />
-                Ready for purchase
-              </span>
-              <span className="inline-flex items-center gap-2 border border-jobsite-rail bg-jobsite-paper px-3 py-2 text-jobsite-steel">
-                <CalendarDays size={17} />
-                Expires {expirationDate}
-              </span>
+            <div className="flex flex-wrap gap-2">
+              <button className="inline-flex h-10 items-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-sm font-medium text-industrial-ink shadow-sm transition hover:bg-[#f7f7f4]" type="button" onClick={handleSaveQuote}>
+                <Save size={16} />
+                Save
+              </button>
+              <button className="inline-flex h-10 items-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-sm font-medium text-industrial-ink shadow-sm transition hover:bg-[#f7f7f4]" type="button" onClick={printQuote}>
+                <Printer size={16} />
+                Print
+              </button>
+              <button className="inline-flex h-10 items-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-sm font-medium text-industrial-ink shadow-sm transition hover:bg-[#f7f7f4]" type="button" onClick={printQuote}>
+                <Download size={16} />
+                PDF
+              </button>
+              <button className="inline-flex h-10 items-center gap-2 rounded-lg bg-industrial-ink px-3 text-sm font-semibold text-white transition hover:bg-jobsite-pine" type="button" onClick={emailQuote}>
+                <Send size={16} />
+                Send
+              </button>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2 sm:flex">
-            <button
-              className="inline-flex h-11 items-center justify-center gap-2 border border-jobsite-rail bg-white px-4 text-sm font-black text-jobsite-ink transition hover:border-jobsite-ink"
-              type="button"
-              onClick={printQuote}
-            >
-              <Printer size={18} />
-              Print
-            </button>
-            <button
-              className="inline-flex h-11 items-center justify-center gap-2 border border-jobsite-rail bg-white px-4 text-sm font-black text-jobsite-ink transition hover:border-jobsite-ink"
-              type="button"
-              onClick={printQuote}
-            >
-              <Download size={18} />
-              PDF
-            </button>
-            <button
-              className="inline-flex h-11 items-center justify-center gap-2 border border-jobsite-rail bg-white px-4 text-sm font-black text-jobsite-ink transition hover:border-jobsite-ink"
-              type="button"
-              onClick={shareQuote}
-            >
-              <Share2 size={18} />
-              Share
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto grid max-w-[1500px] items-start gap-5 px-4 py-6 xl:grid-cols-[1fr_390px]">
-        <div className="grid content-start gap-5">
-          <div className="grid items-start gap-4 lg:grid-cols-3">
-            <SummaryTile
-              icon={<FileText size={20} />}
-              label="Quote created"
-              value={quoteDate}
-            />
-            <SummaryTile
-              icon={<Building2 size={20} />}
-              label="Customer"
-              value="Bakersfield Store Account"
-            />
-            <SummaryTile
-              icon={<Truck size={20} />}
-              label="Fulfillment"
-              value="Pickup or delivery"
-            />
           </div>
 
-          <section className="border border-jobsite-rail bg-white">
-            <div className="flex flex-col gap-3 border-b border-jobsite-rail p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="p-4 md:p-6">
+            <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-jobsite-steel">
-                  Line Items
-                </p>
-                <h2 className="mt-1 text-2xl font-black text-jobsite-ink">
-                  {items.length ? `${items.length} products in quote` : "No products in quote"}
-                </h2>
+                <label className="text-xs font-semibold uppercase tracking-[0.1em] text-industrial-muted" htmlFor="document-title">
+                  Invoice title
+                </label>
+                <input
+                  className="mt-2 w-full rounded-lg border border-transparent bg-[#f7f7f4] px-3 py-3 text-2xl font-semibold text-industrial-ink outline-none focus:border-black/10 focus:bg-white"
+                  id="document-title"
+                  value={quote.name}
+                  onChange={(event) => updateField({ name: event.target.value })}
+                />
               </div>
-              {items.length ? (
-                <button
-                  className="h-10 border border-jobsite-rail bg-white px-4 text-sm font-black text-jobsite-ink transition hover:border-red-700 hover:text-red-700"
-                  type="button"
-                  onClick={() => clearQuote(currentQuote.id)}
-                >
-                  Clear quote
-                </button>
-              ) : null}
+              <div className="rounded-lg border border-black/10 bg-[#f7f7f4] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-industrial-muted">
+                  Balance due
+                </p>
+                <p className="mt-1 text-3xl font-semibold text-industrial-ink">
+                  {formatCurrency(balanceDue)}
+                </p>
+              </div>
             </div>
 
-            {!items.length ? (
-              <div className="grid place-items-center p-10 text-center">
-                <div className="grid size-14 place-items-center border border-jobsite-rail bg-jobsite-paper text-jobsite-ink">
-                  <FileText size={25} />
-                </div>
-                <p className="mt-4 text-lg font-black text-jobsite-ink">
-                  Your quote is empty.
-                </p>
-                <p className="mt-2 max-w-md text-sm font-semibold text-jobsite-steel">
-                  Add products from a product page to build a contractor quote, then
-                  return here to adjust quantities and send it to cart.
-                </p>
-                <Link
-                  className="truewerk-cta mt-5 inline-flex h-12 items-center justify-center bg-jobsite-ink px-6 text-sm font-black uppercase tracking-[0.1em] text-white"
-                  href="/"
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              <section className="rounded-lg border border-black/10 bg-white p-4">
+                <h2 className="text-sm font-semibold text-industrial-ink">Bill to</h2>
+                <label className="mt-3 block text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">
+                  Customer
+                  <select
+                    className="mt-1 h-10 w-full rounded-lg border border-black/10 bg-[#f7f7f4] px-3 text-sm text-industrial-ink outline-none focus:bg-white"
+                    value={selectedCustomerId}
+                    onChange={(event) => updateFromCustomerSelection(event.target.value)}
+                  >
+                    <option value="">Manual entry</option>
+                    {sortedCustomers.map((customer) => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.name} ({customer.company})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <InvoiceInput
+                  label="Customer"
+                  value={fieldValue(quote.customerName, "")}
+                  onChange={(value) => updateField({ customerId: "", customerName: value })}
+                />
+                <InvoiceInput
+                  label="Email"
+                  value={fieldValue(quote.customerEmail, "")}
+                  onChange={(value) => updateField({ customerId: "", customerEmail: value })}
+                />
+                <InvoiceTextarea
+                  label="Billing address"
+                  value={fieldValue(quote.billingAddress, "")}
+                  onChange={(value) => updateField({ customerId: "", billingAddress: value })}
+                />
+              </section>
+              <section className="rounded-lg border border-black/10 bg-white p-4">
+                <h2 className="text-sm font-semibold text-industrial-ink">Invoice details</h2>
+                <InvoiceInput label="Invoice no." value={invoiceNumber} onChange={() => undefined} readOnly />
+                <InvoiceInput label="Invoice date" value={formatDate(quote.createdAt)} onChange={() => undefined} readOnly />
+                <InvoiceInput label="Due date" value={formatDate(quote.dueAt || quote.expiresAt)} onChange={() => undefined} readOnly />
+                <label className="mt-3 block text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted" htmlFor="terms">
+                  Terms
+                </label>
+                <select
+                  className="mt-1 h-10 w-full rounded-lg border border-black/10 bg-[#f7f7f4] px-3 text-sm text-industrial-ink outline-none focus:bg-white"
+                  id="terms"
+                  value={fieldValue(quote.terms, "Due on receipt")}
+                  onChange={(event) => updateField({ terms: event.target.value })}
                 >
-                  <span>Browse products</span>
-                </Link>
-              </div>
-            ) : (
-              <div className="divide-y divide-jobsite-rail">
-                {items.map((item) => {
-                  const itemTotal = item.price * item.quantity;
-                  const productSlug = getQuoteItemProductSlug(item);
+                  <option>Due on receipt</option>
+                  <option>Net 15</option>
+                  <option>Net 30</option>
+                  <option>Net 45</option>
+                </select>
+              </section>
+            </div>
 
-                  return (
-                    <article
-                      key={item.variantId}
-                      className="grid gap-4 p-4 transition hover:bg-jobsite-paper lg:grid-cols-[112px_1fr_auto]"
+            <section className="mt-5 overflow-hidden rounded-lg border border-black/10 bg-white">
+              <div className="grid grid-cols-[minmax(0,1fr)_110px_130px_130px_44px] gap-3 border-b border-black/10 bg-[#f7f7f4] px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">
+                <span>Product or service</span>
+                <span className="text-right">Qty</span>
+                <span className="text-right">Rate</span>
+                <span className="text-right">Amount</span>
+                <span />
+              </div>
+              <div className="border-b border-black/10 px-4 py-3">
+                <button
+                  className={cn(
+                    "inline-flex h-10 items-center gap-2 rounded-lg bg-industrial-ink px-4 text-sm font-semibold text-white transition hover:bg-jobsite-pine",
+                    isQuickAddOpen ? "bg-jobsite-ink/90" : ""
+                  )}
+                  type="button"
+                  onClick={() => setIsQuickAddOpen((current) => !current)}
+                >
+                  <Plus size={16} />
+                  Add Product
+                </button>
+              </div>
+
+              {isQuickAddOpen ? (
+                <div className="border-b border-black/10 bg-[#fafaf8] p-4">
+                  <div className="flex gap-2">
+                    <Search className="mt-2 text-jobsite-steel" size={18} />
+                    <label className="flex-1 text-xs text-industrial-muted" htmlFor="quote-product-search">
+                      Product search
+                    </label>
+                    <button
+                      aria-label="Close add product"
+                      className="grid size-7 place-items-center rounded border border-black/10 text-jobsite-ink"
+                      type="button"
+                      onClick={closeQuickAdd}
                     >
-                      <Link
-                        aria-label={`Open ${item.title}`}
-                        className="relative aspect-square border border-jobsite-rail bg-white"
-                        href={`/products/${productSlug}`}
-                      >
-                        <Image
-                          alt={item.title}
-                          className="object-contain p-2"
-                          fill
-                          quality={60}
-                          sizes="112px"
-                          src={item.image}
-                        />
-                      </Link>
-                      <Link
-                        className="min-w-0 underline-offset-4 hover:underline"
-                        href={`/products/${productSlug}`}
-                      >
-                        <div className="flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-[0.12em] text-jobsite-steel">
-                          <span>SKU {item.sku}</span>
-                          <span className="text-jobsite-rail">|</span>
-                          <span>Vendor direct</span>
-                        </div>
-                        <h3 className="mt-2 text-lg font-black text-jobsite-ink">
-                          {item.title}
-                        </h3>
-                        <p className="mt-2 text-sm font-semibold capitalize text-jobsite-steel">
-                          {Object.entries(item.options)
-                            .filter(([, value]) => Boolean(value))
-                            .map(([key, value]) => `${key}: ${value}`)
-                            .join(" / ")}
-                        </p>
-                        <div className="mt-4 grid gap-2 text-sm font-bold text-jobsite-steel sm:grid-cols-3">
-                          <span className="inline-flex items-center gap-2">
-                            <CheckCircle2 size={17} className="text-jobsite-pine" />
-                            In stock
-                          </span>
-                          <span className="inline-flex items-center gap-2">
-                            <MapPin size={17} />
-                            Bakersfield
-                          </span>
-                          <span className="inline-flex items-center gap-2">
-                            <Truck size={17} />
-                            Delivery available
-                          </span>
-                        </div>
-                      </Link>
-                      <div className="grid gap-3 sm:grid-cols-[auto_1fr_auto] sm:items-center lg:min-w-[260px] lg:grid-cols-1 lg:justify-items-end">
-                        <div className="text-left sm:text-right">
-                          <p className="text-sm font-bold text-jobsite-steel">
-                            Unit price
-                          </p>
-                          <p className="text-xl font-black text-jobsite-ink">
-                            {formatCurrency(item.price)}
-                          </p>
-                        </div>
-                        <QuantitySelector
-                          value={item.quantity}
-                          onChange={(quantity) =>
-                            updateQuantity(currentQuote.id, item.variantId, quantity)
-                          }
-                        />
-                        <div className="flex items-center justify-between gap-3 sm:justify-end">
-                          <div className="text-left sm:text-right">
-                            <p className="text-sm font-bold text-jobsite-steel">
-                              Line total
-                            </p>
-                            <p className="text-xl font-black text-jobsite-ink">
-                              {formatCurrency(itemTotal)}
-                            </p>
-                          </div>
-                          <button
-                            aria-label={`Remove ${item.title}`}
-                            className="grid size-11 place-items-center border border-jobsite-rail text-jobsite-steel transition hover:border-red-700 hover:text-red-700"
-                            type="button"
-                            onClick={() => removeItem(currentQuote.id, item.variantId)}
-                          >
-                            <Trash2 size={19} />
-                          </button>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        </div>
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <input
+                    autoFocus
+                    className="mt-2 w-full rounded border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-industrial-ink"
+                    id="quote-product-search"
+                    placeholder="Search product title, SKU, or category"
+                    value={quickAddQuery}
+                    onChange={(event) => setQuickAddQuery(event.target.value)}
+                  />
+                  <div className="mt-3 grid gap-2">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-industrial-muted">
+                      Qty
+                      <input
+                        className="h-9 w-16 rounded border border-black/10 bg-white px-2 text-sm outline-none focus:border-industrial-ink"
+                        min={1}
+                        type="number"
+                        value={quickAddQuantity}
+                        onChange={(event) =>
+                          setQuickAddQuantity(String(Math.max(1, Number(event.target.value) || 1)))
+                        }
+                      />
+                    </label>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-xs font-semibold text-industrial-muted">
+                    <span>{quickAddResults.length} product{quickAddResults.length === 1 ? "" : "s"}</span>
+                    <span>Press any result to add</span>
+                  </div>
+                  <div className="mt-3 max-h-56 overflow-y-auto pr-1">
+                    {!quickAddResults.length ? (
+                      <p className="rounded border border-dashed border-black/10 p-4 text-xs text-industrial-muted">
+                        No products match your search.
+                      </p>
+                    ) : (
+                      <div className="grid gap-2">
+                        {quickAddResults.slice(0, 10).map((product) => {
+                          const variant = pickDefaultQuoteVariant(product);
 
-        <aside className="grid h-fit gap-5">
-          <section className="border border-jobsite-rail bg-white p-5">
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-jobsite-steel">
-              Quote Summary
-            </p>
-            <h2 className="mt-1 text-2xl font-black text-jobsite-ink">
-              Estimated Total
-            </h2>
-            <dl className="mt-5 grid gap-3 text-sm font-bold">
-              <SummaryRow label={`${totalQuantity} items`} value={formatCurrency(subtotal)} />
-              <SummaryRow label="Estimated tax" value={formatCurrency(estimatedTax)} />
-              <SummaryRow
-                label="Delivery"
-                value={deliveryFee ? formatCurrency(deliveryFee) : "Free"}
-              />
-              <div className="mt-2 flex items-center justify-between border-t border-jobsite-rail pt-4">
-                <dt className="text-base font-black text-jobsite-ink">Total</dt>
-                <dd className="text-3xl font-black text-jobsite-ink">
-                  {formatCurrency(total)}
-                </dd>
-              </div>
-            </dl>
-            <button
-              className={cn(
-                "truewerk-cta mt-5 flex h-12 w-full items-center justify-center gap-2 bg-jobsite-ink px-5 text-sm font-black uppercase tracking-[0.1em] text-white transition active:scale-[0.98]",
-                !items.length && "cursor-not-allowed opacity-50"
+                          if (!variant) {
+                            return null;
+                          }
+
+                          return (
+                            <button
+                              key={product.id}
+                              className="grid min-h-12 grid-cols-[minmax(0,1fr)_94px_72px] items-center gap-2 rounded border border-black/10 bg-white px-3 py-2 text-left text-sm hover:border-industrial-ink hover:bg-white"
+                              type="button"
+                              onClick={() => addCatalogItem(product)}
+                            >
+                              <span className="truncate text-industrial-ink">
+                                <span className="font-semibold">{product.title}</span>
+                                <span className="ml-1 block text-xs text-industrial-muted">
+                                  SKU {variant.sku}
+                                </span>
+                              </span>
+                              <span className="text-right font-semibold text-industrial-ink">
+                                {formatCurrency(variant.price)}
+                              </span>
+                              <span className={cn("text-right text-xs font-semibold", variant.inventory === "in_stock" ? "text-jobsite-pine" : "text-red-700")}>
+                                {variant.inventory === "in_stock" ? "In stock" : "Out of stock"}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              {!items.length ? (
+                <div className="grid place-items-center p-10 text-center">
+                  <p className="text-lg font-semibold text-industrial-ink">No line items yet</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-black/10">
+                  {items.map((item) => {
+                    const itemTotal = item.price * item.quantity;
+                    const productSlug = getQuoteItemProductSlug(item);
+                    const shouldFocusQuantity = focusTargetVariantId === item.variantId;
+
+                    return (
+                      <article key={item.variantId} className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(0,1fr)_110px_130px_130px_44px] md:items-center">
+                        <Link className="grid min-w-0 grid-cols-[56px_1fr] gap-3" href={`/products/${productSlug}`}>
+                          <span className="relative size-14 rounded-md border border-black/10 bg-[#fafaf8]">
+                            <Image alt={item.title} className="object-contain p-1.5" fill quality={60} sizes="56px" src={item.image} />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-semibold text-industrial-ink">{item.title}</span>
+                            <span className="mt-1 block text-xs text-industrial-muted">SKU {item.sku}</span>
+                          </span>
+                        </Link>
+                        <div className="justify-self-start md:justify-self-end">
+                          <QuantitySelector
+                            inputId={`quote-item-qty-${item.variantId}`}
+                            inputRef={shouldFocusQuantity ? quoteItemQtyRef : undefined}
+                            value={item.quantity}
+                            onChange={(quantity) => updateQuantity(quote.id, item.variantId, quantity)}
+                          />
+                        </div>
+                        <p className="text-left text-sm font-medium text-industrial-ink md:text-right">{formatCurrency(item.price)}</p>
+                        <p className="text-left text-base font-semibold text-industrial-ink md:text-right">{formatCurrency(itemTotal)}</p>
+                        <button
+                          aria-label={`Remove ${item.title}`}
+                          className="grid size-10 place-items-center rounded-lg border border-black/10 text-industrial-muted transition hover:border-red-700 hover:text-red-700"
+                          type="button"
+                          onClick={() => removeItem(quote.id, item.variantId)}
+                        >
+                          <Trash2 size={17} />
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
               )}
-              disabled={!items.length}
-              type="button"
-              onClick={addQuoteToCart}
-            >
-              <span className="inline-flex items-center gap-2">
-                <ShoppingCart size={19} />
-                Add quote to cart
-              </span>
-            </button>
+            </section>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_340px]">
+              <section className="rounded-lg border border-black/10 bg-white p-4">
+                <InvoiceTextarea
+                  label="Message on invoice"
+                  value={fieldValue(quote.notes, "")}
+                  onChange={(value) => updateField({ notes: value })}
+                />
+                <InvoiceTextarea
+                  label="Jobsite or delivery address"
+                  value={fieldValue(quote.jobsiteAddress, "")}
+                  onChange={(value) => updateField({ customerId: "", jobsiteAddress: value })}
+                />
+              </section>
+              <section className="rounded-lg border border-black/10 bg-white p-4">
+                <SummaryRow label="Subtotal" value={formatCurrency(subtotal)} />
+                <SummaryRow label="Tax" value={formatCurrency(estimatedTax)} />
+                <SummaryRow label="Delivery" value={deliveryFee ? formatCurrency(deliveryFee) : "Free"} />
+                <SummaryRow label="Amount paid" value={formatCurrency(amountPaid)} />
+                <div className="mt-3 flex items-center justify-between border-t border-black/10 pt-3">
+                  <span className="text-base font-semibold text-industrial-ink">Balance due</span>
+                  <span className="text-2xl font-semibold text-industrial-ink">{formatCurrency(balanceDue)}</span>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <aside className="grid h-fit gap-4">
+          <section className="rounded-lg border border-black/10 bg-white/86 p-4 shadow-sm backdrop-blur-xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-industrial-muted">
+              Workflow
+            </p>
+            <div className="mt-4 grid gap-3">
+              {[
+                ["Customer", fieldValue(quote.customerName, "Missing customer")],
+                ["Line items", `${totalQuantity} item${totalQuantity === 1 ? "" : "s"}`],
+                ["Terms", fieldValue(quote.terms, "Due on receipt")],
+                ["Status", status]
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-center gap-3">
+                  <CheckCircle2 className="text-jobsite-pine" size={18} />
+                  <div>
+                    <p className="text-sm font-semibold text-industrial-ink">{label}</p>
+                    <p className="text-xs text-industrial-muted">{value}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-black/10 bg-white/86 p-4 shadow-sm backdrop-blur-xl">
             <button
-              className="mt-3 flex h-12 w-full items-center justify-center gap-2 border border-jobsite-ink bg-white px-5 text-sm font-black uppercase tracking-[0.1em] text-jobsite-ink transition hover:bg-jobsite-paper disabled:cursor-not-allowed disabled:opacity-50"
+              className={cn("flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-industrial-ink text-sm font-semibold text-white transition hover:bg-jobsite-pine", !items.length && "cursor-not-allowed opacity-50")}
               disabled={!items.length}
               type="button"
               onClick={emailQuote}
             >
-              <Mail size={18} />
-              Email quote
+              <Mail size={17} />
+              Send invoice
             </button>
-            <div
-              aria-live="polite"
-              className={cn(
-                "mt-3 text-center text-xs font-black text-jobsite-pine transition",
-                actionMessage ? "opacity-100" : "opacity-0"
-              )}
+            <button
+              className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-black/10 bg-white text-sm font-semibold text-industrial-ink transition hover:bg-[#f7f7f4] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!items.length}
+              type="button"
+              onClick={addQuoteToCart}
             >
-              {actionMessage || "Quote action ready"}
-            </div>
-          </section>
-
-          <section className="border border-jobsite-rail bg-white p-5">
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-jobsite-steel">
-              Fulfillment
-            </p>
-            <div className="mt-4 grid gap-3">
-              <button
-                className="border-2 border-jobsite-ink bg-jobsite-amber p-4 text-left"
-                type="button"
-              >
-                <span className="block text-base font-black text-jobsite-ink">
-                  Pickup
-                </span>
-                <span className="mt-1 block text-sm font-bold text-jobsite-steel">
-                  Bakersfield Store, today
-                </span>
-                <span className="mt-2 block text-sm font-black text-jobsite-pine">
-                  Free
-                </span>
-              </button>
-              <button
-                className="border border-jobsite-rail bg-white p-4 text-left transition hover:border-jobsite-ink"
-                type="button"
-              >
-                <span className="block text-base font-black text-jobsite-ink">
-                  Delivery
-                </span>
-                <span className="mt-1 block text-sm font-bold text-jobsite-steel">
-                  Schedule during checkout
-                </span>
-                <span className="mt-2 block text-sm font-black text-jobsite-pine">
-                  Available
-                </span>
-              </button>
-            </div>
-            <Link
-              className="mt-4 inline-flex items-center gap-2 text-sm font-black text-jobsite-ink underline"
-              href="/"
+              Add invoice to cart
+            </button>
+            <button
+              className="mt-2 flex h-11 w-full items-center justify-center rounded-lg border border-black/10 bg-white text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!items.length}
+              type="button"
+              onClick={() => clearQuote(quote.id)}
             >
-              Check nearby stores
-              <ArrowRight size={16} />
-            </Link>
-          </section>
-
-          <section className="border border-jobsite-rail bg-white p-5">
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-jobsite-steel">
-              Terms
-            </p>
-            <ul className="mt-3 grid gap-2 text-sm font-semibold text-jobsite-steel">
-              <li>Prices are estimated and valid until {expirationDate}.</li>
-              <li>Final tax and delivery charges are calculated at checkout.</li>
-              <li>Quote availability depends on current store inventory.</li>
-            </ul>
+              Clear line items
+            </button>
+            <div aria-live="polite" className={cn("mt-3 text-center text-xs font-semibold text-jobsite-pine transition", actionMessage ? "opacity-100" : "opacity-0")}>
+              {actionMessage || "Ready"}
+            </div>
           </section>
         </aside>
-      </section>
+      </div>
     </main>
   );
 }
 
-function SummaryTile({
-  icon,
+function InvoiceInput({
   label,
-  value
+  value,
+  readOnly = false,
+  onChange
 }: {
-  icon: ReactNode;
   label: string;
   value: string;
+  readOnly?: boolean;
+  onChange: (value: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-3 border border-jobsite-rail bg-white p-4">
-      <div className="grid size-11 place-items-center border border-jobsite-rail bg-jobsite-paper text-jobsite-ink">
-        {icon}
-      </div>
-      <div>
-        <p className="text-xs font-black uppercase tracking-[0.12em] text-jobsite-steel">
-          {label}
-        </p>
-        <p className="mt-1 text-sm font-black text-jobsite-ink">{value}</p>
-      </div>
-    </div>
+    <label className="mt-3 block">
+      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">{label}</span>
+      <input
+        className="mt-1 h-10 w-full rounded-lg border border-black/10 bg-[#f7f7f4] px-3 text-sm text-industrial-ink outline-none focus:bg-white disabled:text-industrial-muted"
+        readOnly={readOnly}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
+
+function InvoiceTextarea({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="mt-3 block first:mt-0">
+      <span className="text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">{label}</span>
+      <textarea
+        className="mt-1 min-h-20 w-full resize-y rounded-lg border border-black/10 bg-[#f7f7f4] px-3 py-2 text-sm leading-6 text-industrial-ink outline-none focus:bg-white"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
   );
 }
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between">
-      <dt className="text-jobsite-steel">{label}</dt>
-      <dd className="text-jobsite-ink">{value}</dd>
+    <div className="flex items-center justify-between py-1.5 text-sm">
+      <span className="text-industrial-muted">{label}</span>
+      <span className="font-medium text-industrial-ink">{value}</span>
     </div>
   );
 }

@@ -58,7 +58,7 @@ const moduleCards = [
 ];
 
 const quickActions = [
-  { label: "Create Order", href: "/admin/orders", icon: Plus },
+  { label: "Create Order", href: "/admin/orders/new", icon: Plus },
   { label: "Create Quote", href: "/admin/quotes", icon: ClipboardList },
   { label: "Add Customer", href: "/admin/customers", icon: UserRound },
   { label: "Add Product", href: "/admin/products/new", icon: PackageCheck }
@@ -96,7 +96,7 @@ export default function AdminPage() {
             </Button>
             <Link
               className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-industrial-rail bg-industrial-ink px-3 text-xs font-black uppercase tracking-[0.08em] text-white transition hover:bg-industrial-pine"
-              href="/admin/orders"
+              href="/admin/orders/new"
             >
               <Plus size={14} aria-hidden="true" />
               New Order

@@ -236,9 +236,14 @@ create table if not exists public.inventory_events (
   created_at timestamptz not null default now()
 );
 
+create sequence if not exists public.order_number_sequence start with 10027;
+create sequence if not exists public.quote_number_sequence start with 10027;
+create sequence if not exists public.invoice_number_sequence start with 10027;
+create sequence if not exists public.purchase_order_number_sequence start with 10027;
+
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
-  order_number text not null unique default ('GW-O-' || upper(substr(gen_random_uuid()::text, 1, 8))),
+  order_number text not null unique default ('Order-' || nextval('public.order_number_sequence')),
   company_id uuid references public.companies(id) on delete set null,
   placed_by_user_id uuid references auth.users(id) on delete set null,
   customer_email text,
@@ -283,7 +288,7 @@ create table if not exists public.saved_carts (
 
 create table if not exists public.quotes (
   id uuid primary key default gen_random_uuid(),
-  quote_number text not null unique default ('GW-Q-' || upper(substr(gen_random_uuid()::text, 1, 8))),
+  quote_number text not null unique default ('Quote-' || nextval('public.quote_number_sequence')),
   company_id uuid references public.companies(id) on delete set null,
   requested_by_user_id uuid references auth.users(id) on delete set null,
   status public.document_status not null default 'draft',
@@ -312,7 +317,7 @@ create table if not exists public.quote_items (
 
 create table if not exists public.invoices (
   id uuid primary key default gen_random_uuid(),
-  invoice_number text not null unique default ('GW-I-' || upper(substr(gen_random_uuid()::text, 1, 8))),
+  invoice_number text not null unique default ('Invoice-' || nextval('public.invoice_number_sequence')),
   order_id uuid references public.orders(id) on delete set null,
   quote_id uuid references public.quotes(id) on delete set null,
   company_id uuid references public.companies(id) on delete set null,
@@ -358,7 +363,7 @@ create table if not exists public.payments (
 
 create table if not exists public.purchase_orders (
   id uuid primary key default gen_random_uuid(),
-  po_number text not null unique default ('GW-PO-' || upper(substr(gen_random_uuid()::text, 1, 8))),
+  po_number text not null unique default ('PO-' || nextval('public.purchase_order_number_sequence')),
   supplier_id uuid not null references public.suppliers(id) on delete restrict,
   status public.purchase_order_status not null default 'draft',
   expected_at date,

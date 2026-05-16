@@ -1,13 +1,21 @@
 "use client";
 
 import { Minus, Plus } from "lucide-react";
+import type { Ref } from "react";
 
 type QuantitySelectorProps = {
   value: number;
   onChange: (value: number) => void;
+  inputRef?: Ref<HTMLInputElement>;
+  inputId?: string;
 };
 
-export function QuantitySelector({ value, onChange }: QuantitySelectorProps) {
+export function QuantitySelector({
+  value,
+  onChange,
+  inputRef,
+  inputId
+}: QuantitySelectorProps) {
   return (
     <div className="flex h-12 w-36 items-center overflow-hidden border border-jobsite-rail bg-white">
       <button
@@ -22,7 +30,9 @@ export function QuantitySelector({ value, onChange }: QuantitySelectorProps) {
         aria-label="Quantity"
         className="h-full w-12 border-x border-jobsite-rail text-center text-base font-semibold outline-none"
         min={1}
+        id={inputId}
         type="number"
+        ref={inputRef}
         value={value}
         onChange={(event) => onChange(Math.max(1, Number(event.target.value)))}
       />

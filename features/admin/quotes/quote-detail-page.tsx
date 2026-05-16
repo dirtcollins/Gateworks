@@ -32,7 +32,7 @@ const unitOptions = ["EA", "FT", "SET", "ROLL", "BOX", "PCS"];
 const sampleQuoteFallbacks: OrderRecord[] = [
   {
     id: "sample-quote-1",
-    orderNumber: "GW-Q-1042",
+    orderNumber: "Quote-10042",
     userId: "sample",
     customerName: "Manny Ortega",
     companyName: "Anderson Fabrication",
@@ -92,7 +92,7 @@ const sampleQuoteFallbacks: OrderRecord[] = [
   },
   {
     id: "sample-quote-2",
-    orderNumber: "GW-Q-1041",
+    orderNumber: "Quote-10041",
     userId: "sample",
     customerName: "Dana Price",
     companyName: "Valley Gate Co.",
@@ -297,7 +297,6 @@ function makeDraftLine(overrides?: Partial<CartItem>) {
     quantityPulled: 0,
     pulled: false,
     pickNotes: "",
-    options: { unit: "EA" },
     ...overrides,
     options: { unit: "EA", ...(overrides?.options || {}) }
   };
@@ -594,7 +593,7 @@ export function QuoteDetailPage({
       price: addedPrice,
       options: {
         ...variant.options,
-        size: variantSummary || "default",
+        length: variantSummary || "default",
         unit: quickAddUnit || "EA"
       },
       pickNotes: ""
@@ -822,13 +821,12 @@ export function QuoteDetailPage({
                   <Select
                     aria-label="Catalog variant"
                     onChange={(event) => {
-                      const variant = getCatalogVariant(
-                        activeCatalogProduct || ({ variants: [] } as Product),
-                        event.target.value
-                      );
+                      const variant = activeCatalogProduct
+                        ? getCatalogVariant(activeCatalogProduct, event.target.value)
+                        : undefined;
                       setQuickAddVariantId(event.target.value);
                       setQuickAddPrice((variant?.price || 0).toFixed(2));
-                      setQuickAddUnit(unitFromVariant(variant));
+                      setQuickAddUnit(unitFromVariant(variant || undefined));
                     }}
                     disabled={!activeCatalogProduct}
                     value={quickAddVariantId}
@@ -921,7 +919,9 @@ export function QuoteDetailPage({
                           <td className="px-3 py-3 text-industrial-steel">
                             {item.quantity}
                           </td>
-                          <td className="px-3 py-3 text-industrial-steel">{item.options?.unit || "EA"}</td>
+                          <td className="px-3 py-3 text-industrial-steel">
+                            {(item.options as Record<string, string | undefined> | undefined)?.unit || "EA"}
+                          </td>
                           <td className="px-3 py-3 text-industrial-steel">
                             {formatCurrency(item.price)}
                           </td>

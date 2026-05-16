@@ -114,14 +114,14 @@ const placeholderSavedQuotes: QuoteRow[] = [
 const placeholderInvoices: InvoiceRow[] = [
   {
     id: "inv-0011",
-    invoiceNumber: "INV-2026-0011",
+    invoiceNumber: "Invoice-10011",
     amount: 1450,
     status: "Open",
     dueDate: "2026-06-02"
   },
   {
     id: "inv-0012",
-    invoiceNumber: "INV-2026-0012",
+    invoiceNumber: "Invoice-10012",
     amount: 930,
     status: "Open",
     dueDate: "2026-06-09"

@@ -1,23 +1,15 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
-  CalendarDays,
-  CheckCircle2,
-  ClipboardCheck,
   FileText,
   Plus,
-  Mail,
-  PackageCheck,
   Search,
-  Send,
-  Truck
+  Send
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Input, Select, Textarea } from "@/components/ui/input";
-import { PageShell } from "@/components/ui/page-shell";
-import { StatGrid } from "@/components/ui/stat-grid";
+import { Input, Select } from "@/components/ui/input";
 import type { OrderStatus } from "@/lib/platform-backend";
 import { useOrderStore, type OrderRecord } from "@/lib/order-store";
 import { formatCurrency } from "@/lib/utils";
@@ -50,7 +42,7 @@ const convertedSampleQuoteStorageKey = "gateworks-converted-sample-quotes";
 const sampleQuoteRequests: OrderRecord[] = [
   {
     id: "sample-quote-1",
-    orderNumber: "GW-Q-1042",
+    orderNumber: "Quote-10042",
     userId: "sample",
     customerName: "Manny Ortega",
     companyName: "Anderson Fabrication",
@@ -134,7 +126,7 @@ const sampleQuoteRequests: OrderRecord[] = [
   },
   {
     id: "sample-quote-2",
-    orderNumber: "GW-Q-1041",
+    orderNumber: "Quote-10041",
     userId: "sample",
     customerName: "Dana Price",
     companyName: "Valley Gate Co.",
@@ -254,6 +246,7 @@ function getQuotedTotal(quote: OrderRecord) {
 }
 
 export function QuotesDashboard() {
+  const router = useRouter();
   const storedOrders = useOrderStore((state) => state.orders);
   const setOrders = useOrderStore((state) => state.setOrders);
   const createOrder = useOrderStore((state) => state.createOrder);
@@ -340,6 +333,7 @@ export function QuotesDashboard() {
 
     setSelectedQuoteId(createdQuote.id);
     setActionMessage("New quote created. Add products and build details from this workspace.");
+    router.push(`/admin/quotes/${createdQuote.id}`);
 
     try {
       const response = await fetch("/api/orders", {
@@ -594,491 +588,207 @@ export function QuotesDashboard() {
   }
 
   return (
-      <PageShell
-        description="Sales counter quote desk for customer quote requests, contractor pricing, drawing review, approval, send-out, and quote-to-order conversion."
-        eyebrow="Gateworks Operations"
-        title="Quotes"
-        actions={
-        <Button
-          disabled={isCreatingQuote}
-          onClick={handleCreateQuote}
-          variant="primary"
-          type="button"
-        >
-          <Plus size={16} />
-          Create new quote
-        </Button>
-      }
-    >
-      <div className="grid gap-5">
-        <StatGrid
-          className="grid-cols-2 overflow-hidden bg-white lg:grid-cols-5"
-          stats={[
-            { label: "Open", value: summary.open },
-            { label: "Needs pricing", value: summary.needsPricing },
-            { label: "Approved", value: summary.approved },
-            { label: "Converted", value: summary.converted },
-            { label: "Pipeline value", value: formatCurrency(summary.value) }
-          ]}
-        />
-
-        {actionMessage ? (
-          <div className="border border-industrial-pine bg-industrial-paper p-3 text-sm font-black text-industrial-pine">
-            {actionMessage}
-          </div>
-        ) : null}
-
-        {backendNotice ? (
-          <div className="border border-amber-700 bg-amber-50 p-3 text-sm font-black text-amber-900">
-            Backend notice: {backendNotice}
-          </div>
-        ) : null}
-
-        <div className="grid gap-5 xl:grid-cols-[430px_1fr]">
-          <Card>
-            <CardHeader>
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
-                  Quote Queue
-                </p>
-                <h2 className="text-xl font-black text-industrial-ink">
-                  Requests and estimates
-                </h2>
+    <main className="px-3 py-4 md:px-6 md:py-6">
+      <div className="mx-auto grid max-w-[1280px] gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="overflow-hidden rounded-lg border border-black/10 bg-white/86 shadow-sm backdrop-blur-xl">
+          <div className="flex flex-col gap-3 border-b border-black/10 bg-[#fafaf8] p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-black/10 bg-white px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">
+                  Quotes
+                </span>
+                <span className="text-sm font-medium text-industrial-muted">
+                  {filteredQuotes.length} active
+                </span>
               </div>
-              <FileText size={20} />
-            </CardHeader>
-            <CardBody className="grid gap-3">
-              <label className="relative">
-                <Search
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-industrial-muted"
-                  size={16}
-                />
-                <Input
-                  className="pl-9"
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search quote, customer, SKU"
-                  value={query}
-                />
-              </label>
+              <h1 className="mt-3 text-2xl font-semibold text-industrial-ink">
+                Quote workspace
+              </h1>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                className="h-10 rounded-lg normal-case tracking-normal"
+                disabled={isCreatingQuote}
+                onClick={handleCreateQuote}
+                type="button"
+                variant="primary"
+              >
+                <Plus size={16} />
+                Create new quote
+              </Button>
+            </div>
+          </div>
 
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Select
-                  onChange={(event) =>
-                    setStatus(event.target.value as "all" | OrderStatus)
-                  }
-                  value={status}
-                >
-                  <option value="all">All statuses</option>
-                  {quotePipeline.map((item) => (
-                    <option key={item} value={item}>
-                      {quoteStatusLabels[item]}
-                    </option>
-                  ))}
-                </Select>
-                <Select
-                  onChange={(event) => setFulfillment(event.target.value)}
-                  value={fulfillment}
-                >
-                  <option value="all">All fulfillment</option>
-                  <option value="pickup">Pickup</option>
-                  <option value="delivery">Delivery</option>
-                </Select>
+          <div className="grid gap-4 border-b border-black/10 p-4 lg:grid-cols-[1fr_220px_200px]">
+            <label className="relative">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-industrial-muted"
+                size={16}
+              />
+              <Input
+                className="h-10 rounded-lg border-black/10 bg-[#f7f7f4] pl-9 text-sm font-medium focus:bg-white"
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search quote, customer, SKU"
+                value={query}
+              />
+            </label>
+            <Select
+              className="h-10 rounded-lg border-black/10 bg-[#f7f7f4] text-sm font-medium focus:bg-white"
+              onChange={(event) =>
+                setStatus(event.target.value as "all" | OrderStatus)
+              }
+              value={status}
+            >
+              <option value="all">All statuses</option>
+              {quotePipeline.map((item) => (
+                <option key={item} value={item}>
+                  {quoteStatusLabels[item]}
+                </option>
+              ))}
+            </Select>
+            <Select
+              className="h-10 rounded-lg border-black/10 bg-[#f7f7f4] text-sm font-medium focus:bg-white"
+              onChange={(event) => setFulfillment(event.target.value)}
+              value={fulfillment}
+            >
+              <option value="all">All fulfillment</option>
+              <option value="pickup">Pickup</option>
+              <option value="delivery">Delivery</option>
+            </Select>
+          </div>
+
+          {actionMessage ? (
+            <div className="border-b border-black/10 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+              {actionMessage}
+            </div>
+          ) : null}
+
+          {backendNotice ? (
+            <div className="border-b border-black/10 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+              Backend notice: {backendNotice}
+            </div>
+          ) : null}
+
+          <div className="overflow-x-auto">
+            <div className="min-w-[980px]">
+              <div className="grid grid-cols-[130px_130px_150px_minmax(220px,1fr)_120px_130px_150px] gap-3 border-b border-black/10 bg-[#f7f7f4] px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">
+                <span>Status</span>
+                <span>Date</span>
+                <span>Number</span>
+                <span>Customer</span>
+                <span className="text-right">Total</span>
+                <span>Fulfillment</span>
+                <span className="text-right">Actions</span>
               </div>
 
-              <div className="max-h-[680px] overflow-auto border border-industrial-rail">
-                {filteredQuotes.map((quote) => (
-                  <button
-                    className={`grid w-full gap-2 border-b border-industrial-rail p-3 text-left transition hover:bg-industrial-paper ${
-                      selectedQuote?.id === quote.id
-                        ? "bg-industrial-amber"
-                        : "bg-white"
-                    }`}
-                    key={quote.id}
-                    onClick={() => setSelectedQuoteId(quote.id)}
-                    type="button"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-black text-industrial-ink">
-                          {quote.orderNumber}
-                        </p>
-                        <p className="text-sm text-industrial-steel">
-                          {quote.companyName || quote.customerName}
-                        </p>
-                      </div>
-                      <span className="border border-industrial-rail bg-white px-2 py-1 text-[11px] font-black uppercase tracking-[0.08em]">
+              {!filteredQuotes.length ? (
+                <div className="grid place-items-center p-10 text-center">
+                  <FileText className="text-industrial-muted" size={24} />
+                  <p className="mt-3 text-sm font-semibold text-industrial-ink">
+                    No matching quote requests.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-black/10">
+                  {filteredQuotes.map((quote) => (
+                    <div
+                      className="grid cursor-pointer grid-cols-[130px_130px_150px_minmax(220px,1fr)_120px_130px_150px] items-center gap-3 px-4 py-3 text-sm transition hover:bg-[#fafaf8]"
+                      key={quote.id}
+                      onClick={() => router.push(`/admin/quotes/${quote.id}`)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          router.push(`/admin/quotes/${quote.id}`);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <span className="inline-flex w-fit rounded border border-black/10 bg-[#f7f7f4] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-industrial-ink">
                         {quoteStatusLabels[quote.status]}
                       </span>
+                      <span>
+                        <span className="block font-medium text-industrial-ink">
+                          {formatDate(quote.requestedDate || quote.createdAt)}
+                        </span>
+                        <span className="text-xs text-industrial-muted">
+                          Requested
+                        </span>
+                      </span>
+                      <span className="font-semibold text-industrial-ink">
+                        {quote.orderNumber}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold text-industrial-ink">
+                          {quote.companyName || quote.customerName}
+                        </span>
+                        <span className="block truncate text-xs text-industrial-muted">
+                          {quote.customerName} · {quote.jobName || "Material quote"}
+                        </span>
+                      </span>
+                      <span className="text-right font-semibold text-industrial-ink">
+                        {formatCurrency(getQuotedTotal(quote))}
+                      </span>
+                      <span className="font-medium capitalize text-industrial-ink">
+                        {quote.fulfillmentMethod}
+                      </span>
+                      <span className="flex justify-end gap-2">
+                        <Link
+                          className="inline-flex h-8 items-center justify-center rounded-lg border border-black/10 bg-white px-3 text-xs font-semibold text-industrial-ink transition hover:bg-[#f7f7f4]"
+                          href={`/admin/quotes/${quote.id}`}
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          Open
+                        </Link>
+                      </span>
                     </div>
-                    <p className="text-xs font-semibold text-industrial-muted">
-                      {quote.fulfillmentMethod} / {formatDate(quote.requestedDate)} /{" "}
-                      {formatCurrency(getQuotedTotal(quote))}
-                    </p>
-                    <Link
-                      className="inline-flex h-7 items-center justify-center rounded border border-industrial-ink bg-white px-2 text-[11px] font-black uppercase tracking-[0.08em] text-industrial-ink"
-                      href={`/admin/quotes/${quote.id}`}
-                    >
-                      Open quote
-                    </Link>
-                  </button>
-                ))}
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
 
-                {!filteredQuotes.length ? (
-                  <div className="grid place-items-center p-8 text-center">
-                    <FileText className="text-industrial-muted" size={24} />
-                    <p className="mt-3 text-sm font-black text-industrial-ink">
-                      No matching quote requests.
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            </CardBody>
-          </Card>
+        <aside className="grid h-fit gap-4">
+          <section className="rounded-lg border border-black/10 bg-white/86 p-4 shadow-sm backdrop-blur-xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-industrial-muted">
+              Workflow
+            </p>
+            <div className="mt-4 grid gap-3">
+              {[
+                ["Open", String(summary.open)],
+                ["Needs pricing", String(summary.needsPricing)],
+                ["Approved", String(summary.approved)],
+                ["Converted", String(summary.converted)]
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between gap-3 border-b border-black/10 pb-2 last:border-b-0 last:pb-0">
+                  <span className="text-sm font-semibold text-industrial-ink">{label}</span>
+                  <span className="text-sm font-semibold text-industrial-muted">{value}</span>
+                </div>
+              ))}
+            </div>
+          </section>
 
-          {selectedQuote ? (
-            <section className="grid content-start gap-5">
-              <Card>
-                <CardHeader>
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
-                      {selectedQuote.orderNumber}
-                    </p>
-                    <h2 className="text-2xl font-black text-industrial-ink">
-                      {selectedQuote.jobName ||
-                        selectedQuote.companyName ||
-                        selectedQuote.customerName}
-                    </h2>
-                    <p className="mt-2 text-sm text-industrial-steel">
-                      {selectedQuote.customerName} / {selectedQuote.email} /{" "}
-                      {selectedQuote.phone}
-                    </p>
-                  </div>
-                  <Select
-                    className="max-w-xs"
-                    onChange={(event) =>
-                      persistQuoteStatus(
-                        selectedQuote.id,
-                        event.target.value as OrderStatus,
-                        "Changed from admin quote desk."
-                      )
-                    }
-                    value={selectedQuote.status}
-                  >
-                    {quotePipeline.map((item) => (
-                      <option key={item} value={item}>
-                        {quoteStatusLabels[item]}
-                      </option>
-                    ))}
-                  </Select>
-                </CardHeader>
-                <CardBody className="grid gap-5">
-                  <div className="grid gap-3 md:grid-cols-4">
-                    <div className="border border-industrial-rail p-3">
-                      <ClipboardCheck size={18} />
-                      <p className="mt-2 text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
-                        Status
-                      </p>
-                      <p className="font-black text-industrial-ink">
-                        {quoteStatusLabels[selectedQuote.status]}
-                      </p>
-                    </div>
-                    <div className="border border-industrial-rail p-3">
-                      <Truck size={18} />
-                      <p className="mt-2 text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
-                        Fulfillment
-                      </p>
-                      <p className="font-black capitalize text-industrial-ink">
-                        {selectedQuote.fulfillmentMethod}
-                      </p>
-                    </div>
-                    <div className="border border-industrial-rail p-3">
-                      <CalendarDays size={18} />
-                      <p className="mt-2 text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
-                        Needed by
-                      </p>
-                      <p className="font-black text-industrial-ink">
-                        {formatDate(selectedQuote.requestedDate)}
-                      </p>
-                      <p className="text-xs text-industrial-steel">
-                        {selectedQuote.requestedWindow}
-                      </p>
-                    </div>
-                    <div className="border border-industrial-rail p-3">
-                      <CheckCircle2 size={18} />
-                      <p className="mt-2 text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
-                        Quote total
-                      </p>
-                      <p className="font-black text-industrial-ink">
-                        {formatCurrency(getQuotedTotal(selectedQuote))}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-                    <Card>
-                      <CardHeader>
-                        <div>
-                          <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
-                            Pricing
-                          </p>
-                          <h3 className="text-lg font-black text-industrial-ink">
-                            Line items
-                          </h3>
-                        </div>
-                      </CardHeader>
-                      <CardBody className="grid gap-3">
-                        {selectedQuote.items.length ? (
-                          selectedQuote.items.map((item) => (
-                            <div
-                              className="grid gap-3 border-b border-industrial-rail pb-3 text-sm sm:grid-cols-[1fr_auto]"
-                              key={item.variantId}
-                            >
-                              <div>
-                                <p className="font-black text-industrial-ink">
-                                  {item.title}
-                                </p>
-                                <p className="text-xs font-semibold text-industrial-muted">
-                                  {item.quantity} x {item.sku}
-                                </p>
-                                <p className="mt-1 text-xs text-industrial-steel">
-                                  {Object.values(item.options || {})
-                                    .filter(Boolean)
-                                    .join(" / ") || "Standard option"}
-                                </p>
-                              </div>
-                              <div className="text-left sm:text-right">
-                                <p className="font-black text-industrial-ink">
-                                  {formatCurrency(item.price * item.quantity)}
-                                </p>
-                                <p className="text-xs text-industrial-muted">
-                                  {formatCurrency(item.price)} each
-                                </p>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-sm text-industrial-steel">
-                            Submitted checkout quote requests will show requested
-                            products here.
-                          </p>
-                        )}
-                      </CardBody>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <div>
-                          <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
-                            Quote Math
-                          </p>
-                          <h3 className="text-lg font-black text-industrial-ink">
-                            Estimate
-                          </h3>
-                        </div>
-                      </CardHeader>
-                      <CardBody className="grid gap-3 text-sm">
-                        <div className="flex justify-between gap-4">
-                          <span className="text-industrial-steel">Subtotal</span>
-                          <strong>{formatCurrency(getQuoteSubtotal(selectedQuote))}</strong>
-                        </div>
-                        <div className="flex justify-between gap-4">
-                          <span className="text-industrial-steel">Delivery</span>
-                          <strong>
-                            {formatCurrency(
-                              selectedQuote.fulfillmentMethod === "delivery" &&
-                                getQuoteSubtotal(selectedQuote) < 500
-                                ? 85
-                                : 0
-                            )}
-                          </strong>
-                        </div>
-                        <div className="flex justify-between gap-4">
-                          <span className="text-industrial-steel">
-                            Tax after approval
-                          </span>
-                          <strong>
-                            {selectedQuote.status === "confirmed"
-                              ? formatCurrency(getQuoteSubtotal(selectedQuote) * taxRate)
-                              : "Pending"}
-                          </strong>
-                        </div>
-                        <div className="border-t border-industrial-rail pt-3">
-                          <div className="flex justify-between gap-4 text-lg">
-                            <span className="font-black text-industrial-ink">
-                              Total
-                            </span>
-                            <strong>{formatCurrency(getQuotedTotal(selectedQuote))}</strong>
-                          </div>
-                        </div>
-                      </CardBody>
-                    </Card>
-                  </div>
-
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <Card>
-                      <CardHeader>
-                        <h3 className="text-lg font-black text-industrial-ink">
-                          Jobsite and request notes
-                        </h3>
-                      </CardHeader>
-                      <CardBody className="text-sm leading-6 text-industrial-steel">
-                        <p className="font-black text-industrial-ink">
-                          {selectedQuote.jobsiteAddress.addressLine1 || "Pickup at yard"}
-                        </p>
-                        {selectedQuote.jobsiteAddress.addressLine2 ? (
-                          <p>{selectedQuote.jobsiteAddress.addressLine2}</p>
-                        ) : null}
-                        <p>
-                          {[
-                            selectedQuote.jobsiteAddress.city,
-                            selectedQuote.jobsiteAddress.state,
-                            selectedQuote.jobsiteAddress.postalCode
-                          ]
-                            .filter(Boolean)
-                            .join(" ") || "No delivery address supplied."}
-                        </p>
-                        <p className="mt-3">
-                          {selectedQuote.jobsiteAddress.notes || "No notes provided."}
-                        </p>
-                      </CardBody>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <h3 className="text-lg font-black text-industrial-ink">
-                          Staff pricing note
-                        </h3>
-                      </CardHeader>
-                      <CardBody>
-                        <Textarea
-                          onChange={(event) => setStaffNote(event.target.value)}
-                          value={staffNote}
-                        />
-                      </CardBody>
-                    </Card>
-                  </div>
-
-                  <Card>
-                    <CardHeader>
-                      <h3 className="text-lg font-black text-industrial-ink">
-                        Customer drawings
-                      </h3>
-                    </CardHeader>
-                    <CardBody className="grid gap-3">
-                      {selectedQuote.drawings.length ? (
-                        selectedQuote.drawings.map((drawing) => (
-                          <div
-                            className="grid gap-2 border border-industrial-rail p-3 sm:grid-cols-[1fr_auto]"
-                            key={drawing.id}
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate font-black text-industrial-ink">
-                                {drawing.fileName}
-                              </p>
-                              <p className="text-xs font-semibold text-industrial-muted">
-                                {drawing.fileType} /{" "}
-                                {(drawing.fileSize / 1024 / 1024).toFixed(2)} MB
-                              </p>
-                            </div>
-                            {drawing.publicUrl ? (
-                              <a
-                                className="inline-flex h-9 items-center justify-center border border-industrial-ink px-3 text-xs font-black uppercase tracking-[0.08em] text-industrial-ink"
-                                href={drawing.publicUrl}
-                                rel="noreferrer"
-                                target="_blank"
-                              >
-                                Open
-                              </a>
-                            ) : (
-                              <span className="self-center text-xs font-black uppercase tracking-[0.08em] text-industrial-muted">
-                                Metadata saved
-                              </span>
-                            )}
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-industrial-steel">
-                          No customer drawings attached.
-                        </p>
-                      )}
-                    </CardBody>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <h3 className="text-lg font-black text-industrial-ink">
-                        Activity
-                      </h3>
-                    </CardHeader>
-                    <CardBody className="grid gap-3">
-                      {selectedQuote.activity.map((event) => (
-                        <div className="border border-industrial-rail p-3" key={event.id}>
-                          <p className="font-black text-industrial-ink">
-                            {event.label}
-                          </p>
-                          <p className="mt-1 text-sm text-industrial-steel">
-                            {event.detail}
-                          </p>
-                        </div>
-                      ))}
-                    </CardBody>
-                  </Card>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      onClick={() =>
-                        persistQuoteStatus(
-                          selectedQuote.id,
-                          "confirmed",
-                          "Quote approved with pricing and ready to send."
-                        )
-                      }
-                      variant="primary"
-                    >
-                      <CheckCircle2 size={16} />
-                      Approve quote
-                    </Button>
-                    <Button
-                      onClick={() =>
-                        persistQuoteStatus(
-                          selectedQuote.id,
-                          "submitted",
-                          "Quote marked ready for customer send-out."
-                        )
-                      }
-                    >
-                      <Send size={16} />
-                      Mark ready to send
-                    </Button>
-                    <Button
-                      onClick={() => convertQuoteToOrder(selectedQuote)}
-                    >
-                      <PackageCheck size={16} />
-                      Convert to order
-                    </Button>
-                    <Button
-                      onClick={() =>
-                        persistQuoteStatus(
-                          selectedQuote.id,
-                          "cancelled",
-                          "Quote declined or voided from quote desk."
-                        )
-                      }
-                      variant="danger"
-                    >
-                      Decline
-                    </Button>
-                    <Button onClick={() => openEmailPreview(selectedQuote)}>
-                      <Mail size={16} />
-                      Email preview
-                    </Button>
-                  </div>
-                </CardBody>
-              </Card>
-            </section>
-          ) : null}
-        </div>
+          <section className="rounded-lg border border-black/10 bg-white/86 p-4 shadow-sm backdrop-blur-xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-industrial-muted">
+              Pipeline value
+            </p>
+            <p className="mt-2 text-3xl font-semibold text-industrial-ink">
+              {formatCurrency(summary.value)}
+            </p>
+            <Button
+              className="mt-4 h-11 w-full rounded-lg normal-case tracking-normal"
+              disabled={isCreatingQuote}
+              onClick={handleCreateQuote}
+              type="button"
+              variant="primary"
+            >
+              <Send size={16} />
+              New quote
+            </Button>
+          </section>
+        </aside>
       </div>
-    </PageShell>
+    </main>
   );
 }

@@ -14,11 +14,14 @@ export function AdminOrderBootstrap() {
     if (hasRemoteOrdersLoaded || isRemoteOrdersLoading) return;
 
     let mounted = true;
-    setRemoteOrdersLoading(true);
+    let idleHandle: number | null = null;
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
     async function hydrateOrders() {
+      setRemoteOrdersLoading(true);
+
       try {
-        const response = await fetch("/api/orders?limit=250&includeItems=false", {
+        const response = await fetch("/api/orders?limit=75&includeItems=false", {
           cache: "no-store"
         });
 
@@ -44,10 +47,22 @@ export function AdminOrderBootstrap() {
       }
     }
 
-    void hydrateOrders();
+    if ("requestIdleCallback" in window) {
+      idleHandle = window.requestIdleCallback(() => void hydrateOrders(), {
+        timeout: 1800
+      });
+    } else {
+      timeoutHandle = globalThis.setTimeout(() => void hydrateOrders(), 500);
+    }
 
     return () => {
       mounted = false;
+      if (idleHandle !== null && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleHandle);
+      }
+      if (timeoutHandle) {
+        globalThis.clearTimeout(timeoutHandle);
+      }
     };
   }, [hasRemoteOrdersLoaded, isRemoteOrdersLoading, setOrders, setRemoteOrdersLoading, setRemoteOrdersLoaded]);
 
