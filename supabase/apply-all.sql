@@ -1974,6 +1974,11 @@ alter table public.orders add column if not exists po_number text;
 alter table public.orders add column if not exists po_status text not null default 'none';
 alter table public.orders add column if not exists source_quote_id uuid;
 
+-- order_items.unit_cost is written at order creation for margin reporting;
+-- ensure it exists on legacy databases or every order-with-items insert fails.
+alter table public.order_items
+  add column if not exists unit_cost numeric(12, 2) not null default 0;
+
 -- ---------------------------------------------------------------------------
 -- Procurement orders: internal POs issued to suppliers to restock inventory.
 -- Kept separate from the legacy `purchase_orders` table (which is bound to the
