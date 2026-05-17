@@ -1,5 +1,7 @@
 import rawCatalog from "@/data/national_hardware_gate_products.json";
+import { applyTubingPricing } from "@/lib/pricing";
 import type { Category, Product, ProductVariant } from "@/lib/types";
+import { getImageSet } from "@/lib/product-image";
 import { slugify } from "@/lib/utils";
 
 type RawProduct = {
@@ -32,6 +34,13 @@ type RawProduct = {
   keyed?: boolean;
   pin_type?: string;
   source_categories?: string[];
+  tube_shape?: string;
+  tube_size?: string;
+  wall_thickness?: string;
+  gauge?: string;
+  stock_length?: string;
+  typical_use?: string;
+  photo_source?: string;
 };
 
 const rawProducts = (rawCatalog as { products: RawProduct[] }).products;
@@ -87,8 +96,22 @@ function uniqueValues(values: Array<string | undefined>) {
   return Array.from(new Set(values.filter((value): value is string => Boolean(value))));
 }
 
+function getSeededInventoryQuantity(seed: string) {
+  let hash = 0;
+
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+
+  return 30 + (hash % 46);
+}
+
 function getProductTitle(first: RawProduct, variants: ProductVariant[]) {
   const baseTitle = first.display_name || first.website_name;
+
+  if (first.source === "Home Depot") {
+    return baseTitle;
+  }
 
   if (variants.length !== 1) {
     return baseTitle;
@@ -164,7 +187,9 @@ function buildProduct(groupSlug: string, groupItems: RawProduct[]): Product {
         sku: item.stock_number || item.catalog_number || id,
         price: Number(item.price || first.price || 0),
         inventory: "in_stock" as const,
-        inventoryQuantity: 100,
+        inventoryQuantity: getSeededInventoryQuantity(
+          `${groupSlug}:${item.stock_number || item.catalog_number || id}`
+        ),
         image,
         options: {
           length: item.size || "Standard",
@@ -223,14 +248,18 @@ function buildProduct(groupSlug: string, groupItems: RawProduct[]): Product {
       `${first.website_name || title} for gates, fencing, and exterior construction work.${featureText}`.trim(),
     category,
     price: getDisplayPrice(variants),
-    images: imageUrls.map((url, index) => ({
-      id: `${groupSlug}-image-${index + 1}`,
-      productId: groupSlug,
-      variantId: index === 0 ? variants[0]?.id : undefined,
-      url,
-      alt: `${title} image ${index + 1}`,
-      sortOrder: index + 1
-    })),
+    images: imageUrls.map((url, index) => {
+      const imageSet = getImageSet(url);
+      return {
+        id: `${groupSlug}-image-${index + 1}`,
+        productId: groupSlug,
+        variantId: index === 0 ? variants[0]?.id : undefined,
+        url,
+        alt: `${title} image ${index + 1}`,
+        sortOrder: index + 1,
+        sizes: imageSet
+      };
+    }),
     variants,
     specifications: {
       Brand: first.brand || first.source || "Construction Supply",
@@ -467,15 +496,99 @@ function withAdjustOMaticLatchDetails(product: Product): Product {
   };
 }
 
+function withHomeDepotMilwaukeeM18Details(product: Product): Product {
+  if (
+    ![
+      "milwaukee-m18-impacts",
+      "milwaukee-m18-drills",
+      "milwaukee-m18-sawzalls",
+      "milwaukee-m18-circular-saws"
+    ].includes(product.category.slug)
+  ) {
+    return product;
+  }
+
+  const variant = product.variants[0];
+  const family = product.specifications["Catalog Number"] || variant?.sku || "M18";
+
+  return {
+    ...product,
+    description:
+      `${product.title} sourced from Home Depot for the Milwaukee M18 18V power-tool catalog. Battery and charger contents vary by kit configuration.`,
+    details: [
+      "Milwaukee M18 18V platform item from Home Depot.",
+      "Model, kit contents, price, and product URL are preserved from the Home Depot listing.",
+      "Use the category filter to separate impacts, drills, SAWZALL and reciprocating saws, and circular saws.",
+      "Only M18 listings are included in this Home Depot import."
+    ],
+    specifications: {
+      ...product.specifications,
+      Brand: "Milwaukee",
+      Category: product.category.name,
+      Platform: "M18 18V",
+      "Product Family": family,
+      "Retail Source": "Home Depot",
+      "Battery Platform": "M18",
+      "Subcompact Platform Included": "No"
+    }
+  };
+}
+
+function withMetalTubingDetails(product: Product): Product {
+  if (!["square-steel-tubing", "rectangle-steel-tubing"].includes(product.category.slug)) {
+    return product;
+  }
+
+  const sourceRows = rawProducts.filter(
+    (item) => item.product_grouping === product.id && item.source === "JWM Metal Supply"
+  );
+  const first = sourceRows[0];
+  const wallThicknesses = uniqueValues(sourceRows.map((item) => item.wall_thickness));
+  const gauges = uniqueValues(sourceRows.map((item) => item.gauge));
+  const typicalUse = first?.typical_use || "Gate fabrication and metalwork";
+  const stockLength = first?.stock_length || "20 ft";
+
+  return applyTubingPricing({
+    ...product,
+    description:
+      `${product.title} in raw mill finish steel for gate frames, rails, posts, and ornamental fabrication. Stocked wall thicknesses are grouped as selectable variants for estimating and quote workflows.`,
+    details: [
+      `Common use: ${typicalUse}.`,
+      `Stock length reference: ${stockLength}.`,
+      "Raw mill finish steel can be cut, welded, drilled, and finished for exterior gate and fence work.",
+      "Pricing is calculated from tubing dimensions, 20 ft length, steel density, and the global CWT setting."
+    ],
+    specifications: {
+      ...product.specifications,
+      Brand: "Steel Supply",
+      Category: product.category.name,
+      "Product Family": product.category.name,
+      "Tube Size": first?.tube_size || product.title.replace(product.category.name, "").trim(),
+      "Wall Thicknesses": wallThicknesses.join(", "),
+      Gauges: gauges.join(", "),
+      "Stock Length": stockLength,
+      Finish: "Raw Mill Finish",
+      "Typical Use": typicalUse,
+      Supplier: "JWM Metal Supply",
+      "Photo Source": first?.photo_source || "JWM Metal Supply"
+    }
+  });
+}
+
 const displayProductEntries = Array.from(groupedProducts.entries()).filter(
   ([, groupItems], index) =>
-    index < 50 || groupItems.some((item) => item.source === "Hoover Fence")
+    index < 50 ||
+    groupItems.some((item) =>
+      ["Hoover Fence", "Home Depot", "JWM Metal Supply"].includes(item.source || "")
+    )
 );
 
 export const products: Product[] = displayProductEntries
   .map(([groupSlug, groupItems]) => buildProduct(groupSlug, groupItems))
   .map(withDecorativeTHingeVariants)
-  .map(withAdjustOMaticLatchDetails);
+  .map(withAdjustOMaticLatchDetails)
+  .map(withHomeDepotMilwaukeeM18Details)
+  .map(withMetalTubingDetails);
 
 export const categories = uniqueCategories(rawProducts);
 
@@ -498,13 +611,15 @@ function mergeProductData(fallback: Product, primary: Product): Product {
   primary.images.forEach((image) => imageMap.set(image.url, image));
   variants.forEach((variant, index) => {
     if (!imageMap.has(variant.image)) {
+      const imageSet = getImageSet(variant.image);
       imageMap.set(variant.image, {
         id: `${primary.id}-variant-image-${index + 1}`,
         productId: primary.id,
         variantId: variant.id,
         url: variant.image,
         alt: `${primary.title} image ${index + 1}`,
-        sortOrder: index + 1
+        sortOrder: index + 1,
+        sizes: imageSet
       });
     }
   });
@@ -516,7 +631,7 @@ function mergeProductData(fallback: Product, primary: Product): Product {
       ? fallback.description
       : primary.description;
 
-  return {
+  return applyTubingPricing({
     ...fallback,
     ...primary,
     description,
@@ -531,7 +646,7 @@ function mergeProductData(fallback: Product, primary: Product): Product {
       ...primary.specifications
     },
     details
-  };
+  });
 }
 
 export function mergeCatalogProducts(
@@ -549,7 +664,7 @@ export function mergeCatalogProducts(
     productMap.set(product.slug, fallback ? mergeProductData(fallback, product) : product);
   });
 
-  return Array.from(productMap.values());
+  return Array.from(productMap.values()).map((product) => applyTubingPricing(product));
 }
 
 export function getProduct(slug: string) {

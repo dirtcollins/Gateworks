@@ -23,7 +23,13 @@ import { useCartStore } from "@/lib/cart-store";
 import { useListStore } from "@/lib/list-store";
 import { useQuoteStore } from "@/lib/quote-store";
 import { useRecentlyViewedStore } from "@/lib/recently-viewed-store";
+import {
+  calculateTubingCwtPricing,
+  formatPricingMethod,
+  isTubingProduct
+} from "@/lib/pricing";
 import type { Product, ProductVariant } from "@/lib/types";
+import { getProductImageForSize } from "@/lib/product-image";
 import { cn, formatCurrency } from "@/lib/utils";
 
 type ProductPageClientProps = {
@@ -38,6 +44,42 @@ const optionLabels: Array<keyof ProductVariant["options"]> = [
   "finish",
   "color"
 ];
+const tubingLengthOptions = [20, 24];
+
+function pickImageSource(product: Product, imageUrl?: string, size: "thumb" | "card" | "medium" | "full" = "card") {
+  const normalized = imageUrl || "/assets/logo.svg";
+  const matchedImage = product.images.find((candidate) => candidate.url === normalized);
+
+  if (matchedImage?.sizes) {
+    return getProductImageForSize(matchedImage.url, size, matchedImage.sizes);
+  }
+
+  if (matchedImage) {
+    return getProductImageForSize(normalized, size);
+  }
+
+  const primaryImage = product.images[0];
+  if (primaryImage?.sizes) {
+    return getProductImageForSize(primaryImage.url, size, primaryImage.sizes);
+  }
+
+  return getProductImageForSize(primaryImage?.url, size) || getProductImageForSize(normalized, size);
+}
+
+function getTubingWallLabel(variant: ProductVariant) {
+  const optionLength = variant.options.length || "";
+  const [, wallLabel] = optionLength.split("/");
+
+  if (wallLabel?.trim()) {
+    return wallLabel.trim();
+  }
+
+  if (variant.wall_thickness_in) {
+    return `${variant.wall_thickness_in.toFixed(3).replace(/^0/, "")}" wall`;
+  }
+
+  return "Standard wall";
+}
 
 export function ProductPageClient({
   product,
@@ -48,6 +90,7 @@ export function ProductPageClient({
     product.variants.find((variant) => variant.inventory === "in_stock") ||
     product.variants[0];
   const [selectedVariant, setSelectedVariant] = useState(firstAvailableVariant);
+  const [selectedTubingLengthFt, setSelectedTubingLengthFt] = useState(20);
   const [selectedImage, setSelectedImage] = useState(
     firstAvailableVariant?.image || product.images[0]?.url || "/assets/logo.svg"
   );
@@ -95,6 +138,16 @@ export function ProductPageClient({
     return urls;
   }, [product.images, product.variants, selectedVariant.image]);
 
+  const galleryImages = useMemo(
+    () => allImages.map((image) => ({ source: image, thumb: pickImageSource(product, image, "thumb") })),
+    [allImages, product]
+  );
+
+  const selectedImageSource = useMemo(
+    () => pickImageSource(product, selectedImage, "medium"),
+    [product, selectedImage]
+  );
+
   const optionValues = useMemo(() => {
     return optionLabels.reduce<Record<string, string[]>>((values, option) => {
       values[option] = Array.from(
@@ -105,9 +158,70 @@ export function ProductPageClient({
   }, [product.variants]);
 
   const configurableOptions = useMemo(
-    () => optionLabels.filter((option) => optionValues[option]?.length > 1),
-    [optionValues]
+    () =>
+      optionLabels.filter((option) => {
+        if (isTubingProduct(product) && option === "length") {
+          return false;
+        }
+
+        return optionValues[option]?.length > 1;
+      }),
+    [optionValues, product]
   );
+
+  const tubingWallOptions = useMemo(() => {
+    if (!isTubingProduct(product)) return [];
+
+    return product.variants.map((variant) => ({
+      id: variant.id,
+      label: getTubingWallLabel(variant)
+    }));
+  }, [product]);
+
+  const selectedTubingWallLabel = getTubingWallLabel(selectedVariant);
+
+  const pricedSelectedVariant = useMemo(() => {
+    if (!isTubingProduct(product) || selectedVariant.pricing_method !== "cwt_calculated") {
+      return selectedVariant;
+    }
+
+    const pricing = calculateTubingCwtPricing({
+      width_in: selectedVariant.width_in || 0,
+      height_in: selectedVariant.height_in || 0,
+      wall_thickness_in: selectedVariant.wall_thickness_in || 0,
+      length_ft: selectedTubingLengthFt,
+      material_density_lb_per_in3: selectedVariant.material_density_lb_per_in3,
+      steel_cwt_price: selectedVariant.steel_cwt_price,
+      manual_price: selectedVariant.manual_price,
+      pricing_method: selectedVariant.pricing_method
+    });
+
+    if (!pricing) return selectedVariant;
+
+    return {
+      ...selectedVariant,
+      ...pricing,
+      price: pricing.final_price,
+      sku: `${selectedVariant.sku}-${selectedTubingLengthFt}FT`,
+      options: {
+        ...selectedVariant.options,
+        length: `${selectedTubingLengthFt} ft`,
+        wall: selectedTubingWallLabel
+      }
+    };
+  }, [product, selectedTubingLengthFt, selectedTubingWallLabel, selectedVariant]);
+
+  const selectedVariantCardImage = useMemo(
+    () => pickImageSource(product, pricedSelectedVariant.image, "card"),
+    [product, pricedSelectedVariant.image]
+  );
+
+  const actionVariantId =
+    pricedSelectedVariant.id === selectedVariant.id &&
+    isTubingProduct(product) &&
+    pricedSelectedVariant.pricing_method === "cwt_calculated"
+      ? `${selectedVariant.id}-${selectedTubingLengthFt}ft`
+      : pricedSelectedVariant.id;
 
   const recentlyViewed = recentlyViewedIds
     .filter((id) => id !== product.id)
@@ -148,16 +262,26 @@ export function ProductPageClient({
     setSelectedVariant(nextVariant);
   }
 
+  function handleTubingWallChange(variantId: string) {
+    const nextVariant = product.variants.find((variant) => variant.id === variantId);
+    if (nextVariant) {
+      setSelectedVariant(nextVariant);
+    }
+  }
+
   function addToCart() {
     addItem({
       productId: product.id,
-      variantId: selectedVariant.id,
+      variantId: actionVariantId,
       title: product.title,
-      sku: selectedVariant.sku,
-      image: selectedVariant.image,
-      price: selectedVariant.price,
+      sku: pricedSelectedVariant.sku,
+      image: selectedVariantCardImage,
+      price: pricedSelectedVariant.price,
+      weightLbs: pricedSelectedVariant.calculated_weight_lb,
+      cwtPrice: pricedSelectedVariant.steel_cwt_price,
+      pricingMethod: pricedSelectedVariant.pricing_method,
       quantity,
-      options: selectedVariant.options
+      options: pricedSelectedVariant.options
     });
     setJustAdded(true);
     window.setTimeout(() => setJustAdded(false), 1200);
@@ -165,25 +289,28 @@ export function ProductPageClient({
 
   const currentActionItem = {
     productId: product.id,
-    variantId: selectedVariant.id,
+    variantId: actionVariantId,
     title: product.title,
-    sku: selectedVariant.sku,
-    image: selectedVariant.image,
-    price: selectedVariant.price,
+    sku: pricedSelectedVariant.sku,
+    image: selectedVariantCardImage,
+    price: pricedSelectedVariant.price,
+    weightLbs: pricedSelectedVariant.calculated_weight_lb,
+    cwtPrice: pricedSelectedVariant.steel_cwt_price,
+    pricingMethod: pricedSelectedVariant.pricing_method,
     quantity,
-    options: selectedVariant.options
+    options: pricedSelectedVariant.options
   };
 
   const savedListIds = lists
     .filter((list) =>
-      list.items.some((item) => item.variantId === selectedVariant.id)
+      list.items.some((item) => item.variantId === actionVariantId)
     )
     .map((list) => list.id);
   const isSavedToList = savedListIds.length > 0;
   const activeQuote = quotes.find((quote) => quote.id === activeQuoteId) || quotes[0];
   const savedQuoteIds = quotes
     .filter((quote) =>
-      quote.items.some((item) => item.variantId === selectedVariant.id)
+      quote.items.some((item) => item.variantId === actionVariantId)
     )
     .map((quote) => quote.id);
   const isAddedToQuote = savedQuoteIds.length > 0;
@@ -303,7 +430,7 @@ export function ProductPageClient({
       if (navigator.share) {
         await navigator.share({
           title: product.title,
-          text: `${product.title} - ${selectedVariant.sku}`,
+          text: `${product.title} - ${pricedSelectedVariant.sku}`,
           url: productUrl
         });
         showActionMessage("Share sheet opened.");
@@ -320,7 +447,14 @@ export function ProductPageClient({
   }
 
   const isInStock = selectedVariant.inventory === "in_stock";
-  const skuTail = selectedVariant.sku.replace(/[^0-9]/g, "").slice(-6) || "613371";
+  const selectedPriceLabel =
+    pricedSelectedVariant.price > 0 ? formatCurrency(pricedSelectedVariant.price) : "Quote required";
+  const selectedTotalLabel =
+    pricedSelectedVariant.price > 0
+      ? formatCurrency(pricedSelectedVariant.price * quantity)
+      : "quote required";
+  const hasCalculatedPricing = pricedSelectedVariant.pricing_method === "cwt_calculated";
+  const skuTail = pricedSelectedVariant.sku.replace(/[^0-9]/g, "").slice(-6) || "613371";
 
   return (
     <main className="pb-24 md:pb-0">
@@ -349,32 +483,34 @@ export function ProductPageClient({
               alt={product.title}
               className="object-contain p-2"
               fill
+              quality={90}
               sizes="(max-width: 1024px) 100vw, 44vw"
-              src={selectedImage}
+              src={selectedImageSource}
             />
           </div>
           <p className="mt-1 text-center text-xs text-jobsite-steel">
             Click thumbnails to change image
           </p>
           <div className="mt-3 grid grid-cols-5 gap-2">
-            {allImages.slice(0, 8).map((image) => (
+            {galleryImages.slice(0, 8).map((image) => (
               <button
-                key={image}
+                key={image.source}
                 className={cn(
                   "relative aspect-square border bg-white",
-                  selectedImage === image
+                  selectedImage === image.source
                     ? "border-2 border-jobsite-safety"
                     : "border-jobsite-rail"
                 )}
                 type="button"
-                onClick={() => setSelectedImage(image)}
+                onClick={() => setSelectedImage(image.source)}
               >
                 <Image
                   alt={`${product.title} thumbnail`}
                   className="object-contain p-2"
                   fill
+                  quality={60}
                   sizes="88px"
-                  src={image}
+                  src={image.thumb}
                 />
               </button>
             ))}
@@ -385,7 +521,7 @@ export function ProductPageClient({
           <div className="border border-jobsite-rail bg-white p-4">
             <div className="mb-2 grid gap-1 text-[11px] font-bold uppercase text-jobsite-steel sm:grid-cols-2">
               <span>Internet # {skuTail}</span>
-              <span>Model # {selectedVariant.sku}</span>
+              <span>Model # {pricedSelectedVariant.sku}</span>
               <span>Store SKU # {skuTail.slice(-5)}</span>
               <span>{product.category.name}</span>
             </div>
@@ -416,15 +552,55 @@ export function ProductPageClient({
             </p>
             <div className="mt-1 flex items-end gap-2">
               <p className="text-4xl font-black text-jobsite-ink">
-                {formatCurrency(selectedVariant.price)}
+                {selectedPriceLabel}
               </p>
-              <p className="pb-1 text-sm font-semibold text-jobsite-pine">
-                Save 9%
-              </p>
+              {pricedSelectedVariant.price > 0 ? (
+                <p className="pb-1 text-sm font-semibold text-jobsite-pine">
+                  Save 9%
+                </p>
+              ) : null}
             </div>
             <p className="mt-1 text-xs font-semibold text-jobsite-steel">
-              Buy 10 or more for contractor volume pricing.
+              {pricedSelectedVariant.price > 0
+                ? "Buy 10 or more for contractor volume pricing."
+                : "Add to quote for supplier-specific pricing."}
             </p>
+            {hasCalculatedPricing ? (
+              <dl className="mt-4 grid gap-2 border-t border-jobsite-rail pt-3 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="text-xs font-black uppercase tracking-[0.12em] text-jobsite-steel">
+                    Pricing Method
+                  </dt>
+                  <dd className="mt-1 font-black text-jobsite-ink">
+                    {formatPricingMethod(pricedSelectedVariant.pricing_method)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-black uppercase tracking-[0.12em] text-jobsite-steel">
+                    Weight
+                  </dt>
+                  <dd className="mt-1 font-black text-jobsite-ink">
+                    {pricedSelectedVariant.calculated_weight_lb?.toFixed(2) || "0.00"} lb
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-black uppercase tracking-[0.12em] text-jobsite-steel">
+                    CWT
+                  </dt>
+                  <dd className="mt-1 font-black text-jobsite-ink">
+                    {formatCurrency(pricedSelectedVariant.steel_cwt_price || 0)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-black uppercase tracking-[0.12em] text-jobsite-steel">
+                    Calculated
+                  </dt>
+                  <dd className="mt-1 font-black text-jobsite-ink">
+                    {formatCurrency(pricedSelectedVariant.calculated_price || 0)}
+                  </dd>
+                </div>
+              </dl>
+            ) : null}
           </div>
 
           <div className="mt-3 border border-jobsite-rail bg-white p-4">
@@ -434,6 +610,50 @@ export function ProductPageClient({
               <li>• Built for durable construction ecommerce workflows.</li>
             </ul>
           </div>
+
+          {isTubingProduct(product) ? (
+            <div className="mt-3 border border-jobsite-rail bg-white p-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="grid gap-2">
+                  <span className="text-sm font-bold text-jobsite-ink">
+                    Length
+                  </span>
+                  <select
+                    className="h-11 border border-jobsite-rail bg-white px-3 text-sm font-extrabold text-jobsite-ink outline-none focus:border-jobsite-ink"
+                    value={selectedTubingLengthFt}
+                    onChange={(event) =>
+                      setSelectedTubingLengthFt(Number(event.target.value))
+                    }
+                  >
+                    {tubingLengthOptions.map((lengthFt) => (
+                      <option key={lengthFt} value={lengthFt}>
+                        {lengthFt} ft
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {tubingWallOptions.length > 1 ? (
+                  <label className="grid gap-2">
+                    <span className="text-sm font-bold text-jobsite-ink">
+                      Wall
+                    </span>
+                    <select
+                      className="h-11 border border-jobsite-rail bg-white px-3 text-sm font-extrabold text-jobsite-ink outline-none focus:border-jobsite-ink"
+                      value={selectedVariant.id}
+                      onChange={(event) => handleTubingWallChange(event.target.value)}
+                    >
+                      {tubingWallOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
 
           {configurableOptions.length ? (
             <div className="mt-3 border border-jobsite-rail bg-white p-4">
@@ -722,8 +942,9 @@ export function ProductPageClient({
                   alt={product.title}
                   className="object-contain p-2"
                   fill
+                  quality={60}
                   sizes="88px"
-                  src={selectedVariant.image}
+                  src={selectedVariantCardImage}
                 />
               </div>
               <div>
@@ -731,10 +952,10 @@ export function ProductPageClient({
                   {product.title}
                 </p>
                 <p className="mt-1 text-xs font-bold text-jobsite-steel">
-                  SKU {selectedVariant.sku}
+                  SKU {pricedSelectedVariant.sku}
                 </p>
                 <p className="mt-2 text-sm font-black text-jobsite-ink">
-                  {formatCurrency(selectedVariant.price)}
+                  {selectedPriceLabel}
                   <span className="ml-2 text-xs font-bold text-jobsite-steel">
                     Qty {quantity}
                   </span>
@@ -875,8 +1096,9 @@ export function ProductPageClient({
                   alt={product.title}
                   className="object-contain p-2"
                   fill
+                  quality={60}
                   sizes="88px"
-                  src={selectedVariant.image}
+                  src={selectedVariantCardImage}
                 />
               </div>
               <div>
@@ -884,10 +1106,10 @@ export function ProductPageClient({
                   {product.title}
                 </p>
                 <p className="mt-1 text-xs font-bold text-jobsite-steel">
-                  SKU {selectedVariant.sku}
+                  SKU {pricedSelectedVariant.sku}
                 </p>
                 <p className="mt-2 text-sm font-black text-jobsite-ink">
-                  {formatCurrency(selectedVariant.price)}
+                  {selectedPriceLabel}
                   <span className="ml-2 text-xs font-bold text-jobsite-steel">
                     Qty {quantity}
                   </span>
@@ -996,9 +1218,7 @@ export function ProductPageClient({
         >
           <span className="inline-flex items-center gap-2">
             {justAdded ? <Check size={20} /> : <ShoppingCart size={20} />}
-            {justAdded
-              ? "Added"
-              : `Add ${quantity} to cart - ${formatCurrency(selectedVariant.price * quantity)}`}
+            {justAdded ? "Added" : `Add ${quantity} to cart - ${selectedTotalLabel}`}
           </span>
         </button>
       </div>

@@ -11,6 +11,7 @@ import type { CartItem } from "@/lib/types";
 type CartState = {
   items: CartItem[];
   addItem: (item: CartItem) => void;
+  replaceCart: (items: CartItem[]) => void;
   removeItem: (variantId: string) => void;
   updateQuantity: (variantId: string, quantity: number) => void;
   clearCart: () => void;
@@ -47,6 +48,7 @@ export const useCartStore = create<CartState>()(
             )
           };
         }),
+      replaceCart: (items) => set({ items }),
       removeItem: (variantId) =>
         set((state) => ({
           items: state.items.filter((item) => item.variantId !== variantId)

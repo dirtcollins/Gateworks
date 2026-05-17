@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 
 type SiteUserRow = {
   id: string;
@@ -30,6 +30,8 @@ function toClientUser(user: SiteUserRow) {
 }
 
 export async function GET() {
+  const supabase = getSupabaseClient();
+
   if (!supabase) {
     return NextResponse.json({ users: [] });
   }
@@ -53,6 +55,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const supabase = getSupabaseClient();
+
   if (!supabase) {
     return NextResponse.json(
       { ok: false, reason: "Supabase is not configured." },
@@ -96,4 +100,3 @@ export async function POST(request: NextRequest) {
     user: toClientUser(data as SiteUserRow)
   });
 }
-

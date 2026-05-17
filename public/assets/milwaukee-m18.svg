@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" role="img" aria-labelledby="title desc">
+  <title id="title">Milwaukee M18 product placeholder</title>
+  <desc id="desc">Red and black placeholder artwork for Milwaukee M18 power tools.</desc>
+  <rect width="640" height="640" fill="#111111"/>
+  <rect x="56" y="56" width="528" height="528" fill="#d71920"/>
+  <path d="M112 414h416v82H112z" fill="#111111"/>
+  <path d="M128 154h126l66 152 66-152h126v288h-86V252l-78 190h-56l-78-190v190h-86V154z" fill="#ffffff"/>
+  <path d="M456 236c0-51-36-88-98-88H238v288h120c66 0 108-37 108-93 0-34-18-60-49-74 25-14 39-35 39-33zm-132 25v-42h31c18 0 29 8 29 21 0 14-11 21-29 21h-31zm0 106v-48h39c20 0 32 9 32 24s-12 24-32 24h-39z" fill="#111111" opacity=".18"/>
+  <text x="320" y="472" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="78" font-weight="900" fill="#ffffff">M18</text>
+</svg>

@@ -1,0 +1,786 @@
+import { NextRequest, NextResponse } from "next/server";
+import {
+  createPickTicketForOrder,
+  reserveInventoryForOrder
+} from "@/lib/inventory-repository";
+import { authorizeAdminRequest } from "@/lib/admin-auth";
+import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import type { FulfillmentMethod, OrderStatus, PaymentStatus } from "@/lib/platform-backend";
+import type { CustomerDrawing, OrderPayment } from "@/lib/order-store";
+
+type OrderPayload = {
+  id: string;
+  orderNumber: string;
+  userId: string;
+  customerName: string;
+  companyName: string;
+  email: string;
+  phone: string;
+  items: Array<{
+    productId: string;
+    variantId: string;
+    title: string;
+    sku: string;
+    image?: string;
+    price: number;
+    weightLbs?: number;
+    cwtPrice?: number;
+    pricingMethod?: "manual" | "cwt_calculated";
+    quantity: number;
+    options?: Record<string, string | undefined>;
+  }>;
+  fulfillmentMethod: FulfillmentMethod;
+  requestedDate: string;
+  requestedWindow: string;
+  jobName: string;
+  jobsiteAddress: Record<string, string>;
+  drawings?: CustomerDrawing[];
+  subtotal: number;
+  tax: number;
+  deliveryFee: number;
+  total: number;
+  status: OrderStatus;
+  paymentStatus: PaymentStatus;
+  isQuoteRequest: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type OrderRow = {
+  id: string;
+  order_number: string;
+  site_user_id: string | null;
+  customer_name: string | null;
+  company_name: string | null;
+  email: string | null;
+  phone: string | null;
+  fulfillment_method: FulfillmentMethod;
+  requested_date: string | null;
+  requested_window: string | null;
+  job_name: string | null;
+  jobsite_address: Record<string, string> | null;
+  subtotal: number | string;
+  tax_total: number | string;
+  delivery_fee: number | string;
+  total: number | string;
+  notes: string | null;
+  status: OrderStatus;
+  payment_status: PaymentStatus;
+  is_quote_request: boolean;
+  created_at: string;
+  updated_at: string;
+  order_items?: OrderItemRow[];
+  customer_drawing_uploads?: CustomerDrawingRow[];
+  order_payments?: OrderPaymentRow[];
+};
+
+type OrderPaymentRow = {
+  id: string;
+  payment_date: string;
+  payment_method: string;
+  amount: number | string;
+  reference_number: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type OrderItemRow = {
+  id: string;
+  sku: string;
+  description: string;
+  quantity: number;
+  quantity_needed?: number | string | null;
+  quantity_pulled?: number | string | null;
+  pulled?: boolean | null;
+  pulled_at?: string | null;
+  pulled_by?: string | null;
+  pick_notes?: string | null;
+  unit_price: number | string;
+  line_total: number | string;
+  item_payload: {
+    productId?: string;
+    variantId?: string;
+    title?: string;
+    image?: string;
+    weightLbs?: number;
+    cwtPrice?: number;
+    pricingMethod?: "manual" | "cwt_calculated";
+    options?: Record<string, string | undefined>;
+  } | null;
+};
+
+type CustomerDrawingRow = {
+  id: string;
+  file_name: string;
+  file_size: number;
+  file_type: string;
+  storage_path: string | null;
+  public_url: string | null;
+  created_at: string;
+};
+
+type PatchOrderPayload = {
+  orderId?: string;
+  status?: OrderStatus;
+  paymentStatus?: PaymentStatus;
+  convertToOrder?: boolean;
+  payment?: {
+    amount?: number;
+    method?: string;
+    paidAt?: string;
+    reference?: string;
+    note?: string;
+    createdBy?: string;
+  };
+};
+
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const orderNumberFloor = 10026;
+const documentSequenceMin = 10000;
+const documentSequenceMax = 99999;
+const validPaymentMethods = new Set([
+  "Cash",
+  "Check",
+  "Credit Card",
+  "Debit Card",
+  "ACH",
+  "Wire Transfer",
+  "Financing",
+  "Other"
+]);
+
+function parseOrderSequence(orderNumber: string | null | undefined) {
+  const value = Number(String(orderNumber || "").replace(/\D/g, ""));
+  if (!Number.isFinite(value) || value <= 0) return 0;
+
+  return value > documentSequenceMax ? value % 100000 : value;
+}
+
+function formatDocumentSequence(sequence: number) {
+  const boundedSequence =
+    sequence > documentSequenceMax
+      ? documentSequenceMin
+      : sequence;
+
+  return String(boundedSequence).padStart(5, "0");
+}
+
+function normalizeDocumentNumber(orderNumber: string, isQuoteRequest: boolean) {
+  const sequence = parseOrderSequence(orderNumber);
+  if (!sequence) return orderNumber;
+  return `${isQuoteRequest ? "Quote" : "Order"}-${formatDocumentSequence(sequence)}`;
+}
+
+async function getNextDocumentNumber(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdminClient>>,
+  prefix: "Order" | "Quote",
+  isQuoteRequest: boolean
+) {
+  const { data, error } = await admin
+    .from("orders")
+    .select("order_number,is_quote_request")
+    .order("created_at", { ascending: false })
+    .limit(1000);
+
+  if (error) throw error;
+
+  const highest = (data || []).reduce((currentHighest, row) => {
+    if (Boolean(row.is_quote_request) !== isQuoteRequest) return currentHighest;
+    return Math.max(currentHighest, parseOrderSequence(row.order_number));
+  }, orderNumberFloor);
+
+  const nextSequence = highest >= documentSequenceMax ? documentSequenceMin : highest + 1;
+  return `${prefix}-${formatDocumentSequence(nextSequence)}`;
+}
+
+function asUuid(value: string) {
+  return uuidPattern.test(value) ? value : null;
+}
+
+function getPaymentStatusForPaidAmount(totalPaid: number, totalAmount: number): PaymentStatus {
+  if (totalPaid <= 0) return "unpaid";
+  if (totalPaid > totalAmount) return "overpaid";
+  if (totalPaid === totalAmount) return "paid";
+  return "partial";
+}
+
+function toClientOrder(row: OrderRow) {
+  const resolvedNotes = typeof row.notes === "string" ? row.notes : row.jobsite_address?.notes;
+  const mergedJobsiteAddress: Record<string, string> = {
+    ...(row.jobsite_address || {}),
+    notes: resolvedNotes || ""
+  };
+
+  return {
+    id: row.id,
+    orderNumber: normalizeDocumentNumber(row.order_number, row.is_quote_request),
+    userId: row.site_user_id || "guest",
+    customerName: row.customer_name || "",
+    companyName: row.company_name || "",
+    email: row.email || "",
+    phone: row.phone || "",
+    items: (row.order_items || []).map((item) => ({
+      orderItemId: item.id,
+      productId: item.item_payload?.productId || "",
+      variantId: item.item_payload?.variantId || item.id,
+      title: item.item_payload?.title || item.description,
+      sku: item.sku,
+      image: item.item_payload?.image === "/assets/logo.svg" ? "" : item.item_payload?.image || "",
+      price: Number(item.unit_price),
+      weightLbs:
+        typeof item.item_payload?.weightLbs === "number"
+          ? item.item_payload.weightLbs
+          : undefined,
+      cwtPrice:
+        typeof item.item_payload?.cwtPrice === "number"
+          ? item.item_payload.cwtPrice
+          : undefined,
+      pricingMethod: item.item_payload?.pricingMethod,
+      quantity: item.quantity,
+      quantityNeeded: Number(item.quantity_needed ?? item.quantity),
+      quantityPulled: Number(item.quantity_pulled ?? 0),
+      pulled: Boolean(item.pulled),
+      pulledAt: item.pulled_at || undefined,
+      pulledBy: item.pulled_by || undefined,
+      pickNotes: item.pick_notes || "",
+      options: item.item_payload?.options || {}
+    })),
+    fulfillmentMethod: row.fulfillment_method,
+    requestedDate: row.requested_date || "",
+    requestedWindow: row.requested_window || "",
+    jobName: row.job_name || "",
+    jobsiteAddress: mergedJobsiteAddress,
+    drawings: (row.customer_drawing_uploads || []).map((drawing) => ({
+      id: drawing.id,
+      fileName: drawing.file_name,
+      fileSize: drawing.file_size,
+      fileType: drawing.file_type,
+      storagePath: drawing.storage_path || undefined,
+      publicUrl: drawing.public_url || undefined,
+      uploadedAt: drawing.created_at
+    })),
+    payments: (row.order_payments || []).map((payment): OrderPayment => ({
+      id: payment.id,
+      amount: Number(payment.amount),
+      method: payment.payment_method,
+      paidAt: payment.payment_date,
+      reference: payment.reference_number || "",
+      note: payment.notes || "",
+      createdBy: payment.created_by || "Admin",
+      createdAt: payment.created_at
+    })),
+    pickupContact: row.customer_name || "",
+    subtotal: Number(row.subtotal),
+    tax: Number(row.tax_total),
+    deliveryFee: Number(row.delivery_fee),
+    total: Number(row.total),
+    status: row.status,
+    paymentStatus: row.payment_status,
+    isQuoteRequest: row.is_quote_request,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    activity: [
+      {
+        id: `${row.id}-loaded`,
+        label: row.is_quote_request ? "Quote request loaded" : "Order loaded",
+        detail: "Loaded from Supabase.",
+        createdAt: row.updated_at
+      }
+    ]
+  };
+}
+
+type ResolvedOrderItem = OrderPayload["items"][number] & {
+  resolvedVariantId: string;
+};
+
+async function resolveOrderItemVariantIds(
+  admin: NonNullable<Awaited<ReturnType<typeof getSupabaseAdminClient>>>,
+  items: OrderPayload["items"]
+) {
+  const variantResolutions = new Map<string, string>();
+  const skusNeedingResolution = Array.from(
+    new Set(
+      items
+        .filter((item) => !asUuid(item.variantId))
+        .map((item) => item.sku)
+        .filter(Boolean)
+    )
+  );
+
+  if (skusNeedingResolution.length) {
+    const { data, error } = await admin
+      .from("product_variants")
+      .select("id, sku")
+      .in("sku", skusNeedingResolution);
+
+    if (error) {
+      throw error;
+    }
+
+    (data || []).forEach((record) => {
+      const row = record as { id?: string; sku?: string };
+
+      if (row.sku && row.id) {
+        variantResolutions.set(row.sku, row.id);
+      }
+    });
+  }
+
+  return items.map((item) => {
+    const normalizedVariantId = asUuid(item.variantId);
+    const fallbackVariantId = variantResolutions.get(item.sku);
+
+    if (!normalizedVariantId && !fallbackVariantId) {
+      throw new Error(
+        `Order item variant could not be resolved for SKU ${item.sku}. Please sync catalog variants before checkout.`
+      );
+    }
+
+    const resolvedVariantId = normalizedVariantId || fallbackVariantId;
+
+    if (!resolvedVariantId) {
+      throw new Error(`Order item variant could not be resolved for SKU ${item.sku}.`);
+    }
+
+    return { ...item, resolvedVariantId };
+  }) as ResolvedOrderItem[];
+}
+
+export async function GET(request: NextRequest) {
+  const auth = await authorizeAdminRequest(request);
+  if (!auth.ok) return auth.response;
+
+  const admin = getSupabaseAdminClient();
+
+  if (!admin) {
+    return NextResponse.json({
+      orders: [],
+      persisted: false,
+      reason: "Supabase service role is not configured."
+    });
+  }
+
+  const userId = request.nextUrl.searchParams.get("userId");
+  const orderId = request.nextUrl.searchParams.get("orderId");
+  const orderNumber = request.nextUrl.searchParams.get("orderNumber");
+  const limit = Number(request.nextUrl.searchParams.get("limit") || 100);
+  const includeItems = request.nextUrl.searchParams.get("includeItems") === "true";
+  const includeDrawings = request.nextUrl.searchParams.get("includeDrawings") === "true";
+
+  const selectFields = [
+    "id",
+    "order_number",
+    "site_user_id",
+    "customer_name",
+    "company_name",
+    "email",
+    "phone",
+    "fulfillment_method",
+    "requested_date",
+    "requested_window",
+    "job_name",
+    "jobsite_address",
+    "subtotal",
+    "tax_total",
+    "delivery_fee",
+    "total",
+    "status",
+    "payment_status",
+    "is_quote_request",
+    "notes",
+    "created_at",
+    "updated_at"
+  ];
+
+  if (includeItems) {
+    selectFields.push(
+      `order_items (
+        id,
+        sku,
+        description,
+        quantity,
+        quantity_needed,
+        quantity_pulled,
+        pulled,
+        pulled_at,
+        pulled_by,
+        pick_notes,
+        unit_price,
+        line_total,
+        item_payload
+      )`
+    );
+  }
+
+  if (includeDrawings) {
+    selectFields.push(
+      `customer_drawing_uploads (
+        id,
+        file_name,
+        file_size,
+        file_type,
+        storage_path,
+        public_url,
+        created_at
+      )`
+    );
+  }
+
+  selectFields.push(
+    `order_payments (
+      id,
+      payment_date,
+      payment_method,
+      amount,
+      reference_number,
+      notes,
+      created_by,
+      created_at,
+      updated_at
+    )`
+  );
+
+  let query = admin
+    .from("orders")
+    .select(selectFields.join(", "))
+    .order("created_at", { ascending: false })
+    .limit(Math.min(Math.max(limit, 1), 250));
+
+  if (orderId) {
+    query = query.eq("id", orderId);
+  } else if (orderNumber) {
+    query = query.eq("order_number", orderNumber);
+  } else if (userId) {
+    query = query.eq("site_user_id", userId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return NextResponse.json(
+      { orders: [], persisted: false, reason: error.message },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({
+    orders: ((data || []) as unknown as OrderRow[]).map(toClientOrder),
+    persisted: true
+  });
+}
+
+export async function POST(request: NextRequest) {
+  const payload = (await request.json()) as OrderPayload;
+  const admin = getSupabaseAdminClient();
+
+  if (!admin) {
+    return NextResponse.json(
+      {
+        ok: false,
+        persisted: false,
+        reason: "Supabase service role is not configured. Order was not saved."
+      },
+      { status: process.env.NODE_ENV === "production" ? 503 : 200 }
+    );
+  }
+
+  try {
+    const safeUserId = (payload.userId || "guest").trim();
+
+    if (safeUserId) {
+      await admin.from("site_users").upsert(
+        {
+          id: safeUserId,
+          display_name: payload.customerName || payload.userId,
+          normalized_name: safeUserId.toLowerCase(),
+          last_used_at: new Date().toISOString()
+        },
+        { onConflict: "id" }
+      );
+    }
+
+    const orderNumber = await getNextDocumentNumber(
+      admin,
+      payload.isQuoteRequest ? "Quote" : "Order",
+      payload.isQuoteRequest
+    );
+
+    const { data: order, error: orderError } = await admin
+      .from("orders")
+      .insert({
+        order_number: orderNumber,
+        site_user_id: safeUserId || "guest",
+        customer_name: payload.customerName,
+        company_name: payload.companyName,
+        customer_email: payload.email,
+        email: payload.email,
+        phone: payload.phone,
+        fulfillment_method: payload.fulfillmentMethod,
+        requested_date: payload.requestedDate || null,
+        requested_window: payload.requestedWindow,
+        job_name: payload.jobName,
+        jobsite_address: payload.jobsiteAddress,
+        subtotal: payload.subtotal,
+        tax_total: payload.tax,
+        delivery_fee: payload.deliveryFee,
+        total: payload.total,
+        status: payload.status,
+        payment_status: payload.paymentStatus,
+        is_quote_request: payload.isQuoteRequest,
+        notes: payload.jobsiteAddress?.notes || null
+      })
+      .select("id, order_number")
+      .single();
+
+    if (orderError) throw orderError;
+
+    if (payload.items.length && order?.id) {
+      const resolvedItems = await resolveOrderItemVariantIds(admin, payload.items);
+
+      const { error: itemsError } = await admin.from("order_items").insert(
+        resolvedItems.map((item) => ({
+          order_id: order.id,
+          product_id: asUuid(item.productId),
+          variant_id: item.resolvedVariantId,
+          sku: item.sku,
+          description: item.title,
+          quantity: item.quantity,
+          quantity_needed: item.quantity,
+          quantity_pulled: 0,
+          pulled: false,
+          unit_price: item.price,
+          line_total: item.price * item.quantity,
+          item_payload: {
+            ...item,
+            variantId: item.resolvedVariantId
+          }
+        }))
+      );
+
+    if (itemsError) throw itemsError;
+    }
+
+    return NextResponse.json({
+      ok: true,
+      persisted: true,
+      orderId: order?.id,
+      orderNumber: order?.order_number
+    });
+  } catch (error) {
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String((error as { message?: unknown }).message ?? "Unknown order write error.")
+        : "Unknown order write error.";
+    const details =
+      error &&
+      typeof error === "object" &&
+      "details" in error &&
+      typeof (error as { details?: unknown }).details === "string"
+        ? String((error as { details?: unknown }).details)
+        : null;
+    const hint =
+      error &&
+      typeof error === "object" &&
+      "hint" in error &&
+      typeof (error as { hint?: unknown }).hint === "string"
+        ? String((error as { hint?: unknown }).hint)
+        : null;
+    const code =
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      typeof (error as { code?: unknown }).code === "string"
+        ? String((error as { code?: unknown }).code)
+        : null;
+
+    return NextResponse.json(
+      {
+        ok: false,
+        persisted: false,
+        reason: [message, details, hint, code]
+          .filter(Boolean)
+          .join(" | ")
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  const auth = await authorizeAdminRequest(request);
+  if (!auth.ok) return auth.response;
+
+  const payload = (await request.json()) as PatchOrderPayload;
+  const admin = getSupabaseAdminClient();
+
+  if (!admin) {
+    return NextResponse.json(
+      {
+        ok: false,
+        persisted: false,
+        reason: "Supabase service role is not configured. Order status was not saved."
+      },
+      { status: process.env.NODE_ENV === "production" ? 503 : 200 }
+    );
+  }
+
+  if (!payload.orderId) {
+    return NextResponse.json(
+      { ok: false, reason: "orderId is required." },
+      { status: 400 }
+    );
+  }
+
+  if (payload.payment) {
+    const amount = Number(payload.payment.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return NextResponse.json(
+        { ok: false, reason: "Payment amount must be greater than zero." },
+        { status: 400 }
+      );
+    }
+    const paymentMethod = payload.payment.method || "";
+    if (!validPaymentMethods.has(paymentMethod)) {
+      return NextResponse.json(
+        { ok: false, reason: "Payment method is required." },
+        { status: 400 }
+      );
+    }
+
+    const { data: orderRow, error: orderReadError } = await admin
+      .from("orders")
+      .select("id,total")
+      .eq("id", payload.orderId)
+      .single();
+
+    if (orderReadError) {
+      return NextResponse.json(
+        { ok: false, persisted: false, reason: orderReadError.message },
+        { status: 500 }
+      );
+    }
+
+    const { data: existingPayments, error: paymentReadError } = await admin
+      .from("order_payments")
+      .select("amount")
+      .eq("order_id", payload.orderId);
+
+    if (paymentReadError) {
+      return NextResponse.json(
+        { ok: false, persisted: false, reason: paymentReadError.message },
+        { status: 500 }
+      );
+    }
+
+    const paidBefore = (existingPayments || []).reduce(
+      (sum, payment) => sum + Number(payment.amount || 0),
+      0
+    );
+    const nextPaid = paidBefore + amount;
+    const orderTotal = Number(orderRow?.total || 0);
+    const nextPaymentStatus = getPaymentStatusForPaidAmount(nextPaid, orderTotal);
+
+    const { data: paymentRow, error: paymentInsertError } = await admin
+      .from("order_payments")
+      .insert({
+        order_id: payload.orderId,
+        payment_date: payload.payment.paidAt || new Date().toISOString(),
+        payment_method: paymentMethod,
+        amount,
+        reference_number: payload.payment.reference || null,
+        notes: payload.payment.note || null,
+        created_by: payload.payment.createdBy || "Admin"
+      })
+      .select("id,payment_date,payment_method,amount,reference_number,notes,created_by,created_at,updated_at")
+      .single();
+
+    if (paymentInsertError) {
+      return NextResponse.json(
+        { ok: false, persisted: false, reason: paymentInsertError.message },
+        { status: 500 }
+      );
+    }
+
+    const { error: statusUpdateError } = await admin
+      .from("orders")
+      .update({ payment_status: nextPaymentStatus })
+      .eq("id", payload.orderId);
+
+    if (statusUpdateError) {
+      return NextResponse.json(
+        { ok: false, persisted: false, reason: statusUpdateError.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      persisted: true,
+      paymentStatus: nextPaymentStatus,
+      payment: paymentRow
+        ? {
+            id: paymentRow.id,
+            amount: Number(paymentRow.amount),
+            method: paymentRow.payment_method,
+            paidAt: paymentRow.payment_date,
+            reference: paymentRow.reference_number || "",
+            note: paymentRow.notes || "",
+            createdBy: paymentRow.created_by || "Admin",
+            createdAt: paymentRow.created_at
+          }
+        : null
+    });
+  }
+
+  const updates: Record<string, string | boolean> = {};
+  if (payload.status) updates.status = payload.status;
+  if (payload.paymentStatus) updates.payment_status = payload.paymentStatus;
+  if (payload.convertToOrder) {
+    updates.is_quote_request = false;
+    updates.status = payload.status || "submitted";
+  }
+
+  if (!Object.keys(updates).length) {
+    return NextResponse.json(
+      { ok: false, reason: "No order fields were provided." },
+      { status: 400 }
+    );
+  }
+
+  const { error } = await admin
+    .from("orders")
+    .update(updates)
+    .eq("id", payload.orderId);
+
+  if (error) {
+    return NextResponse.json(
+      { ok: false, persisted: false, reason: error.message },
+      { status: 500 }
+    );
+  }
+
+  const workflow: Record<string, unknown> = {};
+
+  try {
+    if (updates.status === "confirmed") {
+      const reservationResults = await reserveInventoryForOrder(admin, payload.orderId);
+      workflow.inventoryReserved = reservationResults.every((result) => result.ok);
+      workflow.inventoryResults = reservationResults;
+    }
+
+    if (updates.status === "picking") {
+      workflow.pickTicketId = await createPickTicketForOrder(admin, payload.orderId);
+    }
+  } catch (workflowError) {
+    workflow.warning =
+      workflowError instanceof Error
+        ? workflowError.message
+        : "Order status changed, but the operations handoff did not complete.";
+  }
+
+  return NextResponse.json({ ok: true, persisted: true, workflow });
+}

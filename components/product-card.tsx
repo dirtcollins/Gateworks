@@ -6,6 +6,7 @@ import { Check, Star } from "lucide-react";
 import { useState } from "react";
 import { useCartStore } from "@/lib/cart-store";
 import type { Product } from "@/lib/types";
+import { getProductImageForSize } from "@/lib/product-image";
 import { cn, formatCurrency } from "@/lib/utils";
 
 type ProductCardProps = {
@@ -14,10 +15,12 @@ type ProductCardProps = {
 };
 
 export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
-  const image = product.images[0]?.url || product.variants[0]?.image || "/assets/logo.svg";
+  const imageSource = product.images[0]?.url || product.variants[0]?.image || "/assets/logo.svg";
+  const image = getProductImageForSize(imageSource, "card");
   const defaultVariant = product.variants[0];
   const isList = layout === "list";
   const isRail = layout === "rail";
+  const priceLabel = product.price > 0 ? formatCurrency(product.price) : "Quote required";
   const addItem = useCartStore((state) => state.addItem);
   const [justAdded, setJustAdded] = useState(false);
 
@@ -36,6 +39,9 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
       sku: defaultVariant.sku,
       image: defaultVariant.image,
       price: defaultVariant.price,
+      weightLbs: defaultVariant.calculated_weight_lb,
+      cwtPrice: defaultVariant.steel_cwt_price,
+      pricingMethod: defaultVariant.pricing_method,
       quantity: 1,
       options: defaultVariant.options
     });
@@ -46,12 +52,12 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
   const imageContent = (
     <div
       className={cn(
-        "relative bg-white",
+        "relative bg-[#fafaf8]",
         isRail
           ? "h-[150px]"
           : isList
-            ? "min-h-36 border-r border-jobsite-rail sm:min-h-44"
-            : "aspect-square"
+            ? "min-h-36 border-r border-black/10 sm:min-h-44"
+            : "aspect-[4/3]"
       )}
     >
       <Image
@@ -61,6 +67,7 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
           isRail ? "p-3" : isList ? "p-4" : "p-5"
         )}
         fill
+        quality={75}
         sizes={isRail ? "220px" : isList ? "180px" : "(max-width: 768px) 50vw, 25vw"}
         src={image}
       />
@@ -70,27 +77,27 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
   const detailsContent = (
     <div
       className={cn(
-        "flex flex-col border-t border-jobsite-rail",
+        "flex flex-col border-t border-black/10",
         isRail ? "gap-1 p-3" : "gap-2 p-4",
         isList && "border-t-0"
       )}
     >
-      <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-jobsite-steel">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-industrial-muted">
         {product.category.name}
       </p>
       <h3
         className={cn(
-          "line-clamp-2 font-semibold text-jobsite-ink",
+          "line-clamp-2 font-semibold text-industrial-ink",
           isRail ? "min-h-10 text-xs leading-5" : "text-sm leading-5"
         )}
       >
         {product.title}
       </h3>
-      <div className="flex items-center gap-1 text-jobsite-safety">
+      <div className="flex items-center gap-1 text-industrial-ink/80">
         {Array.from({ length: 5 }).map((_, index) => (
           <Star key={index} size={13} fill="currentColor" />
         ))}
-        <span className="ml-1 text-xs font-semibold text-jobsite-steel">
+        <span className="ml-1 text-xs font-medium text-industrial-muted">
           ({120 + product.variants.length})
         </span>
       </div>
@@ -98,19 +105,19 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
         <p
           className={cn(
             "font-extrabold text-jobsite-ink",
-            isRail ? "text-xl" : "text-2xl"
+            isRail ? "text-lg" : "text-2xl"
           )}
         >
-          {formatCurrency(product.price)}
+          {priceLabel}
         </p>
-        <p className="text-xs font-semibold text-jobsite-pine">
+        <p className="text-xs font-medium text-jobsite-pine">
           {defaultVariant?.inventoryQuantity ?? 100} in stock - {product.variants.length} option
           {product.variants.length === 1 ? "" : "s"}
         </p>
         {isRail ? (
           <button
             className={cn(
-              "truewerk-cta mt-2 flex h-9 w-full items-center justify-center gap-1 border text-xs font-black uppercase tracking-[0.1em] transition-all duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:border-jobsite-rail disabled:text-jobsite-steel",
+              "truewerk-cta mt-2 flex h-9 w-full items-center justify-center gap-1 rounded-md border text-xs font-semibold uppercase tracking-[0.08em] transition-all duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:border-black/10 disabled:text-industrial-muted",
               justAdded
                 ? "is-added animate-button-confirm border-jobsite-pine bg-jobsite-ink text-white"
                 : "border-jobsite-ink bg-white text-jobsite-ink hover:text-white"
@@ -132,7 +139,7 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
   if (isRail) {
     return (
       <div
-        className="group grid min-h-full w-[220px] grid-rows-[150px_1fr] border border-jobsite-rail bg-white transition hover:border-jobsite-ink"
+        className="group grid min-h-full w-[220px] grid-rows-[150px_1fr] overflow-hidden rounded-lg border border-black/10 bg-white/84 shadow-sm backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-black/20 hover:bg-white hover:shadow-toolbar"
       >
         <Link href={`/products/${product.slug}`}>{imageContent}</Link>
         {detailsContent}
@@ -143,7 +150,7 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
   return (
     <Link
       className={cn(
-        "group grid min-h-full border border-jobsite-rail bg-white transition hover:shadow-toolbar",
+        "group grid min-h-full overflow-hidden rounded-lg border border-black/10 bg-white/84 shadow-sm backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-black/20 hover:bg-white hover:shadow-toolbar",
         isList
           ? "grid-cols-[132px_1fr] sm:grid-cols-[180px_1fr]"
           : "grid-rows-[auto_1fr]"

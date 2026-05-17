@@ -7,21 +7,51 @@ import {
   readScopedPersistedState
 } from "@/lib/scoped-store";
 import type { CartItem } from "@/lib/types";
+import { defaultCustomer } from "@/lib/customers";
 
 export type QuoteRecord = {
   id: string;
   quoteNumber: string;
+  invoiceNumber: string;
   name: string;
+  customerId?: string;
+  customerName: string;
+  customerEmail: string;
+  billingAddress: string;
+  jobsiteAddress: string;
+  terms: string;
+  status: "draft" | "sent" | "accepted" | "invoiced";
+  notes: string;
   createdAt: string;
+  updatedAt: string;
+  savedAt?: string;
+  dueAt: string;
   expiresAt: string;
   items: CartItem[];
 };
+
+export type QuoteDetailsUpdate = Partial<
+  Pick<
+    QuoteRecord,
+    | "name"
+    | "customerName"
+    | "customerEmail"
+    | "customerId"
+    | "billingAddress"
+    | "jobsiteAddress"
+    | "terms"
+    | "status"
+    | "notes"
+  >
+>;
 
 type QuoteState = {
   quotes: QuoteRecord[];
   activeQuoteId: string;
   createQuote: (name: string) => string;
   renameQuote: (quoteId: string, name: string) => void;
+  updateQuoteDetails: (quoteId: string, details: QuoteDetailsUpdate) => void;
+  saveQuote: (quoteId: string) => void;
   setActiveQuote: (quoteId: string) => void;
   addItem: (item: CartItem, quoteId?: string) => void;
   removeItem: (quoteId: string, variantId: string) => void;
@@ -41,11 +71,24 @@ function isoDate(daysFromNow = 0) {
 }
 
 function makeQuote(number: number, name: string, items: CartItem[] = []): QuoteRecord {
+  const now = isoDate();
+
   return {
     id: `q-${number}`,
-    quoteNumber: `Q-${number}`,
+    quoteNumber: `Quote-${number}`,
+    invoiceNumber: `Invoice-${number}`,
     name,
-    createdAt: isoDate(),
+    customerId: defaultCustomer.id,
+    customerName: defaultCustomer.name,
+    customerEmail: defaultCustomer.email,
+    billingAddress: defaultCustomer.billingAddress,
+    jobsiteAddress: defaultCustomer.jobsiteAddress,
+    terms: "Due on receipt",
+    status: "draft",
+    notes: "Thank you for your business.",
+    createdAt: now,
+    updatedAt: now,
+    dueAt: isoDate(15),
     expiresAt: isoDate(30),
     items
   };
@@ -82,6 +125,48 @@ function quoteDefaults() {
   };
 }
 
+function normalizeQuote(quote: QuoteRecord): QuoteRecord {
+  const createdAt = quote.createdAt || isoDate();
+  const quoteSequence = Number(quote.quoteNumber.replace(/\D/g, ""));
+
+  return {
+    ...quote,
+    quoteNumber: quote.quoteNumber.startsWith("Q-")
+      ? `Quote-${quoteSequence || initialQuoteNumber}`
+      : quote.quoteNumber,
+    invoiceNumber: quote.invoiceNumber
+      ? quote.invoiceNumber.replace("INV-", "Invoice-")
+      : `Invoice-${quoteSequence || initialQuoteNumber}`,
+    customerName: quote.customerName || "",
+    customerEmail: quote.customerEmail || "",
+    billingAddress: quote.billingAddress || "",
+    jobsiteAddress: quote.jobsiteAddress || "",
+    terms: quote.terms || "Due on receipt",
+    status: quote.status || "draft",
+    notes: quote.notes || "",
+    createdAt,
+    updatedAt: quote.updatedAt || quote.savedAt || createdAt,
+    dueAt: quote.dueAt || quote.expiresAt,
+    items: quote.items || []
+  };
+}
+
+function quoteUpdatedTime(quote: QuoteRecord) {
+  const timestamp = quote.updatedAt || quote.savedAt || quote.createdAt;
+  const time = timestamp ? new Date(timestamp).getTime() : 0;
+
+  return Number.isFinite(time) ? time : 0;
+}
+
+function keepNewestQuote(quotesById: Map<string, QuoteRecord>, quote: QuoteRecord) {
+  const normalizedQuote = normalizeQuote(quote);
+  const existingQuote = quotesById.get(normalizedQuote.id);
+
+  if (!existingQuote || quoteUpdatedTime(normalizedQuote) >= quoteUpdatedTime(existingQuote)) {
+    quotesById.set(normalizedQuote.id, normalizedQuote);
+  }
+}
+
 export const useQuoteStore = create<QuoteState>()(
   persist(
     (set, get) => ({
@@ -105,7 +190,35 @@ export const useQuoteStore = create<QuoteState>()(
         set((state) => ({
           quotes: state.quotes.map((quote) =>
             quote.id === quoteId
-              ? { ...quote, name: formatQuoteName(name) }
+              ? { ...quote, name: formatQuoteName(name), updatedAt: isoDate() }
+              : quote
+          )
+        })),
+      updateQuoteDetails: (quoteId, details) =>
+        set((state) => ({
+          quotes: state.quotes.map((quote) =>
+            quote.id === quoteId
+              ? {
+                  ...quote,
+                  ...details,
+                  name:
+                    typeof details.name === "string"
+                      ? formatQuoteName(details.name)
+                      : quote.name,
+                  updatedAt: isoDate()
+                }
+              : quote
+          )
+        })),
+      saveQuote: (quoteId) =>
+        set((state) => ({
+          quotes: state.quotes.map((quote) =>
+            quote.id === quoteId
+              ? {
+                  ...quote,
+                  savedAt: isoDate(),
+                  updatedAt: isoDate()
+                }
               : quote
           )
         })),
@@ -130,7 +243,11 @@ export const useQuoteStore = create<QuoteState>()(
               );
 
               if (!existing) {
-                return { ...quote, items: [...quote.items, item] };
+                return {
+                  ...quote,
+                  items: [...quote.items, item],
+                  updatedAt: isoDate()
+                };
               }
 
               return {
@@ -142,7 +259,8 @@ export const useQuoteStore = create<QuoteState>()(
                         quantity: quoteItem.quantity + item.quantity
                       }
                     : quoteItem
-                )
+                ),
+                updatedAt: isoDate()
               };
             })
           };
@@ -153,7 +271,8 @@ export const useQuoteStore = create<QuoteState>()(
             quote.id === quoteId
               ? {
                   ...quote,
-                  items: quote.items.filter((item) => item.variantId !== variantId)
+                  items: quote.items.filter((item) => item.variantId !== variantId),
+                  updatedAt: isoDate()
                 }
               : quote
           )
@@ -168,7 +287,8 @@ export const useQuoteStore = create<QuoteState>()(
                     item.variantId === variantId
                       ? { ...item, quantity: Math.max(1, quantity) }
                       : item
-                  )
+                  ),
+                  updatedAt: isoDate()
                 }
               : quote
           )
@@ -176,7 +296,7 @@ export const useQuoteStore = create<QuoteState>()(
       clearQuote: (quoteId) =>
         set((state) => ({
           quotes: state.quotes.map((quote) =>
-            quote.id === quoteId ? { ...quote, items: [] } : quote
+            quote.id === quoteId ? { ...quote, items: [], updatedAt: isoDate() } : quote
           )
         })),
       deleteQuote: (quoteId) =>
@@ -229,7 +349,29 @@ export function hydrateQuotesForUser(userId: string) {
     userId,
     quoteDefaults
   );
+  const currentState = useQuoteStore.getState();
+  const persistedQuotes = (persistedState.quotes || []).map(normalizeQuote);
+  const quotesById = new Map<string, QuoteRecord>();
+
+  for (const quote of persistedQuotes) {
+    keepNewestQuote(quotesById, quote);
+  }
+
+  for (const quote of currentState.quotes) {
+    keepNewestQuote(quotesById, quote);
+  }
+
+  const quotes = Array.from(quotesById.values()).sort((left, right) =>
+    String(right.createdAt).localeCompare(String(left.createdAt))
+  );
 
   useQuoteStore.persist.setOptions({ name: scopedStoreName });
-  useQuoteStore.setState(persistedState);
+  useQuoteStore.setState({
+    ...persistedState,
+    quotes,
+    activeQuoteId:
+      quotes.some((quote) => quote.id === currentState.activeQuoteId)
+        ? currentState.activeQuoteId
+        : persistedState.activeQuoteId || quotes[0]?.id || "q-1050"
+  });
 }
