@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
+  ClipboardList,
   CreditCard,
   FileText,
   MapPin,
@@ -31,7 +32,7 @@ const pickupWindows = [
   "3:00 PM - 5:00 PM"
 ];
 
-type PaymentMode = "card_on_pickup" | "net_terms";
+type PaymentMode = "card_on_pickup" | "net_terms" | "purchase_order";
 
 const emptyAddress: OrderAddress = {
   name: "",
@@ -84,6 +85,7 @@ export function IndustrialCheckout() {
   const [requestedDate, setRequestedDate] = useState(tomorrowDate());
   const [requestedWindow, setRequestedWindow] = useState(pickupWindows[1]);
   const [jobName, setJobName] = useState("");
+  const [poNumber, setPoNumber] = useState("");
   const [address, setAddress] = useState<OrderAddress>(emptyAddress);
   const [submittedOrderNumber, setSubmittedOrderNumber] = useState("");
   const [error, setError] = useState("");
@@ -110,6 +112,7 @@ export function IndustrialCheckout() {
     [lineItems]
   );
   const isQuoteRequest = paymentMode === "net_terms";
+  const isPurchaseOrder = paymentMode === "purchase_order";
   const deliveryFee =
     fulfillmentMethod === "delivery" ? (subtotal >= 750 ? 0 : 85) : 0;
   const tax = isQuoteRequest ? 0 : calculateTax(subtotal);
@@ -137,6 +140,10 @@ export function IndustrialCheckout() {
       setError("Delivery orders require a complete jobsite address.");
       return;
     }
+    if (isPurchaseOrder && !poNumber.trim()) {
+      setError("Enter a purchase-order number for net-terms PO billing.");
+      return;
+    }
 
     setError("");
     setIsSubmitting(true);
@@ -152,7 +159,7 @@ export function IndustrialCheckout() {
         fulfillmentMethod,
         requestedDate,
         requestedWindow,
-        jobName,
+        jobName: jobName || (isPurchaseOrder ? `PO ${poNumber.trim()}` : ""),
         jobsiteAddress: address,
         drawings: [],
         pickupContact: address.name,
@@ -168,7 +175,11 @@ export function IndustrialCheckout() {
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(order)
+        body: JSON.stringify({
+          ...order,
+          poNumber: isPurchaseOrder ? poNumber.trim() : undefined,
+          poStatus: isPurchaseOrder ? "submitted" : undefined
+        })
       }).catch(() => null);
 
       if (!response) {
@@ -432,7 +443,7 @@ export function IndustrialCheckout() {
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-d1-pine">
                   Payment
                 </p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   {(
                     [
                       {
@@ -442,10 +453,16 @@ export function IndustrialCheckout() {
                         copy: "Pay by card when the order is handed off."
                       },
                       {
+                        id: "purchase_order" as PaymentMode,
+                        icon: ClipboardList,
+                        title: "Purchase order (net terms)",
+                        copy: "Place a net-terms order against your company PO."
+                      },
+                      {
                         id: "net_terms" as PaymentMode,
                         icon: FileText,
-                        title: "Net terms (account)",
-                        copy: "Submit as a quote request for net-terms billing."
+                        title: "Net terms quote",
+                        copy: "Submit as a quote request for net-terms pricing."
                       }
                     ]
                   ).map((option) => {
@@ -477,6 +494,21 @@ export function IndustrialCheckout() {
                     );
                   })}
                 </div>
+                {isPurchaseOrder ? (
+                  <div className="mt-4 grid gap-3 border-t border-d1-line pt-4">
+                    <Field
+                      label="Purchase order number"
+                      onChange={(event) => setPoNumber(event.target.value)}
+                      placeholder="e.g. PO-48213"
+                      value={poNumber}
+                    />
+                    <p className="text-[12px] leading-snug text-d1-steel">
+                      The order is placed immediately on net terms and tagged
+                      with this PO number. Our team reviews and approves it for
+                      billing.
+                    </p>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -546,7 +578,9 @@ export function IndustrialCheckout() {
                     ? "Submitting…"
                     : isQuoteRequest
                       ? "Submit quote request"
-                      : "Place order"}
+                      : isPurchaseOrder
+                        ? "Place PO order"
+                        : "Place order"}
                 </button>
                 <Link
                   className="mt-2 flex items-center justify-center border border-d1-ink px-5 py-3 text-[12px] font-bold uppercase tracking-[0.1em] text-d1-ink transition hover:bg-d1-ink hover:text-d1-paper"

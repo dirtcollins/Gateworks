@@ -41,7 +41,13 @@ type CustomerAccount = {
   jobsiteAddress: string;
   orderCount: number;
   orderValue: number;
-  source: "directory" | "orders";
+  source: "directory" | "orders" | "registered";
+};
+
+type SiteUser = {
+  id: string;
+  displayName: string;
+  lastUsedAt: string;
 };
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
@@ -73,6 +79,7 @@ export function IndustrialAdminCustomers() {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string>("");
   const [loaded, setLoaded] = useState(false);
+  const [siteUsers, setSiteUsers] = useState<SiteUser[]>([]);
 
   useEffect(() => {
     async function loadOrders() {
@@ -93,6 +100,20 @@ export function IndustrialAdminCustomers() {
 
     void loadOrders();
   }, [setOrders]);
+
+  // Surface people who actually registered an account via /api/site-users.
+  useEffect(() => {
+    let active = true;
+    fetch("/api/site-users", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : { users: [] }))
+      .then((payload: { users?: SiteUser[] }) => {
+        if (active) setSiteUsers(payload.users || []);
+      })
+      .catch(() => null);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const orders = useMemo(() => {
     const real = storedOrders.filter((order) => !order.isQuoteRequest);
@@ -148,10 +169,38 @@ export function IndustrialAdminCustomers() {
       }
     }
 
+    // Merge real registered accounts (people who signed up) so the directory
+    // reflects who actually has a Gateworks account, not just the static list.
+    for (const user of siteUsers) {
+      const displayName = user.displayName || "Registered account";
+      const key = displayName.toLowerCase();
+      if (byKey.has(key)) continue;
+      const matchingOrders = orders.filter(
+        (order) => order.userId && order.userId === user.id
+      );
+      const orderValue = matchingOrders.reduce(
+        (sum, order) => sum + order.total,
+        0
+      );
+      byKey.set(key, {
+        id: user.id,
+        company: displayName,
+        name: displayName,
+        email: matchingOrders[0]?.email || "",
+        phone: matchingOrders[0]?.phone || "",
+        terms: "Registered",
+        billingAddress: "Address on file pending",
+        jobsiteAddress: "Add jobsite or delivery address",
+        orderCount: matchingOrders.length,
+        orderValue,
+        source: "registered"
+      });
+    }
+
     return Array.from(byKey.values()).sort((a, b) =>
       a.company.localeCompare(b.company)
     );
-  }, [orders]);
+  }, [orders, siteUsers]);
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -197,12 +246,14 @@ export function IndustrialAdminCustomers() {
   const stats = [
     { label: "Accounts", value: String(accounts.length) },
     {
-      label: "With order history",
-      value: String(accounts.filter((account) => account.orderCount > 0).length)
+      label: "Registered accounts",
+      value: String(
+        accounts.filter((account) => account.source === "registered").length
+      )
     },
     {
-      label: "Total orders",
-      value: String(accounts.reduce((sum, account) => sum + account.orderCount, 0))
+      label: "With order history",
+      value: String(accounts.filter((account) => account.orderCount > 0).length)
     },
     {
       label: "Lifetime value",
@@ -254,8 +305,13 @@ export function IndustrialAdminCustomers() {
                       onClick={() => setSelectedId(account.id)}
                     >
                       <td className="px-4 py-3.5">
-                        <span className="block text-sm font-extrabold text-d1-ink">
-                          {account.company}
+                        <span className="flex items-center gap-2">
+                          <span className="text-sm font-extrabold text-d1-ink">
+                            {account.company}
+                          </span>
+                          {account.source === "registered" ? (
+                            <AdminPill tone="pine">Registered</AdminPill>
+                          ) : null}
                         </span>
                         <span className="text-[11px] text-d1-steel">
                           {account.name}

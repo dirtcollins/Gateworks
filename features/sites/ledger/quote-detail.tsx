@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -23,37 +24,34 @@ import {
   Pill,
   formatUsd
 } from "./kit";
-import { useLedgerScope } from "./scope";
-import { useQuoteStore, type QuoteRecord } from "@/lib/quote-store";
+import {
+  catalogItemToQuoteInput,
+  formatLedgerDate,
+  pickVariant,
+  searchCatalog
+} from "./quote-helpers";
 import { useCartStore } from "@/lib/cart-store";
-import { products } from "@/lib/catalog";
+import { useUserStore } from "@/lib/user-store";
 import { customerDirectory, getCustomerById } from "@/lib/customers";
 import { calculateTax } from "@/lib/tax";
-import type { Product } from "@/lib/types";
+import type { CartItem } from "@/lib/types";
+import {
+  convertQuoteToOrder,
+  fetchQuote,
+  saveQuote,
+  type DbQuote,
+  type QuoteInput,
+  type QuoteItemInput,
+  type QuoteStatus
+} from "@/lib/quotes-data";
 
-const dateFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  year: "numeric"
-});
-
-function formatDate(value: string) {
-  return dateFormatter.format(new Date(value));
-}
-
-const statusTone: Record<QuoteRecord["status"], { bg: string; fg: string }> = {
+const statusTone: Record<QuoteStatus, { bg: string; fg: string }> = {
   draft: { bg: LEDGER.amberSoft, fg: LEDGER.amber },
   sent: { bg: LEDGER.indigoSoft, fg: LEDGER.indigo },
   accepted: { bg: LEDGER.mintSoft, fg: LEDGER.mint },
-  invoiced: { bg: LEDGER.mintSoft, fg: LEDGER.mint }
+  invoiced: { bg: LEDGER.mintSoft, fg: LEDGER.mint },
+  converted: { bg: LEDGER.mintSoft, fg: LEDGER.mint }
 };
-
-function pickVariant(product: Product) {
-  return (
-    product.variants.find((variant) => variant.inventory === "in_stock") ||
-    product.variants[0]
-  );
-}
 
 function fieldStyle() {
   return {
@@ -63,53 +61,91 @@ function fieldStyle() {
   } as const;
 }
 
-/* Ledger quote builder + detail — reads/writes one quote in the real
- * quote-store: line items, quantity, quick-add catalog search,
- * customer details, terms, notes, and submit (mark sent + add to PO). */
+/* Editable working copy held client-side; flushed to the DB on save. */
+type WorkingItem = QuoteItemInput & {
+  id?: string;
+  productId: string;
+  variantId: string;
+  sku: string;
+  title: string;
+  quantity: number;
+  unitPrice: number;
+};
+
+function toWorkingItems(quote: DbQuote): WorkingItem[] {
+  return quote.items.map((item) => ({
+    id: item.id,
+    productId: item.productId,
+    variantId: item.variantId,
+    sku: item.sku,
+    title: item.title,
+    options: item.options,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    lineTotal: item.lineTotal
+  }));
+}
+
+/* Ledger customer quote builder + detail — reads / writes one DB quote:
+ * line items, quantities, quick-add catalog search, customer details,
+ * terms, notes, submit (mark sent), add to PO, and convert to order. */
 export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
-  const hydrated = useLedgerScope();
-  const {
-    quotes,
-    addItem,
-    removeItem,
-    updateQuantity,
-    clearQuote,
-    saveQuote,
-    setActiveQuote,
-    updateQuoteDetails
-  } = useQuoteStore();
+  const router = useRouter();
   const addCartItem = useCartStore((state) => state.addItem);
-  const quote = quotes.find((record) => record.id === quoteId);
+  const userId = useUserStore((state) => state.userId);
+
+  const [quote, setQuote] = useState<DbQuote | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [configured, setConfigured] = useState(true);
+
+  const [items, setItems] = useState<WorkingItem[]>([]);
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [customerId, setCustomerId] = useState("");
+  const [jobsiteAddress, setJobsiteAddress] = useState("");
+  const [billingAddress, setBillingAddress] = useState("");
+  const [terms, setTerms] = useState("Net 30");
+  const [notes, setNotes] = useState("");
 
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const hydrateFrom = useCallback((next: DbQuote) => {
+    setQuote(next);
+    setItems(toWorkingItems(next));
+    setCustomerName(next.customerName);
+    setCustomerEmail(next.customerEmail);
+    setCustomerId(next.customerId);
+    setJobsiteAddress(next.jobsiteAddress);
+    setBillingAddress(next.billingAddress);
+    setTerms(next.terms || "Net 30");
+    setNotes(next.notes);
+  }, []);
 
   useEffect(() => {
-    if (quote) setActiveQuote(quote.id);
-  }, [quote, setActiveQuote]);
+    let active = true;
+    setLoaded(false);
+    void (async () => {
+      const result = await fetchQuote(quoteId);
+      if (!active) return;
+      setConfigured(result.configured);
+      if (result.quote) hydrateFrom(result.quote);
+      setLoaded(true);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [quoteId, hydrateFrom]);
 
   useEffect(() => {
     if (!message) return;
-    const handle = window.setTimeout(() => setMessage(""), 2600);
+    const handle = window.setTimeout(() => setMessage(""), 2800);
     return () => window.clearTimeout(handle);
   }, [message]);
 
-  const results = useMemo(() => {
-    const normalized = search.trim().toLowerCase();
-    if (!normalized) return products.slice(0, 8);
-    return products
-      .filter(
-        (product) =>
-          product.title.toLowerCase().includes(normalized) ||
-          product.category.name.toLowerCase().includes(normalized) ||
-          product.variants.some((variant) =>
-            variant.sku.toLowerCase().includes(normalized)
-          )
-      )
-      .slice(0, 24);
-  }, [search]);
-
+  const results = useMemo(() => searchCatalog(search), [search]);
   const sortedCustomers = useMemo(
     () =>
       [...customerDirectory].sort((left, right) =>
@@ -118,19 +154,170 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
     []
   );
 
-  if (hydrated && !quote) {
+  const subtotal = useMemo(
+    () => items.reduce((total, item) => total + item.unitPrice * item.quantity, 0),
+    [items]
+  );
+  const tax = calculateTax(subtotal);
+  const total = subtotal + tax;
+  const units = items.reduce((count, item) => count + item.quantity, 0);
+  const status: QuoteStatus = quote?.status ?? "draft";
+  const tone = statusTone[status];
+  const locked = status === "converted";
+
+  function buildInput(overrides: Partial<QuoteInput> = {}): QuoteInput {
+    return {
+      id: quote?.id,
+      status: quote?.status ?? "draft",
+      siteUserId: userId,
+      customerId,
+      customerName,
+      customerEmail,
+      billingAddress,
+      jobsiteAddress,
+      terms,
+      notes,
+      subtotal,
+      tax,
+      total,
+      items: items.map<QuoteItemInput>((item) => ({
+        productId: item.productId,
+        variantId: item.variantId,
+        sku: item.sku,
+        title: item.title,
+        options: item.options,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        lineTotal: Number((item.unitPrice * item.quantity).toFixed(2))
+      })),
+      ...overrides
+    };
+  }
+
+  async function persist(overrides: Partial<QuoteInput>, note: string) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await saveQuote(buildInput(overrides));
+      if (result.quote) hydrateFrom(result.quote);
+      setConfigured(result.persisted);
+      setMessage(
+        result.persisted ? note : "Saved locally — quote database not configured."
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function applyCustomer(id: string) {
+    const customer = getCustomerById(id);
+    if (!customer) {
+      setCustomerId("");
+      return;
+    }
+    setCustomerId(customer.id);
+    setCustomerName(customer.name);
+    setCustomerEmail(customer.email);
+    setBillingAddress(customer.billingAddress);
+    setJobsiteAddress(customer.jobsiteAddress);
+    setTerms(customer.terms);
+  }
+
+  function addCatalogItem(productId: string) {
+    const product = results.find((entry) => entry.id === productId);
+    if (!product) return;
+    const variant = pickVariant(product);
+    if (!variant) return;
+    setItems((current) => {
+      const existing = current.find((item) => item.variantId === variant.id);
+      if (existing) {
+        return current.map((item) =>
+          item.variantId === variant.id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        );
+      }
+      const input = catalogItemToQuoteInput(product, variant);
+      return [
+        {
+          productId: input.productId ?? product.id,
+          variantId: input.variantId ?? variant.id,
+          sku: input.sku ?? variant.sku,
+          title: input.title ?? product.title,
+          options: input.options,
+          quantity: input.quantity ?? 1,
+          unitPrice: input.unitPrice ?? variant.price
+        },
+        ...current
+      ];
+    });
+    setMessage(`Added ${product.title}.`);
+  }
+
+  function updateQuantity(variantId: string, quantity: number) {
+    setItems((current) =>
+      current.map((item) =>
+        item.variantId === variantId
+          ? { ...item, quantity: Math.max(1, Math.round(quantity) || 1) }
+          : item
+      )
+    );
+  }
+
+  function removeItem(variantId: string) {
+    setItems((current) =>
+      current.filter((item) => item.variantId !== variantId)
+    );
+  }
+
+  async function handleConvert() {
+    if (!quote || busy) return;
+    setBusy(true);
+    try {
+      // Flush current edits first so the conversion uses live line items.
+      const saved = await saveQuote(buildInput());
+      if (saved.quote) hydrateFrom(saved.quote);
+      const result = await convertQuoteToOrder(quote.id);
+      if (result.persisted && result.orderId) {
+        setMessage(`Converted to order ${result.orderNumber ?? ""}.`);
+        const refreshed = await fetchQuote(quote.id);
+        if (refreshed.quote) hydrateFrom(refreshed.quote);
+      } else {
+        setMessage("Conversion is not available — quote database not configured.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function addQuoteToCart() {
+    items.forEach((item) => {
+      addCartItem({
+        productId: item.productId,
+        variantId: item.variantId,
+        title: item.title,
+        sku: item.sku,
+        image: "/assets/logo.svg",
+        price: item.unitPrice,
+        quantity: item.quantity,
+        options: (item.options ?? {}) as CartItem["options"]
+      });
+    });
+    setMessage("Quote lines added to your purchase order.");
+  }
+
+  if (loaded && !quote) {
     return (
       <LedgerPage>
         <div className="py-16">
           <Card className="mx-auto max-w-xl p-12 text-center">
-            <p
-              className="text-lg font-semibold"
-              style={{ color: LEDGER.ink }}
-            >
+            <p className="text-lg font-semibold" style={{ color: LEDGER.ink }}>
               Quote not found
             </p>
             <p className="mt-1 text-[13px]" style={{ color: LEDGER.body }}>
-              It may have been deleted or created under another account.
+              {configured
+                ? "It may have been deleted or created under another account."
+                : "The quote database is not configured."}
             </p>
             <Link
               className="mt-5 inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white transition"
@@ -148,76 +335,14 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
   if (!quote) {
     return (
       <LedgerPage>
-        <div className="py-24 text-center text-[13px]" style={{ color: LEDGER.muted }}>
+        <div
+          className="py-24 text-center text-[13px]"
+          style={{ color: LEDGER.muted }}
+        >
           Loading quote…
         </div>
       </LedgerPage>
     );
-  }
-
-  const items = quote.items;
-  const subtotal = items.reduce(
-    (total, item) => total + item.price * item.quantity,
-    0
-  );
-  const tax = calculateTax(subtotal);
-  const total = subtotal + tax;
-  const units = items.reduce((count, item) => count + item.quantity, 0);
-  const status = quote.status || "draft";
-  const tone = statusTone[status];
-
-  function update(details: Parameters<typeof updateQuoteDetails>[1]) {
-    updateQuoteDetails(quote!.id, details);
-  }
-
-  function applyCustomer(customerId: string) {
-    const customer = getCustomerById(customerId);
-    if (!customer) {
-      update({ customerId: "" });
-      return;
-    }
-    update({
-      customerId: customer.id,
-      customerName: customer.name,
-      customerEmail: customer.email,
-      billingAddress: customer.billingAddress,
-      jobsiteAddress: customer.jobsiteAddress,
-      terms: customer.terms
-    });
-  }
-
-  function addCatalogItem(product: Product) {
-    const variant = pickVariant(product);
-    if (!variant) return;
-    addItem(
-      {
-        productId: product.id,
-        variantId: variant.id,
-        title: product.title,
-        sku: variant.sku,
-        image: variant.image || product.images[0]?.url || "/assets/logo.svg",
-        price: variant.price,
-        weightLbs: variant.calculated_weight_lb,
-        cwtPrice: variant.steel_cwt_price,
-        pricingMethod: variant.pricing_method,
-        quantity: 1,
-        options: variant.options
-      },
-      quote!.id
-    );
-    setMessage(`Added ${product.title}.`);
-  }
-
-  function submitQuote() {
-    if (!items.length) return;
-    update({ status: "sent" });
-    saveQuote(quote!.id);
-    setMessage("Quote submitted to Gateworks for review.");
-  }
-
-  function addQuoteToCart() {
-    items.forEach((item) => addCartItem(item));
-    setMessage("Quote lines added to your purchase order.");
   }
 
   return (
@@ -239,18 +364,15 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <Eyebrow>Quote builder</Eyebrow>
-            <input
-              aria-label="Quote name"
-              className="mt-2 w-full max-w-lg bg-transparent text-3xl font-semibold tracking-tight text-white outline-none sm:text-4xl"
-              onChange={(event) => update({ name: event.target.value })}
-              value={quote.name}
-            />
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+              {quote.quoteNumber}
+            </h1>
             <p
               className="mt-2 text-sm"
               style={{ color: "rgba(255,255,255,0.6)" }}
             >
-              {quote.quoteNumber} · Created {formatDate(quote.createdAt)} · Due{" "}
-              {formatDate(quote.dueAt || quote.expiresAt)}
+              Created {formatLedgerDate(quote.createdAt)} · Updated{" "}
+              {formatLedgerDate(quote.updatedAt)}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -281,9 +403,10 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
                 </span>
                 <select
                   className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none"
+                  disabled={locked}
                   onChange={(event) => applyCustomer(event.target.value)}
                   style={fieldStyle()}
-                  value={quote.customerId || ""}
+                  value={customerId || ""}
                 >
                   <option value="">Manual entry</option>
                   {sortedCustomers.map((customer) => (
@@ -302,11 +425,13 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
                 </span>
                 <input
                   className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none"
-                  onChange={(event) =>
-                    update({ customerId: "", customerName: event.target.value })
-                  }
+                  disabled={locked}
+                  onChange={(event) => {
+                    setCustomerId("");
+                    setCustomerName(event.target.value);
+                  }}
                   style={fieldStyle()}
-                  value={quote.customerName}
+                  value={customerName}
                 />
               </label>
               <label>
@@ -318,12 +443,14 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
                 </span>
                 <input
                   className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none"
-                  onChange={(event) =>
-                    update({ customerId: "", customerEmail: event.target.value })
-                  }
+                  disabled={locked}
+                  onChange={(event) => {
+                    setCustomerId("");
+                    setCustomerEmail(event.target.value);
+                  }}
                   style={fieldStyle()}
                   type="email"
-                  value={quote.customerEmail}
+                  value={customerEmail}
                 />
               </label>
               <label>
@@ -335,9 +462,10 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
                 </span>
                 <select
                   className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none"
-                  onChange={(event) => update({ terms: event.target.value })}
+                  disabled={locked}
+                  onChange={(event) => setTerms(event.target.value)}
                   style={fieldStyle()}
-                  value={quote.terms || "Due on receipt"}
+                  value={terms || "Net 30"}
                 >
                   <option>Due on receipt</option>
                   <option>Net 15</option>
@@ -354,11 +482,13 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
                 </span>
                 <input
                   className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none"
-                  onChange={(event) =>
-                    update({ customerId: "", jobsiteAddress: event.target.value })
-                  }
+                  disabled={locked}
+                  onChange={(event) => {
+                    setCustomerId("");
+                    setJobsiteAddress(event.target.value);
+                  }}
                   style={fieldStyle()}
-                  value={quote.jobsiteAddress}
+                  value={jobsiteAddress}
                 />
               </label>
             </div>
@@ -376,20 +506,22 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
               >
                 Line items
               </p>
-              <button
-                className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-semibold transition"
-                onClick={() => setShowAdd((value) => !value)}
-                style={{
-                  backgroundColor: LEDGER.indigoSoft,
-                  color: LEDGER.indigo
-                }}
-                type="button"
-              >
-                <Plus className="h-3.5 w-3.5" /> Add item
-              </button>
+              {!locked ? (
+                <button
+                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-semibold transition"
+                  onClick={() => setShowAdd((value) => !value)}
+                  style={{
+                    backgroundColor: LEDGER.indigoSoft,
+                    color: LEDGER.indigo
+                  }}
+                  type="button"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add item
+                </button>
+              ) : null}
             </div>
 
-            {showAdd ? (
+            {showAdd && !locked ? (
               <div
                 className="p-5"
                 style={{ borderBottom: `1px solid ${LEDGER.line}` }}
@@ -417,7 +549,7 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
                       <button
                         key={product.id}
                         className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-[#fafbfc]"
-                        onClick={() => addCatalogItem(product)}
+                        onClick={() => addCatalogItem(product.id)}
                         type="button"
                       >
                         <span
@@ -480,34 +612,19 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
                     className="grid gap-3 p-5 sm:grid-cols-[1fr_140px_110px] sm:items-center"
                     style={{ borderBottom: `1px solid ${LEDGER.line}` }}
                   >
-                    <div className="flex gap-3">
-                      <div
-                        className="grid h-14 w-14 shrink-0 place-items-center rounded-xl"
-                        style={{ backgroundColor: LEDGER.canvas }}
+                    <div className="min-w-0">
+                      <p
+                        className="text-[13px] font-semibold leading-snug"
+                        style={{ color: LEDGER.ink }}
                       >
-                        <Image
-                          alt={item.title}
-                          className="h-full w-full object-contain p-1.5"
-                          height={112}
-                          quality={75}
-                          src={item.image}
-                          width={112}
-                        />
-                      </div>
-                      <div className="min-w-0">
-                        <p
-                          className="text-[13px] font-semibold leading-snug"
-                          style={{ color: LEDGER.ink }}
-                        >
-                          {item.title}
-                        </p>
-                        <p
-                          className="text-[11px]"
-                          style={{ color: LEDGER.muted }}
-                        >
-                          SKU {item.sku} · {formatUsd(item.price)} each
-                        </p>
-                      </div>
+                        {item.title}
+                      </p>
+                      <p
+                        className="text-[11px]"
+                        style={{ color: LEDGER.muted }}
+                      >
+                        SKU {item.sku} · {formatUsd(item.unitPrice)} each
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <div
@@ -516,13 +633,10 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
                       >
                         <button
                           aria-label="Decrease quantity"
-                          className="grid h-8 w-8 place-items-center"
+                          className="grid h-8 w-8 place-items-center disabled:opacity-40"
+                          disabled={locked}
                           onClick={() =>
-                            updateQuantity(
-                              quote.id,
-                              item.variantId,
-                              item.quantity - 1
-                            )
+                            updateQuantity(item.variantId, item.quantity - 1)
                           }
                           style={{ color: LEDGER.body }}
                           type="button"
@@ -532,11 +646,12 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
                         <input
                           aria-label={`Quantity for ${item.title}`}
                           className="h-8 w-10 bg-transparent text-center text-[13px] font-semibold outline-none"
+                          disabled={locked}
                           inputMode="numeric"
                           onChange={(event) => {
                             const next = Number(event.target.value);
                             if (Number.isFinite(next)) {
-                              updateQuantity(quote.id, item.variantId, next);
+                              updateQuantity(item.variantId, next);
                             }
                           }}
                           style={{ color: LEDGER.ink }}
@@ -544,13 +659,10 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
                         />
                         <button
                           aria-label="Increase quantity"
-                          className="grid h-8 w-8 place-items-center"
+                          className="grid h-8 w-8 place-items-center disabled:opacity-40"
+                          disabled={locked}
                           onClick={() =>
-                            updateQuantity(
-                              quote.id,
-                              item.variantId,
-                              item.quantity + 1
-                            )
+                            updateQuantity(item.variantId, item.quantity + 1)
                           }
                           style={{ color: LEDGER.body }}
                           type="button"
@@ -558,24 +670,26 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
                           <Plus className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                      <button
-                        aria-label={`Remove ${item.title}`}
-                        className="grid h-8 w-8 place-items-center rounded-lg"
-                        onClick={() => removeItem(quote.id, item.variantId)}
-                        style={{
-                          border: `1px solid ${LEDGER.line}`,
-                          color: LEDGER.muted
-                        }}
-                        type="button"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {!locked ? (
+                        <button
+                          aria-label={`Remove ${item.title}`}
+                          className="grid h-8 w-8 place-items-center rounded-lg"
+                          onClick={() => removeItem(item.variantId)}
+                          style={{
+                            border: `1px solid ${LEDGER.line}`,
+                            color: LEDGER.muted
+                          }}
+                          type="button"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
                     </div>
                     <p
                       className="text-[14px] font-semibold sm:text-right"
                       style={{ color: LEDGER.ink }}
                     >
-                      {formatUsd(item.price * item.quantity)}
+                      {formatUsd(item.unitPrice * item.quantity)}
                     </p>
                   </div>
                 ))}
@@ -589,15 +703,16 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
                   No line items yet
                 </p>
                 <p className="mt-1 text-[12px]" style={{ color: LEDGER.body }}>
-                  Use “Add item” to build this quote from the catalog.
+                  Use &ldquo;Add item&rdquo; to build this quote from the
+                  catalog.
                 </p>
               </div>
             )}
-            {items.length ? (
+            {items.length && !locked ? (
               <div className="p-5">
                 <button
                   className="text-[12px] font-semibold transition hover:underline"
-                  onClick={() => clearQuote(quote.id)}
+                  onClick={() => setItems([])}
                   style={{ color: LEDGER.rose }}
                   type="button"
                 >
@@ -617,10 +732,11 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
             </p>
             <textarea
               className="mt-2 min-h-20 w-full resize-y rounded-xl px-3 py-2.5 text-[13px] outline-none"
-              onChange={(event) => update({ notes: event.target.value })}
+              disabled={locked}
+              onChange={(event) => setNotes(event.target.value)}
               placeholder="Scope, lead time, or special instructions"
               style={fieldStyle()}
-              value={quote.notes}
+              value={notes}
             />
           </Card>
         </div>
@@ -667,41 +783,76 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
                 </dd>
               </div>
             </dl>
-            <button
-              className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-3 text-[14px] font-semibold text-white transition"
-              disabled={!items.length}
-              onClick={submitQuote}
-              style={{
-                backgroundColor: items.length ? LEDGER.indigo : LEDGER.muted
-              }}
-              type="button"
-            >
-              <Send className="h-4 w-4" /> Submit quote
-            </button>
-            <button
-              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-[13px] font-semibold transition"
-              disabled={!items.length}
-              onClick={addQuoteToCart}
-              style={{
-                border: `1px solid ${LEDGER.line}`,
-                color: LEDGER.body,
-                opacity: items.length ? 1 : 0.5
-              }}
-              type="button"
-            >
-              <ShoppingCart className="h-4 w-4" /> Add to purchase order
-            </button>
-            <button
-              className="mt-2 flex w-full items-center justify-center rounded-xl px-4 py-2.5 text-[13px] font-semibold transition"
-              onClick={() => {
-                saveQuote(quote.id);
-                setMessage("Quote saved.");
-              }}
-              style={{ border: `1px solid ${LEDGER.line}`, color: LEDGER.body }}
-              type="button"
-            >
-              Save draft
-            </button>
+
+            {locked ? (
+              <p
+                className="mt-4 rounded-xl px-3 py-2.5 text-[12px] font-semibold"
+                style={{ backgroundColor: LEDGER.mintSoft, color: LEDGER.mint }}
+              >
+                This quote has been converted to an order
+                {quote.convertedOrderId ? "." : "."}
+              </p>
+            ) : (
+              <>
+                <button
+                  className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-3 text-[14px] font-semibold text-white transition disabled:opacity-60"
+                  disabled={!items.length || busy}
+                  onClick={() => persist({ status: "sent" }, "Quote submitted.")}
+                  style={{
+                    backgroundColor: items.length ? LEDGER.indigo : LEDGER.muted
+                  }}
+                  type="button"
+                >
+                  <Send className="h-4 w-4" /> Submit quote
+                </button>
+                <button
+                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-[13px] font-semibold transition disabled:opacity-60"
+                  disabled={!items.length || busy}
+                  onClick={handleConvert}
+                  style={{
+                    border: `1px solid ${LEDGER.indigo}`,
+                    color: LEDGER.indigo
+                  }}
+                  type="button"
+                >
+                  <ArrowRight className="h-4 w-4" /> Convert to order
+                </button>
+                <button
+                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-[13px] font-semibold transition"
+                  disabled={!items.length}
+                  onClick={addQuoteToCart}
+                  style={{
+                    border: `1px solid ${LEDGER.line}`,
+                    color: LEDGER.body,
+                    opacity: items.length ? 1 : 0.5
+                  }}
+                  type="button"
+                >
+                  <ShoppingCart className="h-4 w-4" /> Add to purchase order
+                </button>
+                <button
+                  className="mt-2 flex w-full items-center justify-center rounded-xl px-4 py-2.5 text-[13px] font-semibold transition disabled:opacity-60"
+                  disabled={busy}
+                  onClick={() => persist({}, "Quote saved.")}
+                  style={{
+                    border: `1px solid ${LEDGER.line}`,
+                    color: LEDGER.body
+                  }}
+                  type="button"
+                >
+                  Save draft
+                </button>
+              </>
+            )}
+
+            {!configured ? (
+              <p
+                className="mt-3 text-[12px] font-semibold"
+                style={{ color: LEDGER.amber }}
+              >
+                Quote database not configured — changes are not persisted.
+              </p>
+            ) : null}
             {message ? (
               <p
                 className="mt-3 flex items-center gap-1.5 text-[12px] font-semibold"
@@ -713,6 +864,14 @@ export function LedgerQuoteDetailView({ quoteId }: { quoteId: string }) {
             <div className="mt-4">
               <ArrowLink href="/ledger/quotes">Back to all quotes</ArrowLink>
             </div>
+            <button
+              className="mt-2 text-[11px] font-medium"
+              onClick={() => router.refresh()}
+              style={{ color: LEDGER.muted }}
+              type="button"
+            >
+              Refresh
+            </button>
           </Card>
         </aside>
       </div>

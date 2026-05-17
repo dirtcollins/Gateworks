@@ -27,7 +27,8 @@ import {
 
 /* ------------------------------------------------------------------ *
  * LEDGER — admin / customers
- * Customer directory built on the real `customerDirectory` records,
+ * Customer directory built on the real `customerDirectory` records
+ * merged with people who actually registered (GET /api/site-users),
  * cross-referenced with the live order store so each account shows
  * genuine spend, order count, and recent purchase history. Searchable
  * list on the left, a detail panel on the right.
@@ -41,6 +42,23 @@ type CustomerStats = {
   lastOrderAt: string | null;
 };
 
+type SiteUser = { id: string; displayName: string; lastUsedAt: string };
+
+/* A registered site user with no directory entry becomes a synthetic
+ * CustomerRecord so it surfaces alongside the static directory. */
+function siteUserToCustomer(user: SiteUser): CustomerRecord {
+  return {
+    id: `site-user:${user.id}`,
+    name: user.displayName,
+    company: user.displayName,
+    email: "",
+    phone: "",
+    billingAddress: "No billing address on file",
+    jobsiteAddress: "No jobsite address on file",
+    terms: "Registered account"
+  };
+}
+
 const OPEN_STATUSES = [
   "submitted",
   "confirmed",
@@ -50,15 +68,21 @@ const OPEN_STATUSES = [
 ];
 
 /* An order belongs to a customer if the company name matches the
- * directory company, or the email matches. Falls back gracefully. */
+ * directory company, the email matches, or — for synthetic registered
+ * accounts — the order userId matches. Falls back gracefully. */
 function ordersForCustomer(customer: CustomerRecord, orders: OrderRecord[]) {
   const company = customer.company.trim().toLowerCase();
   const email = customer.email.trim().toLowerCase();
+  const siteUserId = customer.id.startsWith("site-user:")
+    ? customer.id.slice("site-user:".length)
+    : "";
   return orders.filter((order) => {
     const orderCompany = (order.companyName || "").trim().toLowerCase();
     const orderEmail = (order.email || "").trim().toLowerCase();
     return (
-      (company && orderCompany === company) || (email && orderEmail === email)
+      (company && orderCompany === company) ||
+      (email && orderEmail === email) ||
+      (siteUserId && order.userId === siteUserId)
     );
   });
 }
@@ -87,6 +111,7 @@ export function LedgerAdminCustomers() {
   const setOrders = useOrderStore((state) => state.setOrders);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(customerDirectory[0]?.id ?? "");
+  const [siteUsers, setSiteUsers] = useState<SiteUser[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -113,18 +138,55 @@ export function LedgerAdminCustomers() {
     };
   }, [setOrders]);
 
+  useEffect(() => {
+    let mounted = true;
+    async function loadUsers() {
+      try {
+        const response = await fetch("/api/site-users", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json()) as { users?: SiteUser[] };
+        if (mounted && payload.users) setSiteUsers(payload.users);
+      } catch {
+        /* Directory still renders without registered accounts. */
+      }
+    }
+    void loadUsers();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const orders = useMemo(
     () => storeOrders.filter((order) => !order.isQuoteRequest),
     [storeOrders]
   );
 
+  /* Static directory plus any registered account not already covered by
+   * a directory entry (matched on a normalized name). */
+  const allCustomers = useMemo(() => {
+    const directoryNames = new Set(
+      customerDirectory.flatMap((entry) => [
+        entry.name.trim().toLowerCase(),
+        entry.company.trim().toLowerCase()
+      ])
+    );
+    const extras = siteUsers
+      .filter(
+        (user) =>
+          user.id !== "guest" &&
+          !directoryNames.has(user.displayName.trim().toLowerCase())
+      )
+      .map(siteUserToCustomer);
+    return [...customerDirectory, ...extras];
+  }, [siteUsers]);
+
   const enriched = useMemo(
     () =>
-      customerDirectory.map((customer) => ({
+      allCustomers.map((customer) => ({
         customer,
         stats: buildStats(customer, orders)
       })),
-    [orders]
+    [allCustomers, orders]
   );
 
   const filtered = useMemo(() => {

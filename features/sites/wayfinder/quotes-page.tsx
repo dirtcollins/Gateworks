@@ -1,14 +1,20 @@
-// Wayfinder — quotes list. Reads every quote from the real @/lib/quote-store,
-// with status filter tabs, search, create, rename, delete, and totals.
-// Restyled in the Wayfinder identity. Logic ported from
-// components/quotes-page-client.tsx.
+// Wayfinder — customer quotes list. Reads the signed-in customer's quotes from
+// the Supabase-backed quote API (@/lib/quotes-data), scoped by siteUserId. Shows
+// status filter tabs, search, totals, create, delete, and a convert-to-order
+// action. Degrades gracefully when Supabase is not configured.
 "use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { useQuoteStore, type QuoteRecord } from "@/lib/quote-store";
-import { calculateTax } from "@/lib/tax";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useUserStore } from "@/lib/user-store";
+import {
+  convertQuoteToOrder,
+  deleteQuote,
+  fetchQuotes,
+  saveQuote,
+  type DbQuote
+} from "@/lib/quotes-data";
 import { Btn, Card, Eyebrow, Ico, Mono, fmt, monoFont, wf } from "./kit";
 import { WfInput } from "./cart-page";
 
@@ -22,68 +28,134 @@ function formatDate(value: string) {
   return value ? dateFormatter.format(new Date(value)) : "—";
 }
 
-function quoteSubtotal(quote: QuoteRecord) {
-  return quote.items.reduce((total, item) => total + item.price * item.quantity, 0);
-}
+type QuoteTab = "open" | "draft" | "converted" | "all";
 
-function quoteTotal(quote: QuoteRecord) {
-  const subtotal = quoteSubtotal(quote);
-  return subtotal + calculateTax(subtotal);
-}
-
-type QuoteTab = "open" | "draft" | "all";
+const STATUS_LABEL: Record<string, string> = {
+  draft: "Draft",
+  sent: "Sent",
+  accepted: "Accepted",
+  invoiced: "Invoiced",
+  converted: "Converted"
+};
 
 export function WayfinderQuotes() {
   const router = useRouter();
-  const { quotes, createQuote, deleteQuote, renameQuote, setActiveQuote } = useQuoteStore();
+  const userId = useUserStore((state) => state.userId);
+  const displayName = useUserStore((state) => state.displayName);
 
   const [ready, setReady] = useState(false);
+  const [configured, setConfigured] = useState(true);
+  const [quotes, setQuotes] = useState<DbQuote[]>([]);
   const [tab, setTab] = useState<QuoteTab>("open");
   const [query, setQuery] = useState("");
-  const [editingId, setEditingId] = useState("");
-  const [editingName, setEditingName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const load = useCallback(async () => {
+    const result = await fetchQuotes({ siteUserId: userId });
+    setQuotes(result.quotes);
+    setConfigured(result.configured);
+    setReady(true);
+  }, [userId]);
 
   useEffect(() => {
-    useQuoteStore.persist.rehydrate();
-    setReady(true);
+    useUserStore.persist.rehydrate();
   }, []);
+
+  useEffect(() => {
+    setReady(false);
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!message) return;
+    const handle = window.setTimeout(() => setMessage(""), 3200);
+    return () => window.clearTimeout(handle);
+  }, [message]);
 
   const rows = useMemo(
     () =>
-      quotes.map((quote) => ({
-        quote,
-        status: quote.status || "draft",
-        total: quoteTotal(quote)
-      })),
+      quotes
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(b.updatedAt || b.createdAt).getTime() -
+            new Date(a.updatedAt || a.createdAt).getTime()
+        ),
     [quotes]
   );
 
-  const openRows = rows.filter((row) => row.status !== "invoiced");
-  const draftRows = rows.filter((row) => row.status === "draft");
-  const openTotal = openRows.reduce((total, row) => total + row.total, 0);
-  const invoicedCount = rows.filter((row) => row.status === "invoiced").length;
+  const openRows = rows.filter(
+    (q) => q.status !== "invoiced" && q.status !== "converted"
+  );
+  const draftRows = rows.filter((q) => q.status === "draft");
+  const convertedRows = rows.filter((q) => q.status === "converted");
+  const openTotal = openRows.reduce((sum, q) => sum + q.total, 0);
 
-  const visibleRows = rows.filter(({ quote, status }) => {
-    if (tab === "open" && status === "invoiced") return false;
-    if (tab === "draft" && status !== "draft") return false;
+  const visibleRows = rows.filter((quote) => {
+    if (tab === "open" && (quote.status === "invoiced" || quote.status === "converted"))
+      return false;
+    if (tab === "draft" && quote.status !== "draft") return false;
+    if (tab === "converted" && quote.status !== "converted") return false;
     const search = query.trim().toLowerCase();
     if (!search) return true;
-    return [quote.name, quote.quoteNumber, quote.customerName, quote.customerEmail, status]
+    return [quote.quoteNumber, quote.customerName, quote.customerEmail, quote.status]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(search));
   });
 
-  function handleNewQuote() {
-    const id = createQuote("New job quote");
-    setActiveQuote(id);
-    router.push("/wayfinder/quote");
+  async function handleNewQuote() {
+    if (busy) return;
+    setBusy(true);
+    const result = await saveQuote({
+      status: "draft",
+      siteUserId: userId,
+      customerName: displayName && displayName !== "Guest" ? displayName : "",
+      createdBy: displayName || "Customer",
+      items: []
+    });
+    setBusy(false);
+    if (result.quote) {
+      router.push(`/wayfinder/quotes/${result.quote.id}`);
+      return;
+    }
+    setMessage(
+      result.persisted
+        ? "Could not start a new quote."
+        : "Quotes are not yet persisted — Supabase is not configured."
+    );
   }
 
-  function finishRename() {
-    if (!editingId) return;
-    renameQuote(editingId, editingName);
-    setEditingId("");
-    setEditingName("");
+  async function handleDelete(id: string) {
+    if (busy) return;
+    if (!window.confirm("Delete this quote?")) return;
+    setBusy(true);
+    const result = await deleteQuote(id);
+    if (result.persisted) {
+      setQuotes((current) => current.filter((q) => q.id !== id));
+      setMessage("Quote deleted.");
+    } else {
+      setMessage("Could not delete the quote.");
+    }
+    setBusy(false);
+  }
+
+  async function handleConvert(quote: DbQuote) {
+    if (busy) return;
+    if (!quote.items.length) {
+      setMessage("Add a line item before converting to an order.");
+      return;
+    }
+    if (!window.confirm(`Convert ${quote.quoteNumber} to a full order?`)) return;
+    setBusy(true);
+    const result = await convertQuoteToOrder(quote.id);
+    setBusy(false);
+    if (result.persisted) {
+      setMessage(`Converted to order ${result.orderNumber || ""}.`.trim());
+      void load();
+    } else {
+      setMessage("Could not convert the quote — Supabase may not be configured.");
+    }
   }
 
   if (!ready) {
@@ -97,6 +169,7 @@ export function WayfinderQuotes() {
   const tabs: Array<{ id: QuoteTab; label: string; count: number | null }> = [
     { id: "open", label: "Open", count: openRows.length },
     { id: "draft", label: "Draft", count: draftRows.length },
+    { id: "converted", label: "Converted", count: convertedRows.length },
     { id: "all", label: "All", count: rows.length }
   ];
 
@@ -116,14 +189,50 @@ export function WayfinderQuotes() {
       >
         <div>
           <Eyebrow>Estimate center</Eyebrow>
-          <h1 style={{ fontSize: 30, fontWeight: 900, letterSpacing: "-0.02em", margin: "6px 0 0" }}>
-            Quotes
+          <h1
+            style={{
+              fontSize: 30,
+              fontWeight: 900,
+              letterSpacing: "-0.02em",
+              margin: "6px 0 0"
+            }}
+          >
+            Your quotes
           </h1>
         </div>
-        <Btn variant="primary" onClick={handleNewQuote}>
+        <Btn variant="primary" onClick={handleNewQuote} disabled={busy}>
           <Ico.plus size={14} /> Create a quote
         </Btn>
       </div>
+
+      {!configured ? (
+        <Card
+          style={{
+            padding: "10px 14px",
+            marginBottom: 16,
+            background: wf.amber,
+            borderColor: wf.amberDeep
+          }}
+        >
+          <Mono style={{ fontSize: 12, color: "#92500a" }}>
+            Quotes are not yet persisted — Supabase is not configured. You can
+            still build a quote, but it will not be saved.
+          </Mono>
+        </Card>
+      ) : null}
+
+      {message ? (
+        <Card
+          style={{
+            padding: "10px 14px",
+            marginBottom: 16,
+            background: "#e7f0ea",
+            borderColor: "#bcd6c6"
+          }}
+        >
+          <Mono style={{ fontSize: 12, color: wf.pineDeep }}>{message}</Mono>
+        </Card>
+      ) : null}
 
       {/* Summary cards */}
       <div
@@ -137,12 +246,19 @@ export function WayfinderQuotes() {
         {[
           { label: "Open value", value: fmt(openTotal) },
           { label: "Draft quotes", value: String(draftRows.length) },
-          { label: "Invoiced", value: String(invoicedCount) },
+          { label: "Converted", value: String(convertedRows.length) },
           { label: "Total documents", value: String(rows.length) }
         ].map((card) => (
           <Card key={card.label} style={{ padding: 14 }}>
             <Eyebrow>{card.label}</Eyebrow>
-            <p style={{ fontSize: 24, fontWeight: 900, margin: "8px 0 0", letterSpacing: "-0.02em" }}>
+            <p
+              style={{
+                fontSize: 24,
+                fontWeight: 900,
+                margin: "8px 0 0",
+                letterSpacing: "-0.02em"
+              }}
+            >
               {card.value}
             </p>
           </Card>
@@ -188,7 +304,9 @@ export function WayfinderQuotes() {
                 >
                   {tabItem.label}
                   {tabItem.count !== null ? (
-                    <Mono style={{ fontSize: 10, opacity: 0.75 }}>{tabItem.count}</Mono>
+                    <Mono style={{ fontSize: 10, opacity: 0.75 }}>
+                      {tabItem.count}
+                    </Mono>
                   ) : null}
                 </button>
               );
@@ -204,81 +322,41 @@ export function WayfinderQuotes() {
         </div>
 
         {visibleRows.length ? (
-          visibleRows.map(({ quote, status, total }, index) => {
-            const lineCount = quote.items.reduce((count, item) => count + item.quantity, 0);
+          visibleRows.map((quote, index) => {
+            const lineCount = quote.items.reduce(
+              (count, item) => count + item.quantity,
+              0
+            );
+            const converted = quote.status === "converted";
             return (
               <div
                 key={quote.id}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr) 110px 130px auto",
+                  gridTemplateColumns:
+                    "minmax(0, 1.4fr) minmax(0, 1fr) 110px 130px auto",
                   gap: 12,
                   alignItems: "center",
                   padding: 14,
                   borderBottom:
-                    index < visibleRows.length - 1 ? `1px solid ${wf.hairline}` : "none"
+                    index < visibleRows.length - 1
+                      ? `1px solid ${wf.hairline}`
+                      : "none"
                 }}
               >
                 <div style={{ minWidth: 0 }}>
                   <Mono style={{ fontSize: 11, color: wf.muted }}>
-                    {quote.quoteNumber} · expires {formatDate(quote.expiresAt)}
+                    {quote.quoteNumber} · updated{" "}
+                    {formatDate(quote.updatedAt || quote.createdAt)}
                   </Mono>
-                  {editingId === quote.id ? (
-                    <input
-                      autoFocus
-                      value={editingName}
-                      onChange={(event) => setEditingName(event.target.value)}
-                      onBlur={finishRename}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") event.currentTarget.blur();
-                        if (event.key === "Escape") {
-                          setEditingId("");
-                          setEditingName("");
-                        }
-                      }}
-                      style={{
-                        marginTop: 4,
-                        height: 32,
-                        width: "100%",
-                        border: `1px solid ${wf.ink}`,
-                        padding: "0 8px",
-                        fontSize: 14,
-                        fontWeight: 800,
-                        fontFamily: "inherit"
-                      }}
-                    />
-                  ) : (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                      <span
-                        style={{
-                          fontSize: 15,
-                          fontWeight: 800,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap"
-                        }}
-                      >
-                        {quote.name}
-                      </span>
-                      <button
-                        type="button"
-                        aria-label={`Rename ${quote.name}`}
-                        onClick={() => {
-                          setEditingId(quote.id);
-                          setEditingName(quote.name);
-                        }}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          color: wf.muted,
-                          display: "inline-flex"
-                        }}
-                      >
-                        <Ico.clipboard size={13} />
-                      </button>
-                    </div>
-                  )}
+                  <div style={{ marginTop: 4 }}>
+                    <Link
+                      href={`/wayfinder/quotes/${quote.id}`}
+                      style={{ fontSize: 15, fontWeight: 800, color: wf.ink }}
+                    >
+                      {quote.customerName || "Untitled quote"}
+                    </Link>
+                  </div>
                   <Mono style={{ fontSize: 11, color: wf.steel }}>
                     {lineCount} unit{lineCount === 1 ? "" : "s"}
                   </Mono>
@@ -286,7 +364,9 @@ export function WayfinderQuotes() {
 
                 <div style={{ minWidth: 0 }}>
                   <p style={{ fontSize: 13, fontWeight: 700, margin: 0 }}>
-                    {quote.customerName || "No customer selected"}
+                    {quote.jobsiteAddress
+                      ? quote.jobsiteAddress.split("\n")[0]
+                      : "No jobsite set"}
                   </p>
                   <Mono style={{ fontSize: 11, color: wf.muted }}>
                     {quote.customerEmail || "Add email before sending"}
@@ -306,22 +386,38 @@ export function WayfinderQuotes() {
                     width: "fit-content"
                   }}
                 >
-                  {status}
+                  {STATUS_LABEL[quote.status] || quote.status}
                 </span>
 
-                <span style={{ fontSize: 17, fontWeight: 900, textAlign: "right" }}>
-                  {fmt(total)}
+                <span
+                  style={{ fontSize: 17, fontWeight: 900, textAlign: "right" }}
+                >
+                  {fmt(quote.total)}
                 </span>
 
-                <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                  <Btn
-                    size="xs"
-                    variant="primary"
-                    href={`/wayfinder/quotes/${quote.id}`}
-                  >
+                <div
+                  style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}
+                >
+                  <Btn size="xs" variant="primary" href={`/wayfinder/quotes/${quote.id}`}>
                     Open
                   </Btn>
-                  <Btn size="xs" variant="danger" onClick={() => deleteQuote(quote.id)}>
+                  {!converted ? (
+                    <Btn
+                      size="xs"
+                      variant="default"
+                      onClick={() => handleConvert(quote)}
+                      disabled={busy}
+                      title="Convert this quote to a full order"
+                    >
+                      To order
+                    </Btn>
+                  ) : null}
+                  <Btn
+                    size="xs"
+                    variant="danger"
+                    onClick={() => handleDelete(quote.id)}
+                    disabled={busy}
+                  >
                     <Ico.x size={12} />
                   </Btn>
                 </div>
@@ -330,11 +426,13 @@ export function WayfinderQuotes() {
           })
         ) : (
           <div style={{ padding: 40, textAlign: "center" }}>
-            <p style={{ fontSize: 15, fontWeight: 800, margin: 0 }}>No quotes in this view.</p>
+            <p style={{ fontSize: 15, fontWeight: 800, margin: 0 }}>
+              No quotes in this view.
+            </p>
             <p style={{ fontSize: 13, color: wf.steel, margin: "6px 0 14px" }}>
               Create a quote to start building an estimate.
             </p>
-            <Btn variant="primary" onClick={handleNewQuote}>
+            <Btn variant="primary" onClick={handleNewQuote} disabled={busy}>
               <Ico.plus size={14} /> Create a quote
             </Btn>
           </div>

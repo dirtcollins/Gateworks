@@ -1,23 +1,41 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { LedgerPage, LEDGER } from "@/features/sites/ledger/kit";
-import { useLedgerScope } from "@/features/sites/ledger/scope";
-import { useQuoteStore } from "@/lib/quote-store";
+import { useUserStore } from "@/lib/user-store";
+import { saveQuote } from "@/lib/quotes-data";
 
-/* Quote builder entry — hydrates stores, then routes to the active
- * quote's detail/builder page. Mirrors the real /quote behavior. */
+/* Quote builder entry — creates a fresh DB-backed draft quote for the
+ * logged-in account, then routes to its builder. Falls back to the
+ * quotes list when the quote database is not configured. */
 export default function LedgerQuotePage() {
-  const hydrated = useLedgerScope();
   const router = useRouter();
-  const activeQuoteId = useQuoteStore((state) => state.activeQuoteId);
+  const userId = useUserStore((state) => state.userId);
+  const displayName = useUserStore((state) => state.displayName);
+  const email = useUserStore((state) => state.email);
+  const started = useRef(false);
 
   useEffect(() => {
-    if (hydrated && activeQuoteId) {
-      router.replace(`/ledger/quotes/${activeQuoteId}`);
-    }
-  }, [hydrated, activeQuoteId, router]);
+    if (started.current) return;
+    started.current = true;
+
+    void (async () => {
+      const result = await saveQuote({
+        status: "draft",
+        siteUserId: userId,
+        customerName: displayName === "Guest" ? "" : displayName,
+        customerEmail: email,
+        terms: "Net 30",
+        items: []
+      });
+      if (result.quote) {
+        router.replace(`/ledger/quotes/${result.quote.id}`);
+      } else {
+        router.replace("/ledger/quotes");
+      }
+    })();
+  }, [router, userId, displayName, email]);
 
   return (
     <LedgerPage>

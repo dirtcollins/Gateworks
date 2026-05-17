@@ -24,7 +24,7 @@ const pickupWindows = [
   "2:00P - 4:00P"
 ];
 
-type PaymentMethod = "card" | "net-terms";
+type PaymentMethod = "card" | "net-terms" | "purchase-order";
 
 const emptyAddress: OrderAddress = {
   name: "",
@@ -114,13 +114,21 @@ export function WayfinderCheckout() {
       return;
     }
 
+    if (payment === "purchase-order" && !poNumber.trim()) {
+      setError("Enter a purchase-order number to bill on a PO.");
+      return;
+    }
+
     setError("");
     setIsSubmitting(true);
 
     try {
       // Net-terms checkout is submitted as a quote request so staff price /
-      // approve terms before invoicing; card checkout is a live order.
+      // approve terms before invoicing. A purchase-order checkout is a real
+      // order that carries a PO number and submitted PO status for admin
+      // approval. Card checkout is a live order.
       const isQuoteRequest = payment === "net-terms";
+      const isPurchaseOrder = payment === "purchase-order";
 
       const order = createOrder({
         userId,
@@ -148,7 +156,11 @@ export function WayfinderCheckout() {
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(order)
+        body: JSON.stringify({
+          ...order,
+          poNumber: isPurchaseOrder ? poNumber.trim() : "",
+          poStatus: isPurchaseOrder ? "submitted" : "none"
+        })
       }).catch(() => null);
 
       if (!response) {
@@ -206,9 +218,20 @@ export function WayfinderCheckout() {
           >
             <Ico.check size={32} />
           </div>
-          <Eyebrow>{payment === "net-terms" ? "Quote request" : "Order"} confirmed</Eyebrow>
+          <Eyebrow>
+            {payment === "net-terms"
+              ? "Quote request"
+              : payment === "purchase-order"
+                ? "Purchase order"
+                : "Order"}{" "}
+            confirmed
+          </Eyebrow>
           <h1 style={{ fontSize: 26, fontWeight: 900, margin: "8px 0" }}>
-            {payment === "net-terms" ? "Quote request submitted" : "Order placed"}
+            {payment === "net-terms"
+              ? "Quote request submitted"
+              : payment === "purchase-order"
+                ? "Purchase order submitted"
+                : "Order placed"}
           </h1>
           <Mono style={{ fontSize: 13, color: wf.steel, display: "block" }}>
             Reference {submittedOrderNumber}
@@ -461,7 +484,7 @@ export function WayfinderCheckout() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr",
+                gridTemplateColumns: "repeat(3, 1fr)",
                 gap: 8,
                 marginTop: 12
               }}
@@ -472,6 +495,11 @@ export function WayfinderCheckout() {
                     id: "card" as PaymentMethod,
                     title: "Card at pickup",
                     sub: "Pay at the counter or by card on file. Order goes live now."
+                  },
+                  {
+                    id: "purchase-order" as PaymentMethod,
+                    title: "Purchase order",
+                    sub: "Bill against a PO number. Order is submitted for PO approval."
                   },
                   {
                     id: "net-terms" as PaymentMethod,
@@ -505,6 +533,28 @@ export function WayfinderCheckout() {
                 );
               })}
             </div>
+            {payment === "purchase-order" ? (
+              <div style={{ marginTop: 10 }}>
+                <Field label="Purchase-order number">
+                  <WfInput
+                    placeholder="e.g. PO-48213"
+                    value={poNumber}
+                    onChange={setPoNumber}
+                  />
+                </Field>
+                <p
+                  style={{
+                    margin: "8px 0 0",
+                    fontSize: 11,
+                    color: wf.muted,
+                    fontFamily: monoFont
+                  }}
+                >
+                  The order is placed now and held for PO approval by the
+                  Bakersfield desk before fulfillment.
+                </p>
+              </div>
+            ) : null}
             {payment === "net-terms" ? (
               <div style={{ marginTop: 10 }}>
                 <WfInput
@@ -597,7 +647,9 @@ export function WayfinderCheckout() {
                 ? "Submitting…"
                 : payment === "net-terms"
                   ? "Submit for net terms"
-                  : "Place order"}
+                  : payment === "purchase-order"
+                    ? "Submit purchase order"
+                    : "Place order"}
             </Btn>
             <Btn variant="ghost" href="/wayfinder/cart" block size="sm">
               Back to cart

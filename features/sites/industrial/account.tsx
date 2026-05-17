@@ -16,7 +16,11 @@ import { useUserStore } from "@/lib/user-store";
 import { useOrderStore } from "@/lib/order-store";
 import { useCartStore } from "@/lib/cart-store";
 import { useSavedCartStore } from "@/lib/saved-cart-store";
-import { useQuoteStore } from "@/lib/quote-store";
+import {
+  fetchQuotes,
+  quoteDisplayName,
+  type DbQuote
+} from "./quote-data";
 
 /* ------------------------------------------------------------------ *
  * INDUSTRIAL PRO — Account. Consolidates the original site's separate
@@ -45,7 +49,7 @@ export function IndustrialAccount() {
 
   const orders = useOrderStore((state) => state.orders);
   const setOrders = useOrderStore((state) => state.setOrders);
-  const quotes = useQuoteStore((state) => state.quotes);
+  const [quotes, setQuotes] = useState<DbQuote[]>([]);
   const carts = useSavedCartStore((state) => state.carts);
   const setCarts = useSavedCartStore((state) => state.setCarts);
   const deleteCart = useSavedCartStore((state) => state.deleteCart);
@@ -62,11 +66,23 @@ export function IndustrialAccount() {
 
   useEffect(() => {
     void useOrderStore.persist.rehydrate();
-    void useQuoteStore.persist.rehydrate();
     void useSavedCartStore.persist.rehydrate();
     void useCartStore.persist.rehydrate();
     setReady(true);
   }, []);
+
+  // Load the account's DB-backed quotes scoped to the signed-in user.
+  useEffect(() => {
+    let active = true;
+    fetchQuotes(userId === "guest" ? {} : { siteUserId: userId }).then(
+      (result) => {
+        if (active) setQuotes(result.quotes);
+      }
+    );
+    return () => {
+      active = false;
+    };
+  }, [userId]);
 
   const canLoadRemote = isAuthenticated || userId !== "guest";
 
@@ -435,40 +451,34 @@ export function IndustrialAccount() {
               {tab === "quotes" ? (
                 quoteList.length ? (
                   <div className="grid gap-px border border-d1-line bg-d1-line">
-                    {quoteList.map((quote) => {
-                      const subtotal = quote.items.reduce(
-                        (total, item) => total + item.price * item.quantity,
-                        0
-                      );
-                      return (
-                        <div
-                          className="grid gap-3 bg-d1-card p-4 sm:grid-cols-[1fr_auto] sm:items-center"
-                          key={quote.id}
-                        >
-                          <div>
-                            <p className="text-sm font-bold text-d1-ink">
-                              {quote.name}
-                            </p>
-                            <p className="mt-0.5 text-[12px] text-d1-steel">
-                              {quote.quoteNumber} ·{" "}
-                              {quote.customerName || "No customer"} ·{" "}
-                              {quote.status}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className="text-base font-extrabold text-d1-ink">
-                              {formatUsd(subtotal)}
-                            </span>
-                            <Link
-                              className="border border-d1-ink px-3 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-d1-ink transition hover:bg-d1-ink hover:text-d1-paper"
-                              href={`/industrial/quotes/${quote.id}`}
-                            >
-                              Open
-                            </Link>
-                          </div>
+                    {quoteList.map((quote) => (
+                      <div
+                        className="grid gap-3 bg-d1-card p-4 sm:grid-cols-[1fr_auto] sm:items-center"
+                        key={quote.id}
+                      >
+                        <div>
+                          <p className="text-sm font-bold text-d1-ink">
+                            {quoteDisplayName(quote)}
+                          </p>
+                          <p className="mt-0.5 text-[12px] text-d1-steel">
+                            {quote.quoteNumber} ·{" "}
+                            {quote.customerName || "No customer"} ·{" "}
+                            {quote.status}
+                          </p>
                         </div>
-                      );
-                    })}
+                        <div className="flex items-center gap-3">
+                          <span className="text-base font-extrabold text-d1-ink">
+                            {formatUsd(quote.total)}
+                          </span>
+                          <Link
+                            className="border border-d1-ink px-3 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-d1-ink transition hover:bg-d1-ink hover:text-d1-paper"
+                            href={`/industrial/quotes/${quote.id}`}
+                          >
+                            Open
+                          </Link>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="border border-dashed border-d1-line bg-d1-card px-6 py-16 text-center">

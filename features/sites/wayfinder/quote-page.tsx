@@ -1,18 +1,24 @@
-// Wayfinder — quote builder. Builds / edits a quote in the real
-// @/lib/quote-store: customer details, line items with quick-add from the real
-// catalog, quantity edit, remove, live subtotal / tax / total, and submit
-// (marks the quote "sent"). Works on the active quote when no quoteId is
-// passed, or a specific quote when one is. Logic ported from
-// components/quote-page-client.tsx, restyled in Wayfinder.
+// Wayfinder — customer quote builder. Builds / edits a Supabase-backed quote
+// via @/lib/quotes-data: customer details, line items quick-added from the real
+// catalog, quantity edit, remove, live subtotal / tax / total, save draft,
+// submit (status "sent"), and convert to a full order. Quotes are scoped to the
+// signed-in customer account (siteUserId) and persist server-side.
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { useCartStore } from "@/lib/cart-store";
-import { useQuoteStore } from "@/lib/quote-store";
 import { products } from "@/lib/catalog";
-import { customerDirectory, getCustomerById } from "@/lib/customers";
 import { calculateTax } from "@/lib/tax";
+import { useUserStore } from "@/lib/user-store";
+import {
+  convertQuoteToOrder,
+  fetchQuote,
+  saveQuote,
+  type DbQuote,
+  type QuoteItemInput,
+  type QuoteStatus
+} from "@/lib/quotes-data";
 import type { Product } from "@/lib/types";
 import {
   Btn,
@@ -39,45 +45,128 @@ function formatDate(value: string) {
 }
 
 function pickQuoteVariant(product: Product) {
-  return product.variants.find((variant) => variant.inventory === "in_stock") || product.variants[0];
+  return (
+    product.variants.find((variant) => variant.inventory === "in_stock") ||
+    product.variants[0]
+  );
+}
+
+// A local, editable draft of a quote — server state plus unsaved edits.
+type Draft = {
+  id?: string;
+  quoteNumber: string;
+  status: QuoteStatus;
+  customerName: string;
+  customerEmail: string;
+  jobsiteAddress: string;
+  billingAddress: string;
+  terms: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+  convertedOrderId: string | null;
+  items: Array<{
+    productId: string;
+    variantId: string;
+    sku: string;
+    title: string;
+    options: Record<string, string | undefined>;
+    quantity: number;
+    unitPrice: number;
+  }>;
+};
+
+function draftFromQuote(quote: DbQuote): Draft {
+  return {
+    id: quote.id,
+    quoteNumber: quote.quoteNumber,
+    status: quote.status,
+    customerName: quote.customerName,
+    customerEmail: quote.customerEmail,
+    jobsiteAddress: quote.jobsiteAddress,
+    billingAddress: quote.billingAddress,
+    terms: quote.terms || "Due on receipt",
+    notes: quote.notes,
+    createdAt: quote.createdAt,
+    updatedAt: quote.updatedAt,
+    convertedOrderId: quote.convertedOrderId,
+    items: quote.items.map((item) => ({
+      productId: item.productId,
+      variantId: item.variantId,
+      sku: item.sku,
+      title: item.title,
+      options: item.options || {},
+      quantity: item.quantity,
+      unitPrice: item.unitPrice
+    }))
+  };
+}
+
+function emptyDraft(): Draft {
+  const now = new Date().toISOString();
+  return {
+    quoteNumber: "New quote",
+    status: "draft",
+    customerName: "",
+    customerEmail: "",
+    jobsiteAddress: "",
+    billingAddress: "",
+    terms: "Due on receipt",
+    notes: "",
+    createdAt: now,
+    updatedAt: now,
+    convertedOrderId: null,
+    items: []
+  };
 }
 
 export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
-  const {
-    quotes,
-    activeQuoteId,
-    addItem,
-    removeItem,
-    updateQuantity,
-    clearQuote,
-    saveQuote,
-    setActiveQuote,
-    createQuote,
-    updateQuoteDetails
-  } = useQuoteStore();
+  const router = useRouter();
+  const userId = useUserStore((state) => state.userId);
+  const displayName = useUserStore((state) => state.displayName);
 
   const [ready, setReady] = useState(false);
+  const [configured, setConfigured] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    useQuoteStore.persist.rehydrate();
-    useCartStore.persist.rehydrate();
-    setReady(true);
+    useUserStore.persist.rehydrate();
   }, []);
 
-  const targetId = quoteId || activeQuoteId;
-  const quote = quotes.find((record) => record.id === targetId);
-
-  // Keep the store's active quote in sync with the one we're editing.
   useEffect(() => {
-    if (quote) setActiveQuote(quote.id);
-  }, [quote, setActiveQuote]);
+    let cancelled = false;
+    async function load() {
+      setReady(false);
+      setNotFound(false);
+      if (quoteId) {
+        const result = await fetchQuote(quoteId);
+        if (cancelled) return;
+        setConfigured(result.configured);
+        if (result.quote) {
+          setDraft(draftFromQuote(result.quote));
+        } else {
+          setNotFound(result.configured);
+          if (!result.configured) setDraft(emptyDraft());
+        }
+      } else {
+        setDraft(emptyDraft());
+      }
+      if (!cancelled) setReady(true);
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [quoteId]);
 
   useEffect(() => {
     if (!message) return;
-    const handle = window.setTimeout(() => setMessage(""), 2400);
+    const handle = window.setTimeout(() => setMessage(""), 3200);
     return () => window.clearTimeout(handle);
   }, [message]);
 
@@ -89,15 +178,171 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
         (product) =>
           product.title.toLowerCase().includes(normalized) ||
           product.category.name.toLowerCase().includes(normalized) ||
-          product.variants.some((variant) => variant.sku.toLowerCase().includes(normalized))
+          product.variants.some((variant) =>
+            variant.sku.toLowerCase().includes(normalized)
+          )
       )
       .slice(0, 24);
   }, [search]);
 
-  const sortedCustomers = useMemo(
-    () => [...customerDirectory].sort((left, right) => left.name.localeCompare(right.name)),
-    []
+  function updateDraft(patch: Partial<Draft>) {
+    setDraft((current) => ({ ...current, ...patch }));
+  }
+
+  function addCatalogItem(product: Product) {
+    const variant = pickQuoteVariant(product);
+    if (!variant) return;
+    setDraft((current) => {
+      const existing = current.items.find(
+        (item) => item.variantId === variant.id
+      );
+      if (existing) {
+        return {
+          ...current,
+          items: current.items.map((item) =>
+            item.variantId === variant.id
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          )
+        };
+      }
+      return {
+        ...current,
+        items: [
+          ...current.items,
+          {
+            productId: product.id,
+            variantId: variant.id,
+            sku: variant.sku,
+            title: product.title,
+            options: variant.options || {},
+            quantity: 1,
+            unitPrice: variant.price
+          }
+        ]
+      };
+    });
+    setMessage(`Added ${product.title}`);
+  }
+
+  function updateQuantity(variantId: string, quantity: number) {
+    setDraft((current) => ({
+      ...current,
+      items: current.items.map((item) =>
+        item.variantId === variantId
+          ? { ...item, quantity: Math.max(1, quantity) }
+          : item
+      )
+    }));
+  }
+
+  function removeItem(variantId: string) {
+    setDraft((current) => ({
+      ...current,
+      items: current.items.filter((item) => item.variantId !== variantId)
+    }));
+  }
+
+  const items = draft.items;
+  const subtotal = items.reduce(
+    (total, item) => total + item.unitPrice * item.quantity,
+    0
   );
+  const tax = calculateTax(subtotal);
+  const total = subtotal + tax;
+  const lineCount = items.reduce((count, item) => count + item.quantity, 0);
+
+  function buildItemInputs(): QuoteItemInput[] {
+    return items.map((item) => ({
+      productId: item.productId,
+      variantId: item.variantId,
+      sku: item.sku,
+      title: item.title,
+      options: item.options,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      lineTotal: Number((item.unitPrice * item.quantity).toFixed(2))
+    }));
+  }
+
+  async function persist(status: QuoteStatus): Promise<DbQuote | null> {
+    const result = await saveQuote({
+      id: draft.id,
+      status,
+      siteUserId: userId,
+      customerName: draft.customerName,
+      customerEmail: draft.customerEmail,
+      jobsiteAddress: draft.jobsiteAddress,
+      billingAddress: draft.billingAddress,
+      terms: draft.terms,
+      notes: draft.notes,
+      subtotal,
+      tax,
+      total,
+      createdBy: draft.id ? undefined : displayName || "Customer",
+      items: buildItemInputs()
+    });
+    setConfigured(result.persisted);
+    return result.quote;
+  }
+
+  async function handleSaveDraft() {
+    if (busy) return;
+    setBusy(true);
+    const saved = await persist("draft");
+    setBusy(false);
+    if (saved) {
+      setDraft(draftFromQuote(saved));
+      setMessage("Quote saved.");
+      if (!quoteId) router.replace(`/wayfinder/quotes/${saved.id}`);
+    } else {
+      setMessage("Quote not yet persisted — Supabase is not configured.");
+    }
+  }
+
+  async function handleSubmit() {
+    if (busy) return;
+    if (!items.length) {
+      setMessage("Add a line item before submitting.");
+      return;
+    }
+    setBusy(true);
+    const saved = await persist("sent");
+    setBusy(false);
+    if (saved) {
+      setDraft(draftFromQuote(saved));
+      setMessage("Quote submitted to the Bakersfield desk.");
+      if (!quoteId) router.replace(`/wayfinder/quotes/${saved.id}`);
+    } else {
+      setMessage("Quote not yet persisted — Supabase is not configured.");
+    }
+  }
+
+  async function handleConvert() {
+    if (busy) return;
+    if (!items.length) {
+      setMessage("Add a line item before converting to an order.");
+      return;
+    }
+    setBusy(true);
+    // Persist any unsaved edits first so the conversion uses current line items.
+    const saved = draft.id ? await persist(draft.status) : await persist("sent");
+    if (!saved) {
+      setBusy(false);
+      setMessage("Save the quote before converting — Supabase is not configured.");
+      return;
+    }
+    setDraft(draftFromQuote(saved));
+    const result = await convertQuoteToOrder(saved.id);
+    setBusy(false);
+    if (result.persisted) {
+      setMessage(`Converted to order ${result.orderNumber || ""}.`.trim());
+      const refreshed = await fetchQuote(saved.id);
+      if (refreshed.quote) setDraft(draftFromQuote(refreshed.quote));
+    } else {
+      setMessage("Could not convert the quote.");
+    }
+  }
 
   if (!ready) {
     return (
@@ -107,13 +352,15 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
     );
   }
 
-  if (!quote) {
+  if (notFound) {
     return (
       <div style={{ maxWidth: 620, margin: "0 auto", padding: "56px 24px" }}>
         <Card style={{ padding: 48, textAlign: "center" }}>
-          <p style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>Quote not found</p>
+          <p style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>
+            Quote not found
+          </p>
           <p style={{ fontSize: 13, color: wf.steel, margin: "8px 0 18px" }}>
-            It may have been deleted or created in another browser.
+            It may have been deleted or belongs to another account.
           </p>
           <Btn variant="primary" href="/wayfinder/quotes">
             View all quotes
@@ -123,63 +370,7 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
     );
   }
 
-  const items = quote.items;
-  const subtotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
-  const tax = calculateTax(subtotal);
-  const total = subtotal + tax;
-  const lineCount = items.reduce((count, item) => count + item.quantity, 0);
-
-  function updateField(details: Parameters<typeof updateQuoteDetails>[1]) {
-    updateQuoteDetails(quote!.id, details);
-  }
-
-  function selectCustomer(customerId: string) {
-    const customer = getCustomerById(customerId);
-    if (!customer) {
-      updateField({ customerId: "" });
-      return;
-    }
-    updateField({
-      customerId: customer.id,
-      customerName: customer.name,
-      customerEmail: customer.email,
-      billingAddress: customer.billingAddress,
-      jobsiteAddress: customer.jobsiteAddress,
-      terms: customer.terms
-    });
-  }
-
-  function addCatalogItem(product: Product) {
-    const variant = pickQuoteVariant(product);
-    if (!variant) return;
-    addItem(
-      {
-        productId: product.id,
-        variantId: variant.id,
-        title: product.title,
-        sku: variant.sku,
-        image: variant.image || product.images[0]?.url || "/assets/logo.svg",
-        price: variant.price,
-        weightLbs: variant.calculated_weight_lb,
-        cwtPrice: variant.steel_cwt_price,
-        pricingMethod: variant.pricing_method,
-        quantity: 1,
-        options: variant.options
-      },
-      quote!.id
-    );
-    setMessage(`Added ${product.title}`);
-  }
-
-  function submitQuote() {
-    if (!items.length) {
-      setMessage("Add a line item before submitting.");
-      return;
-    }
-    saveQuote(quote!.id);
-    updateField({ status: "sent" });
-    setMessage("Quote submitted to the Bakersfield desk.");
-  }
+  const converted = draft.status === "converted";
 
   return (
     <div style={{ maxWidth: 1280, margin: "0 auto", padding: 24 }}>
@@ -209,28 +400,44 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
               gap: 6
             }}
           >
-            <Ico.chevronRight size={12} style={{ transform: "rotate(180deg)" }} /> All quotes
+            <Ico.chevronRight size={12} style={{ transform: "rotate(180deg)" }} />{" "}
+            All quotes
           </Link>
-          <h1 style={{ fontSize: 30, fontWeight: 900, letterSpacing: "-0.02em", margin: "8px 0 0" }}>
+          <h1
+            style={{
+              fontSize: 30,
+              fontWeight: 900,
+              letterSpacing: "-0.02em",
+              margin: "8px 0 0"
+            }}
+          >
             Quote builder
           </h1>
           <Mono style={{ fontSize: 12, color: wf.steel }}>
-            {quote.quoteNumber} · {quote.status} · {lineCount} unit
+            {draft.quoteNumber} · {draft.status} · {lineCount} unit
             {lineCount === 1 ? "" : "s"}
           </Mono>
         </div>
-        <Btn
-          variant="default"
-          size="sm"
-          onClick={() => {
-            const id = createQuote("New job quote");
-            setActiveQuote(id);
-            setMessage("Started a new quote.");
-          }}
-        >
+        <Btn variant="default" size="sm" href="/wayfinder/quotes">
           <Ico.plus size={14} /> New quote
         </Btn>
       </div>
+
+      {!configured ? (
+        <Card
+          style={{
+            padding: "10px 14px",
+            marginBottom: 16,
+            background: wf.amber,
+            borderColor: wf.amberDeep
+          }}
+        >
+          <Mono style={{ fontSize: 12, color: "#92500a" }}>
+            Quotes are not yet persisted — Supabase is not configured. Saving
+            will not store this quote.
+          </Mono>
+        </Card>
+      ) : null}
 
       <div
         style={{
@@ -241,59 +448,40 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
         }}
       >
         <div style={{ display: "grid", gap: 16 }}>
-          {/* Quote title + customer */}
+          {/* Customer */}
           <Card style={{ padding: 18 }}>
             <Eyebrow>Quote details</Eyebrow>
             <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-              <WfInput
-                placeholder="Quote title"
-                value={quote.name}
-                onChange={(value) => updateField({ name: value })}
-              />
-              <label style={{ display: "grid", gap: 6 }}>
-                <span
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 800,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.04em",
-                    color: wf.steel
-                  }}
-                >
-                  Customer account
-                </span>
-                <select
-                  value={quote.customerId || ""}
-                  onChange={(event) => selectCustomer(event.target.value)}
-                  style={selectStyle}
-                >
-                  <option value="">Manual entry</option>
-                  {sortedCustomers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name} ({customer.company})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 10
+                }}
+              >
                 <WfInput
-                  placeholder="Customer name"
-                  value={quote.customerName}
-                  onChange={(value) => updateField({ customerId: "", customerName: value })}
+                  placeholder="Customer / company name"
+                  value={draft.customerName}
+                  onChange={(value) => updateDraft({ customerName: value })}
                 />
                 <WfInput
                   placeholder="Customer email"
-                  value={quote.customerEmail}
-                  onChange={(value) => updateField({ customerId: "", customerEmail: value })}
+                  value={draft.customerEmail}
+                  onChange={(value) => updateDraft({ customerEmail: value })}
                 />
               </div>
               <textarea
                 placeholder="Jobsite or delivery address"
-                value={quote.jobsiteAddress}
+                value={draft.jobsiteAddress}
                 onChange={(event) =>
-                  updateField({ customerId: "", jobsiteAddress: event.target.value })
+                  updateDraft({ jobsiteAddress: event.target.value })
                 }
-                style={{ ...selectStyle, height: 64, padding: "10px 12px", resize: "vertical" }}
+                style={{
+                  ...selectStyle,
+                  height: 64,
+                  padding: "10px 12px",
+                  resize: "vertical"
+                }}
               />
             </div>
           </Card>
@@ -310,13 +498,23 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
               }}
             >
               <Eyebrow>Line items</Eyebrow>
-              <Btn size="xs" variant="default" onClick={() => setShowAdd((open) => !open)}>
+              <Btn
+                size="xs"
+                variant="default"
+                onClick={() => setShowAdd((open) => !open)}
+              >
                 <Ico.plus size={12} /> Add item
               </Btn>
             </div>
 
             {showAdd ? (
-              <div style={{ padding: 14, borderBottom: `1px solid ${wf.hairline}`, background: wf.bone }}>
+              <div
+                style={{
+                  padding: 14,
+                  borderBottom: `1px solid ${wf.hairline}`,
+                  background: wf.bone
+                }}
+              >
                 <WfInput
                   placeholder="Search products by name or SKU"
                   value={search}
@@ -403,27 +601,16 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
                   key={item.variantId}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "64px minmax(0, 1fr) auto",
+                    gridTemplateColumns: "minmax(0, 1fr) auto",
                     gap: 12,
                     padding: 14,
                     alignItems: "center",
                     borderBottom:
-                      index < items.length - 1 ? `1px solid ${wf.hairline}` : "none"
+                      index < items.length - 1
+                        ? `1px solid ${wf.hairline}`
+                        : "none"
                   }}
                 >
-                  <div style={{ border: `1px solid ${wf.rail}` }}>
-                    <ProductImage
-                      product={
-                        {
-                          title: item.title,
-                          images: item.image ? [{ url: item.image }] : [],
-                          variants: [{ sku: item.sku, image: item.image }]
-                        } as unknown as Product
-                      }
-                      ratio={1}
-                      sizes="64px"
-                    />
-                  </div>
                   <div style={{ minWidth: 0 }}>
                     <Link
                       href={`/wayfinder/products/${item.productId}`}
@@ -431,14 +618,23 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
                     >
                       {item.title}
                     </Link>
-                    <Mono style={{ fontSize: 11, color: wf.muted, display: "block", marginTop: 2 }}>
-                      SKU {item.sku} · {fmt(item.price)} ea
+                    <Mono
+                      style={{
+                        fontSize: 11,
+                        color: wf.muted,
+                        display: "block",
+                        marginTop: 2
+                      }}
+                    >
+                      SKU {item.sku} · {fmt(item.unitPrice)} ea
                     </Mono>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 10 }}
+                  >
                     <Qty
                       value={item.quantity}
-                      onChange={(next) => updateQuantity(quote.id, item.variantId, next)}
+                      onChange={(next) => updateQuantity(item.variantId, next)}
                       height={34}
                     />
                     <span
@@ -449,12 +645,12 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
                         textAlign: "right"
                       }}
                     >
-                      {fmt(item.price * item.quantity)}
+                      {fmt(item.unitPrice * item.quantity)}
                     </span>
                     <button
                       type="button"
                       aria-label={`Remove ${item.title}`}
-                      onClick={() => removeItem(quote.id, item.variantId)}
+                      onClick={() => removeItem(item.variantId)}
                       style={{
                         background: "none",
                         border: "none",
@@ -486,9 +682,9 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
           <Card style={{ padding: 18 }}>
             <Eyebrow>Message on quote</Eyebrow>
             <textarea
-              placeholder="Notes for the customer"
-              value={quote.notes}
-              onChange={(event) => updateField({ notes: event.target.value })}
+              placeholder="Notes for the Bakersfield desk"
+              value={draft.notes}
+              onChange={(event) => updateDraft({ notes: event.target.value })}
               style={{
                 ...selectStyle,
                 marginTop: 12,
@@ -504,16 +700,34 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
         <div style={{ display: "grid", gap: 16 }}>
           <Card style={{ padding: 18 }}>
             <Eyebrow>Quote summary</Eyebrow>
-            <div style={{ display: "grid", gap: 8, marginTop: 12, fontSize: 13 }}>
-              <SummaryRow label="Quote no." value={quote.quoteNumber} />
-              <SummaryRow label="Created" value={formatDate(quote.createdAt)} />
-              <SummaryRow label="Expires" value={formatDate(quote.expiresAt)} />
-              <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div
+              style={{ display: "grid", gap: 8, marginTop: 12, fontSize: 13 }}
+            >
+              <SummaryRow label="Quote no." value={draft.quoteNumber} />
+              <SummaryRow label="Created" value={formatDate(draft.createdAt)} />
+              <SummaryRow
+                label="Updated"
+                value={formatDate(draft.updatedAt)}
+              />
+              <label
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center"
+                }}
+              >
                 <span style={{ color: wf.steel }}>Terms</span>
                 <select
-                  value={quote.terms}
-                  onChange={(event) => updateField({ terms: event.target.value })}
-                  style={{ ...selectStyle, width: 130, height: 32, fontSize: 12 }}
+                  value={draft.terms}
+                  onChange={(event) =>
+                    updateDraft({ terms: event.target.value })
+                  }
+                  style={{
+                    ...selectStyle,
+                    width: 130,
+                    height: 32,
+                    fontSize: 12
+                  }}
                 >
                   <option>Due on receipt</option>
                   <option>Net 15</option>
@@ -522,7 +736,9 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
                 </select>
               </label>
             </div>
-            <div style={{ display: "grid", gap: 8, marginTop: 12, fontSize: 13 }}>
+            <div
+              style={{ display: "grid", gap: 8, marginTop: 12, fontSize: 13 }}
+            >
               <SummaryRow label="Subtotal" value={fmt(subtotal)} />
               <SummaryRow label="Estimated tax" value={fmt(tax)} />
             </div>
@@ -537,41 +753,64 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
               }}
             >
               <span style={{ fontSize: 13, fontWeight: 800 }}>Total</span>
-              <span style={{ fontSize: 24, fontWeight: 900, letterSpacing: "-0.02em" }}>
+              <span
+                style={{
+                  fontSize: 24,
+                  fontWeight: 900,
+                  letterSpacing: "-0.02em"
+                }}
+              >
                 {fmt(total)}
               </span>
             </div>
           </Card>
 
           <Card style={{ padding: 18, display: "grid", gap: 8 }}>
-            <Btn variant="primary" block onClick={submitQuote} disabled={!items.length}>
-              <Ico.arrowRight size={14} /> Submit quote
-            </Btn>
-            <Btn
-              variant="default"
-              block
-              size="sm"
-              onClick={() => {
-                saveQuote(quote.id);
-                setMessage("Quote saved.");
-              }}
-            >
-              <Ico.clipboard size={13} /> Save draft
-            </Btn>
-            <Btn
-              variant="danger"
-              block
-              size="sm"
-              disabled={!items.length}
-              onClick={() => {
-                if (!window.confirm("Clear all line items?")) return;
-                clearQuote(quote.id);
-              }}
-            >
-              Clear line items
-            </Btn>
+            {converted ? (
+              <Mono
+                style={{
+                  fontSize: 12,
+                  color: wf.pineDeep,
+                  textAlign: "center"
+                }}
+              >
+                This quote has been converted to an order.
+              </Mono>
+            ) : (
+              <>
+                <Btn
+                  variant="primary"
+                  block
+                  onClick={handleSubmit}
+                  disabled={!items.length || busy}
+                >
+                  <Ico.arrowRight size={14} /> Submit quote
+                </Btn>
+                <Btn
+                  variant="default"
+                  block
+                  size="sm"
+                  onClick={handleSaveDraft}
+                  disabled={busy}
+                >
+                  <Ico.clipboard size={13} /> Save draft
+                </Btn>
+                <Btn
+                  variant="default"
+                  block
+                  size="sm"
+                  onClick={handleConvert}
+                  disabled={!items.length || busy}
+                  title="Convert this quote to a full order"
+                >
+                  <Ico.truck size={13} /> Convert to order
+                </Btn>
+              </>
+            )}
             {message ? (
-              <Mono style={{ fontSize: 11, color: wf.pine, textAlign: "center" }}>
+              <Mono
+                style={{ fontSize: 11, color: wf.pine, textAlign: "center" }}
+              >
                 {message}
               </Mono>
             ) : null}

@@ -1,11 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
-  Mail,
   Minus,
   Plus,
   Printer,
@@ -14,14 +13,23 @@ import {
   Trash2
 } from "lucide-react";
 import { Eyebrow, IndustrialPage, formatUsd } from "./kit";
-import { useQuoteStore } from "@/lib/quote-store";
 import { useCartStore } from "@/lib/cart-store";
 import { calculateTax } from "@/lib/tax";
+import {
+  composeQuoteNotes,
+  convertQuoteToOrder,
+  fetchQuote,
+  quoteDisplayName,
+  quoteNoteBody,
+  saveQuote,
+  type DbQuote,
+  type DbQuoteItem
+} from "./quote-data";
 
 /* ------------------------------------------------------------------ *
- * INDUSTRIAL PRO — Quote detail. Edit a single quote from
- * useQuoteStore: line items, customer fields, terms, status, and
- * actions (save, print, email, push to cart).
+ * INDUSTRIAL PRO — Customer quote detail. Loads a single DB quote,
+ * lets the customer edit line items / fields, saves changes to the DB,
+ * copies to cart, or converts the quote into a full order.
  * ------------------------------------------------------------------ */
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
@@ -32,38 +40,68 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
 
 const termsOptions = ["Due on receipt", "Net 15", "Net 30", "Net 45"];
 
+type EditableItem = DbQuoteItem;
+
 export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
-  const quotes = useQuoteStore((state) => state.quotes);
-  const setActiveQuote = useQuoteStore((state) => state.setActiveQuote);
-  const removeItem = useQuoteStore((state) => state.removeItem);
-  const updateQuantity = useQuoteStore((state) => state.updateQuantity);
-  const updateQuoteDetails = useQuoteStore((state) => state.updateQuoteDetails);
-  const saveQuote = useQuoteStore((state) => state.saveQuote);
+  const router = useRouter();
   const addCartItem = useCartStore((state) => state.addItem);
 
   const [ready, setReady] = useState(false);
+  const [configured, setConfigured] = useState(true);
+  const [quote, setQuote] = useState<DbQuote | null>(null);
   const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const [name, setName] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [billingAddress, setBillingAddress] = useState("");
+  const [terms, setTerms] = useState("Due on receipt");
+  const [status, setStatus] = useState<DbQuote["status"]>("draft");
+  const [noteBody, setNoteBody] = useState("");
+  const [items, setItems] = useState<EditableItem[]>([]);
 
   useEffect(() => {
-    void useQuoteStore.persist.rehydrate();
     void useCartStore.persist.rehydrate();
-    setReady(true);
   }, []);
 
-  const quote = useMemo(
-    () => quotes.find((record) => record.id === quoteId),
-    [quotes, quoteId]
-  );
-
   useEffect(() => {
-    if (quote) setActiveQuote(quote.id);
-  }, [quote, setActiveQuote]);
+    let active = true;
+    fetchQuote(quoteId).then((result) => {
+      if (!active) return;
+      setConfigured(result.configured);
+      if (result.quote) {
+        const q = result.quote;
+        setQuote(q);
+        setName(quoteDisplayName(q));
+        setCustomerName(q.customerName);
+        setCustomerEmail(q.customerEmail);
+        setBillingAddress(q.billingAddress);
+        setTerms(q.terms || "Due on receipt");
+        setStatus(q.status);
+        setNoteBody(quoteNoteBody(q));
+        setItems(q.items);
+      }
+      setReady(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [quoteId]);
 
   useEffect(() => {
     if (!message) return;
-    const handle = window.setTimeout(() => setMessage(""), 2600);
+    const handle = window.setTimeout(() => setMessage(""), 3200);
     return () => window.clearTimeout(handle);
   }, [message]);
+
+  const subtotal = useMemo(
+    () =>
+      items.reduce((total, item) => total + item.unitPrice * item.quantity, 0),
+    [items]
+  );
+  const tax = calculateTax(subtotal);
+  const total = subtotal + tax;
 
   if (!ready) {
     return (
@@ -84,7 +122,9 @@ export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
               Quote not found
             </h1>
             <p className="mt-2 text-sm text-d1-steel">
-              It may have been deleted or created in another browser.
+              {configured
+                ? "It may have been deleted."
+                : "Quotes are not yet persisted — Supabase is not configured."}
             </p>
             <Link
               className="mt-6 inline-flex items-center gap-2 bg-d1-ink px-6 py-3 text-sm font-bold uppercase tracking-[0.1em] text-d1-paper transition hover:bg-d1-pine"
@@ -98,28 +138,106 @@ export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
     );
   }
 
-  const items = quote.items;
-  const subtotal = items.reduce(
-    (total, item) => total + item.price * item.quantity,
-    0
-  );
-  const tax = calculateTax(subtotal);
-  const total = subtotal + tax;
-
-  function updateField(details: Parameters<typeof updateQuoteDetails>[1]) {
-    if (!quote) return;
-    updateQuoteDetails(quote.id, details);
-  }
-
-  function emailQuote() {
-    if (!quote) return;
-    updateQuoteDetails(quote.id, { status: "sent" });
-    const subject = encodeURIComponent(`${quote.quoteNumber} — ${quote.name}`);
-    const body = encodeURIComponent(
-      `${quote.customerName || "Customer"}\n${quote.quoteNumber}\nEstimated total: ${formatUsd(total)}`
+  function updateQuantity(itemId: string, quantity: number) {
+    setItems((current) =>
+      current.map((item) =>
+        item.id === itemId
+          ? { ...item, quantity: Math.max(1, quantity) }
+          : item
+      )
     );
-    window.location.href = `mailto:${quote.customerEmail || ""}?subject=${subject}&body=${body}`;
   }
+
+  function removeItem(itemId: string) {
+    setItems((current) => current.filter((item) => item.id !== itemId));
+  }
+
+  async function handleSave(nextStatus?: DbQuote["status"]) {
+    if (busy || !quote) return;
+    setBusy(true);
+    try {
+      const effectiveStatus = nextStatus || status;
+      const { quote: saved, persisted } = await saveQuote({
+        id: quote.id,
+        status: effectiveStatus,
+        customerName: customerName.trim(),
+        customerEmail: customerEmail.trim(),
+        billingAddress,
+        terms,
+        notes: composeQuoteNotes(name, noteBody),
+        subtotal,
+        tax,
+        total,
+        items: items.map((item) => ({
+          productId: item.productId,
+          variantId: item.variantId,
+          sku: item.sku,
+          title: item.title,
+          options: item.options,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          lineTotal: Number((item.unitPrice * item.quantity).toFixed(2))
+        }))
+      });
+
+      if (!persisted) {
+        setMessage("Supabase is not configured — changes were not saved.");
+        return;
+      }
+      if (saved) {
+        setQuote(saved);
+        setItems(saved.items);
+      }
+      setStatus(effectiveStatus);
+      setMessage("Quote saved.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleConvert() {
+    if (busy || !quote) return;
+    if (!items.length) {
+      setMessage("Add line items before converting to an order.");
+      return;
+    }
+    setBusy(true);
+    try {
+      // Persist current edits first so the conversion uses fresh data.
+      await handleSave();
+      const { orderId, orderNumber, persisted } = await convertQuoteToOrder(
+        quote.id
+      );
+      if (!persisted) {
+        setMessage("Supabase is not configured — could not convert the quote.");
+        return;
+      }
+      setMessage(`Converted to order ${orderNumber || ""}.`.trim());
+      if (orderId) {
+        router.push("/industrial/account");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function moveToCart() {
+    items.forEach((item) =>
+      addCartItem({
+        productId: item.productId,
+        variantId: item.variantId,
+        title: item.title,
+        sku: item.sku,
+        image: "/assets/logo.svg",
+        price: item.unitPrice,
+        quantity: item.quantity,
+        options: item.options || {}
+      })
+    );
+    setMessage("Quote items copied to your cart.");
+  }
+
+  const converted = status === "converted" || Boolean(quote.convertedOrderId);
 
   return (
     <IndustrialPage>
@@ -135,16 +253,14 @@ export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
           <div>
             <Eyebrow>{quote.quoteNumber}</Eyebrow>
             <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-d1-ink sm:text-4xl">
-              {quote.name}
+              {name || quoteDisplayName(quote)}
             </h1>
           </div>
           <div className="flex flex-wrap gap-2 print:hidden">
             <button
-              className="flex items-center gap-2 border border-d1-ink bg-white px-3 py-2.5 text-[11px] font-bold uppercase tracking-[0.1em] text-d1-ink transition hover:bg-d1-ink hover:text-d1-paper"
-              onClick={() => {
-                saveQuote(quote.id);
-                setMessage("Quote saved.");
-              }}
+              className="flex items-center gap-2 border border-d1-ink bg-white px-3 py-2.5 text-[11px] font-bold uppercase tracking-[0.1em] text-d1-ink transition hover:bg-d1-ink hover:text-d1-paper disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={busy}
+              onClick={() => handleSave()}
               type="button"
             >
               <Save className="h-3.5 w-3.5" /> Save
@@ -155,13 +271,6 @@ export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
               type="button"
             >
               <Printer className="h-3.5 w-3.5" /> Print
-            </button>
-            <button
-              className="flex items-center gap-2 bg-d1-ink px-3 py-2.5 text-[11px] font-bold uppercase tracking-[0.1em] text-d1-paper transition hover:bg-d1-pine"
-              onClick={emailQuote}
-              type="button"
-            >
-              <Mail className="h-3.5 w-3.5" /> Send
             </button>
           </div>
         </div>
@@ -176,17 +285,22 @@ export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
                 </p>
                 <label className="mt-3 grid gap-1.5">
                   <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-d1-steel">
+                    Quote name
+                  </span>
+                  <input
+                    className="h-10 border border-d1-line bg-white px-3 text-sm text-d1-ink outline-none focus:border-d1-ink"
+                    onChange={(event) => setName(event.target.value)}
+                    value={name}
+                  />
+                </label>
+                <label className="mt-3 grid gap-1.5">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-d1-steel">
                     Customer
                   </span>
                   <input
                     className="h-10 border border-d1-line bg-white px-3 text-sm text-d1-ink outline-none focus:border-d1-ink"
-                    onChange={(event) =>
-                      updateField({
-                        customerId: "",
-                        customerName: event.target.value
-                      })
-                    }
-                    value={quote.customerName}
+                    onChange={(event) => setCustomerName(event.target.value)}
+                    value={customerName}
                   />
                 </label>
                 <label className="mt-3 grid gap-1.5">
@@ -195,14 +309,9 @@ export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
                   </span>
                   <input
                     className="h-10 border border-d1-line bg-white px-3 text-sm text-d1-ink outline-none focus:border-d1-ink"
-                    onChange={(event) =>
-                      updateField({
-                        customerId: "",
-                        customerEmail: event.target.value
-                      })
-                    }
+                    onChange={(event) => setCustomerEmail(event.target.value)}
                     type="email"
-                    value={quote.customerEmail}
+                    value={customerEmail}
                   />
                 </label>
                 <label className="mt-3 grid gap-1.5">
@@ -211,13 +320,8 @@ export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
                   </span>
                   <textarea
                     className="min-h-16 resize-y border border-d1-line bg-white px-3 py-2 text-sm leading-relaxed text-d1-ink outline-none focus:border-d1-ink"
-                    onChange={(event) =>
-                      updateField({
-                        customerId: "",
-                        billingAddress: event.target.value
-                      })
-                    }
-                    value={quote.billingAddress}
+                    onChange={(event) => setBillingAddress(event.target.value)}
+                    value={billingAddress}
                   />
                 </label>
               </div>
@@ -233,11 +337,9 @@ export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
                     </dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-d1-steel">Due</dt>
+                    <dt className="text-d1-steel">Updated</dt>
                     <dd className="font-bold text-d1-ink">
-                      {dateFormatter.format(
-                        new Date(quote.dueAt || quote.expiresAt)
-                      )}
+                      {dateFormatter.format(new Date(quote.updatedAt))}
                     </dd>
                   </div>
                 </dl>
@@ -247,33 +349,22 @@ export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
                   </span>
                   <select
                     className="h-10 border border-d1-line bg-white px-3 text-sm text-d1-ink outline-none focus:border-d1-ink"
-                    onChange={(event) => updateField({ terms: event.target.value })}
-                    value={quote.terms}
+                    onChange={(event) => setTerms(event.target.value)}
+                    value={terms}
                   >
                     {termsOptions.map((option) => (
                       <option key={option}>{option}</option>
                     ))}
                   </select>
                 </label>
-                <label className="mt-3 grid gap-1.5">
+                <div className="mt-3">
                   <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-d1-steel">
                     Status
                   </span>
-                  <select
-                    className="h-10 border border-d1-line bg-white px-3 text-sm text-d1-ink outline-none focus:border-d1-ink"
-                    onChange={(event) =>
-                      updateField({
-                        status: event.target.value as typeof quote.status
-                      })
-                    }
-                    value={quote.status}
-                  >
-                    <option value="draft">Draft</option>
-                    <option value="sent">Sent</option>
-                    <option value="accepted">Accepted</option>
-                    <option value="invoiced">Invoiced</option>
-                  </select>
-                </label>
+                  <p className="mt-1.5 inline-flex border border-d1-ink bg-white px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-d1-ink">
+                    {status}
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -286,29 +377,15 @@ export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
                 <div className="mt-3 grid gap-px border border-d1-line bg-d1-line">
                   {items.map((item) => (
                     <div
-                      className="grid grid-cols-[44px_1fr_auto] items-center gap-3 bg-white p-3"
-                      key={item.variantId}
+                      className="grid grid-cols-[1fr_auto] items-center gap-3 bg-white p-3"
+                      key={item.id}
                     >
-                      <span className="flex h-11 w-11 items-center justify-center border border-d1-line bg-white">
-                        {item.image ? (
-                          <Image
-                            alt={item.title}
-                            className="h-full w-full object-contain p-1.5"
-                            height={80}
-                            quality={45}
-                            src={item.image}
-                            width={80}
-                          />
-                        ) : (
-                          <span className="text-xs font-black text-d1-line">GW</span>
-                        )}
-                      </span>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-bold text-d1-ink">
                           {item.title}
                         </p>
                         <p className="text-[12px] text-d1-steel">
-                          SKU {item.sku} · {formatUsd(item.price)} each
+                          SKU {item.sku} · {formatUsd(item.unitPrice)} each
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -317,11 +394,7 @@ export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
                             aria-label="Decrease quantity"
                             className="grid h-9 w-9 place-items-center text-d1-ink transition hover:bg-d1-ink hover:text-d1-paper"
                             onClick={() =>
-                              updateQuantity(
-                                quote.id,
-                                item.variantId,
-                                Math.max(1, item.quantity - 1)
-                              )
+                              updateQuantity(item.id, item.quantity - 1)
                             }
                             type="button"
                           >
@@ -334,11 +407,7 @@ export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
                             aria-label="Increase quantity"
                             className="grid h-9 w-9 place-items-center text-d1-ink transition hover:bg-d1-ink hover:text-d1-paper"
                             onClick={() =>
-                              updateQuantity(
-                                quote.id,
-                                item.variantId,
-                                item.quantity + 1
-                              )
+                              updateQuantity(item.id, item.quantity + 1)
                             }
                             type="button"
                           >
@@ -346,12 +415,12 @@ export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
                           </button>
                         </div>
                         <span className="w-20 text-right text-sm font-extrabold text-d1-ink">
-                          {formatUsd(item.price * item.quantity)}
+                          {formatUsd(item.unitPrice * item.quantity)}
                         </span>
                         <button
                           aria-label={`Remove ${item.title}`}
                           className="grid h-9 w-9 place-items-center border border-d1-line text-d1-steel transition hover:border-d1-red hover:text-d1-red"
-                          onClick={() => removeItem(quote.id, item.variantId)}
+                          onClick={() => removeItem(item.id)}
                           type="button"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -369,7 +438,7 @@ export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
                 className="mt-3 inline-flex items-center gap-2 border border-d1-ink px-4 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-d1-ink transition hover:bg-d1-ink hover:text-d1-paper"
                 href="/industrial/quote"
               >
-                <Plus className="h-3.5 w-3.5" /> Add items in builder
+                <Plus className="h-3.5 w-3.5" /> Start a new quote
               </Link>
             </div>
 
@@ -380,8 +449,8 @@ export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
               </p>
               <textarea
                 className="mt-3 min-h-20 w-full resize-y border border-d1-line bg-white px-3 py-2 text-sm leading-relaxed text-d1-ink outline-none focus:border-d1-ink"
-                onChange={(event) => updateField({ notes: event.target.value })}
-                value={quote.notes}
+                onChange={(event) => setNoteBody(event.target.value)}
+                value={noteBody}
               />
             </div>
           </div>
@@ -412,11 +481,16 @@ export function IndustrialQuoteDetail({ quoteId }: { quoteId: string }) {
               </dl>
               <button
                 className="mt-4 flex w-full items-center justify-center gap-2 bg-d1-ink px-5 py-3.5 text-sm font-bold uppercase tracking-[0.1em] text-d1-paper transition hover:bg-d1-pine disabled:cursor-not-allowed disabled:bg-d1-line disabled:text-d1-steel"
+                disabled={busy || !items.length || converted}
+                onClick={handleConvert}
+                type="button"
+              >
+                {converted ? "Already converted" : "Convert to order"}
+              </button>
+              <button
+                className="mt-2 flex w-full items-center justify-center gap-2 border border-d1-ink px-5 py-3 text-[12px] font-bold uppercase tracking-[0.1em] text-d1-ink transition hover:bg-d1-ink hover:text-d1-paper disabled:cursor-not-allowed disabled:border-d1-line disabled:text-d1-steel"
                 disabled={!items.length}
-                onClick={() => {
-                  items.forEach((item) => addCartItem(item));
-                  setMessage("Quote items copied to your cart.");
-                }}
+                onClick={moveToCart}
                 type="button"
               >
                 <ShoppingCart className="h-4 w-4" /> Move to cart

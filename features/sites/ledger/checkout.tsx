@@ -35,7 +35,7 @@ const pickupWindows = [
   "3:00 PM - 5:00 PM"
 ];
 
-type PaymentMethod = "net-terms" | "card";
+type PaymentMethod = "net-terms" | "purchase-order" | "card";
 
 const emptyAddress: OrderAddress = {
   name: "",
@@ -92,6 +92,7 @@ export function LedgerCheckoutView() {
   const [requestedDate, setRequestedDate] = useState(tomorrowDate());
   const [requestedWindow, setRequestedWindow] = useState(pickupWindows[1]);
   const [jobName, setJobName] = useState("");
+  const [poNumber, setPoNumber] = useState("");
   const [address, setAddress] = useState<OrderAddress>({
     ...emptyAddress,
     name: displayName === "Guest" ? "" : displayName
@@ -139,11 +140,16 @@ export function LedgerCheckoutView() {
       setError("Delivery orders require a complete jobsite address.");
       return;
     }
+    if (paymentMethod === "purchase-order" && !poNumber.trim()) {
+      setError("Enter the purchase-order number to submit a draft PO.");
+      return;
+    }
 
     setError("");
     setIsSubmitting(true);
 
     try {
+      const isPurchaseOrder = paymentMethod === "purchase-order";
       const order = createOrder({
         userId,
         customerName: address.name,
@@ -154,7 +160,7 @@ export function LedgerCheckoutView() {
         fulfillmentMethod,
         requestedDate,
         requestedWindow,
-        jobName,
+        jobName: isPurchaseOrder && poNumber.trim() ? poNumber.trim() : jobName,
         jobsiteAddress: address,
         drawings: [],
         pickupContact: address.name,
@@ -170,7 +176,11 @@ export function LedgerCheckoutView() {
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(order)
+        body: JSON.stringify(
+          isPurchaseOrder
+            ? { ...order, poNumber: poNumber.trim(), poStatus: "submitted" }
+            : order
+        )
       }).catch(() => null);
 
       if (!response) {
@@ -531,13 +541,18 @@ export function LedgerCheckoutView() {
             >
               Billing method
             </p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
               {(
                 [
                   {
                     id: "net-terms" as PaymentMethod,
                     title: "Net-30 terms",
                     desc: "Bill this order to your approved trade account."
+                  },
+                  {
+                    id: "purchase-order" as PaymentMethod,
+                    title: "Purchase order",
+                    desc: "Submit a draft PO with your own PO number."
                   },
                   {
                     id: "card" as PaymentMethod,
@@ -601,7 +616,8 @@ export function LedgerCheckoutView() {
                   style={fieldStyle()}
                 />
               </div>
-            ) : (
+            ) : null}
+            {paymentMethod === "net-terms" ? (
               <p
                 className="mt-3 rounded-xl px-3 py-2.5 text-[12px]"
                 style={{ backgroundColor: LEDGER.indigoSoft, color: LEDGER.indigo }}
@@ -609,7 +625,31 @@ export function LedgerCheckoutView() {
                 Account #GW-40128 is approved for Net-30. Invoice issues on
                 fulfillment with a 30-day due date.
               </p>
-            )}
+            ) : null}
+            {paymentMethod === "purchase-order" ? (
+              <div className="mt-3">
+                <label className="block">
+                  <FormLabel>Purchase order number</FormLabel>
+                  <input
+                    className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none"
+                    onChange={(event) => setPoNumber(event.target.value)}
+                    placeholder="e.g. PO-2026-0042"
+                    style={fieldStyle()}
+                    value={poNumber}
+                  />
+                </label>
+                <p
+                  className="mt-2 rounded-xl px-3 py-2.5 text-[12px]"
+                  style={{
+                    backgroundColor: LEDGER.amberSoft,
+                    color: LEDGER.amber
+                  }}
+                >
+                  This order is submitted as a draft purchase order. It awaits
+                  approval before fulfillment and is invoiced on Net-30 terms.
+                </p>
+              </div>
+            ) : null}
           </Card>
         </div>
 

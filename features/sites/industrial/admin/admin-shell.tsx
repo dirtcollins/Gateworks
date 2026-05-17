@@ -41,6 +41,11 @@ const NAV_GROUPS: Array<{ heading: string; items: AdminNavItem[] }> = [
       { href: "/industrial/admin", label: "Dashboard", Icon: LayoutDashboard },
       { href: "/industrial/admin/orders", label: "Orders", Icon: ClipboardList },
       { href: "/industrial/admin/quotes", label: "Quotes", Icon: FileText },
+      {
+        href: "/industrial/admin/purchase-orders",
+        label: "Purchase orders",
+        Icon: ClipboardCheck
+      },
       { href: "/industrial/admin/reports", label: "Reports", Icon: BarChart3 }
     ]
   },
@@ -56,6 +61,7 @@ const NAV_GROUPS: Array<{ heading: string; items: AdminNavItem[] }> = [
     heading: "Network",
     items: [
       { href: "/industrial/admin/customers", label: "Customers", Icon: Users },
+      { href: "/industrial/admin/procurement", label: "Procurement", Icon: Truck },
       { href: "/industrial/admin/pick-tickets", label: "Pick tickets", Icon: ClipboardCheck },
       { href: "/industrial/admin/warehouse", label: "Warehouse", Icon: Warehouse },
       { href: "/industrial/admin/demand", label: "Demand", Icon: TrendingUp }

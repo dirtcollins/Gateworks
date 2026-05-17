@@ -1,7 +1,8 @@
 // Wayfinder — product detail. Fully functional: image gallery, option-based
 // variant selection with live price / SKU / image, quantity stepper,
-// add-to-cart writing the real @/lib/cart-store, request-a-quote writing the
-// real @/lib/quote-store, a specs / details accordion, and related products.
+// add-to-cart writing the real @/lib/cart-store, request-a-quote which creates
+// a Supabase-backed customer quote (@/lib/quotes-data) scoped to the signed-in
+// account, a specs / details accordion, and related products.
 //
 // Variant logic is ported from components/product-page-client.tsx: each
 // option (length / material / finish / color) that varies is a real selector,
@@ -9,9 +10,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useCartStore } from "@/lib/cart-store";
-import { useQuoteStore } from "@/lib/quote-store";
+import { useUserStore } from "@/lib/user-store";
+import { saveQuote } from "@/lib/quotes-data";
 import type { Product, ProductVariant } from "@/lib/types";
 import { ProductCard } from "./product-card";
 import {
@@ -43,15 +46,16 @@ export function WayfinderProduct({
   product: Product;
   related: Product[];
 }) {
+  const router = useRouter();
   const addToCart = useCartStore((state) => state.addItem);
-  const addQuoteItem = useQuoteStore((state) => state.addItem);
-  const activeQuoteId = useQuoteStore((state) => state.activeQuoteId);
+  const userId = useUserStore((state) => state.userId);
+  const displayName = useUserStore((state) => state.displayName);
 
   // Stores use skipHydration — rehydrate once so writes land in the persisted
-  // (and user-scoped) cart / quote rather than a fresh in-memory copy.
+  // (and user-scoped) cart rather than a fresh in-memory copy.
   useEffect(() => {
     useCartStore.persist.rehydrate();
-    useQuoteStore.persist.rehydrate();
+    useUserStore.persist.rehydrate();
   }, []);
 
   const firstAvailable =
@@ -64,6 +68,7 @@ export function WayfinderProduct({
   const [openSection, setOpenSection] = useState("details");
   const [added, setAdded] = useState(false);
   const [quoted, setQuoted] = useState(false);
+  const [quoting, setQuoting] = useState(false);
   const [fulfillment, setFulfillment] = useState<"pickup" | "delivery" | "ship">(
     "pickup"
   );
@@ -156,10 +161,38 @@ export function WayfinderProduct({
     window.setTimeout(() => setAdded(false), 1400);
   }
 
-  function onRequestQuote() {
-    addQuoteItem(cartItem, activeQuoteId);
-    setQuoted(true);
-    window.setTimeout(() => setQuoted(false), 1800);
+  async function onRequestQuote() {
+    if (quoting) return;
+    setQuoting(true);
+    // Create a Supabase-backed draft quote scoped to the signed-in account
+    // with this configured line item, then open it in the quote builder.
+    const unitPrice = selectedVariant.price;
+    const result = await saveQuote({
+      status: "draft",
+      siteUserId: userId,
+      customerName: displayName && displayName !== "Guest" ? displayName : "",
+      createdBy: displayName || "Customer",
+      items: [
+        {
+          productId: product.id,
+          variantId: selectedVariant.id,
+          sku: selectedVariant.sku,
+          title: product.title,
+          options: selectedVariant.options,
+          quantity: qty,
+          unitPrice,
+          lineTotal: Number((unitPrice * qty).toFixed(2))
+        }
+      ]
+    });
+    setQuoting(false);
+    if (result.quote) {
+      router.push(`/wayfinder/quotes/${result.quote.id}`);
+    } else {
+      // Degraded mode: Supabase not configured — still acknowledge the action.
+      setQuoted(true);
+      window.setTimeout(() => setQuoted(false), 2400);
+    }
   }
 
   const sections: { id: string; label: string; body: React.ReactNode }[] = [
@@ -564,9 +597,14 @@ export function WayfinderProduct({
                 variant="default"
                 onClick={onRequestQuote}
                 block
+                disabled={quoting}
                 style={{ height: 42 }}
               >
-                {quoted ? (
+                {quoting ? (
+                  <>
+                    <Ico.clipboard size={14} /> Building quote…
+                  </>
+                ) : quoted ? (
                   <>
                     <Ico.check size={16} /> Added to quote
                   </>

@@ -52,6 +52,12 @@ const NAV: NavGroup[] = [
         label: "Inventory",
         code: "INV",
         icon: Ico.clipboard
+      },
+      {
+        href: "/wayfinder/admin/procurement",
+        label: "Procurement",
+        code: "PRC",
+        icon: Ico.truck
       }
     ]
   },

@@ -1,11 +1,12 @@
 // Wayfinder admin — customer directory. Blends the real `lib/customers`
 // registry with accounts derived from the live order store (lib/order-store,
-// bootstrapped from /api/orders). Selecting a row opens a detail rail with
+// bootstrapped from /api/orders) AND the people who actually registered site
+// accounts (GET /api/site-users). Selecting a row opens a detail rail with
 // contact info, terms, purchase history and jobsite/delivery addresses.
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { customerDirectory, type CustomerRecord } from "@/lib/customers";
+import { customerDirectory } from "@/lib/customers";
 import { useOrderStore, type OrderRecord } from "@/lib/order-store";
 import { fmt } from "../kit";
 import {
@@ -22,6 +23,7 @@ import {
   type Column
 } from "./admin-kit";
 import { formatDate, ORDER_STATUS_LABELS, orderStatusTone } from "./order-helpers";
+import { fetchSiteUsers, type SiteUser } from "./site-users";
 
 type Account = {
   id: string;
@@ -31,7 +33,7 @@ type Account = {
   phone: string;
   terms: string;
   billingAddress: string;
-  source: "registry" | "orders";
+  source: "registry" | "orders" | "registered";
   orderCount: number;
   orderValue: number;
   lastOrderAt: string;
@@ -48,21 +50,26 @@ export function WayfinderCustomers() {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string>("");
   const [loaded, setLoaded] = useState(false);
+  const [registeredUsers, setRegisteredUsers] = useState<SiteUser[]>([]);
 
   useEffect(() => {
     useOrderStore.persist.rehydrate();
     async function load() {
       try {
-        const res = await fetch("/api/orders?limit=250&includeItems=true", {
-          cache: "no-store"
-        });
-        if (res.ok) {
-          const payload = (await res.json()) as {
+        const [ordersRes, usersResult] = await Promise.all([
+          fetch("/api/orders?limit=250&includeItems=true", {
+            cache: "no-store"
+          }),
+          fetchSiteUsers()
+        ]);
+        if (ordersRes.ok) {
+          const payload = (await ordersRes.json()) as {
             orders?: OrderRecord[];
             persisted?: boolean;
           };
           if (payload.persisted && payload.orders) setOrders(payload.orders);
         }
+        setRegisteredUsers(usersResult.users);
       } finally {
         setLoaded(true);
       }
@@ -75,10 +82,34 @@ export function WayfinderCustomers() {
     [storedOrders]
   );
 
-  // Build the directory: every registry customer, plus any account that only
-  // shows up in the order history. Order stats are merged onto matching rows.
+  // Build the directory: every registry customer, every registered site
+  // account, plus any account that only shows up in the order history. Order
+  // stats are merged onto matching rows.
   const accounts = useMemo<Account[]>(() => {
     const byKey = new Map<string, Account>();
+    // Order stats are also indexed by site-user id so registered accounts
+    // (which have no email/company key) still pick up purchase history.
+    const statsByUserId = new Map<
+      string,
+      { orderCount: number; orderValue: number; lastOrderAt: string }
+    >();
+    for (const order of orders) {
+      if (!order.userId || order.userId === "guest") continue;
+      const stat = statsByUserId.get(order.userId) || {
+        orderCount: 0,
+        orderValue: 0,
+        lastOrderAt: ""
+      };
+      stat.orderCount += 1;
+      stat.orderValue += order.total;
+      if (
+        !stat.lastOrderAt ||
+        new Date(order.createdAt) > new Date(stat.lastOrderAt)
+      ) {
+        stat.lastOrderAt = order.createdAt;
+      }
+      statsByUserId.set(order.userId, stat);
+    }
 
     for (const customer of customerDirectory) {
       byKey.set(accountKey(customer.email, customer.company), {
@@ -96,7 +127,32 @@ export function WayfinderCustomers() {
       });
     }
 
+    // Registered site accounts — real people who signed up. Keyed by their
+    // user id so order history (matched on userId) merges in.
+    for (const user of registeredUsers) {
+      const stat = statsByUserId.get(user.id);
+      byKey.set(`registered:${user.id}`, {
+        id: `registered:${user.id}`,
+        name: user.displayName,
+        company: user.displayName,
+        email: "",
+        phone: "",
+        terms: "Due on receipt",
+        billingAddress: "",
+        source: "registered",
+        orderCount: stat?.orderCount ?? 0,
+        orderValue: stat?.orderValue ?? 0,
+        lastOrderAt: stat?.lastOrderAt ?? ""
+      });
+    }
+
+    const registeredIds = new Set(registeredUsers.map((user) => user.id));
+
     for (const order of orders) {
+      // Orders belonging to a registered account are already represented by
+      // that account row — skip them here to avoid a duplicate "From orders".
+      if (order.userId && registeredIds.has(order.userId)) continue;
+
       const company = order.companyName || order.customerName || "Unknown";
       const key = accountKey(order.email, company);
       const existing = byKey.get(key);
@@ -140,7 +196,7 @@ export function WayfinderCustomers() {
     return Array.from(byKey.values()).sort((a, b) =>
       a.company.localeCompare(b.company)
     );
-  }, [orders]);
+  }, [orders, registeredUsers]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -170,12 +226,20 @@ export function WayfinderCustomers() {
 
   const selectedOrders = useMemo(() => {
     if (!selected) return [];
+    // Registered accounts carry a `registered:<userId>` id — match those
+    // orders on userId; registry / order accounts match on email or company.
+    const registeredUserId =
+      selected.source === "registered"
+        ? selected.id.replace(/^registered:/, "")
+        : "";
     return orders
-      .filter(
-        (order) =>
-          order.email === selected.email ||
+      .filter((order) => {
+        if (registeredUserId) return order.userId === registeredUserId;
+        return (
+          (selected.email && order.email === selected.email) ||
           (order.companyName || order.customerName) === selected.company
-      )
+        );
+      })
       .sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -211,6 +275,7 @@ export function WayfinderCustomers() {
     () => accounts.filter((account) => account.orderCount > 0).length,
     [accounts]
   );
+  const registeredCount = registeredUsers.length;
 
   const columns: Column<Account>[] = [
     {
@@ -263,8 +328,20 @@ export function WayfinderCustomers() {
       key: "source",
       header: "Source",
       render: (account) => (
-        <Pill tone={account.source === "registry" ? "neutral" : "open"}>
-          {account.source === "registry" ? "Registry" : "From orders"}
+        <Pill
+          tone={
+            account.source === "registry"
+              ? "neutral"
+              : account.source === "registered"
+                ? "active"
+                : "open"
+          }
+        >
+          {account.source === "registry"
+            ? "Registry"
+            : account.source === "registered"
+              ? "Registered"
+              : "From orders"}
         </Pill>
       )
     },
@@ -293,7 +370,7 @@ export function WayfinderCustomers() {
       <PageHead
         eyebrow="Floor"
         title="Customers"
-        desc="Every account that buys off the floor — the standing customer registry blended with accounts pulled from live order history."
+        desc="Every account that buys off the floor — the standing customer registry blended with registered site accounts and accounts pulled from live order history."
       />
 
       <div
@@ -304,8 +381,8 @@ export function WayfinderCustomers() {
         }}
       >
         <Kpi label="Accounts" value={accounts.length} />
-        <Kpi label="With order history" value={activeAccounts} tone="pine" />
-        <Kpi label="Open orders" value={orders.length} />
+        <Kpi label="Registered" value={registeredCount} tone="pine" />
+        <Kpi label="With order history" value={activeAccounts} />
         <Kpi
           label="Lifetime value"
           value={fmt(totalValue, { cents: false })}

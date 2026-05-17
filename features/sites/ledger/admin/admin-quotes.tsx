@@ -2,71 +2,82 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, FileText, Plus, Search, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowRight, FileText, LayoutTemplate, Plus, Search, Trash2 } from "lucide-react";
 import { LEDGER, formatUsd, formatUsd0 } from "@/features/sites/ledger/kit";
-import { useQuoteStore, type QuoteRecord } from "@/lib/quote-store";
-import { calculateTax } from "@/lib/tax";
+import { formatLedgerDate } from "@/features/sites/ledger/quote-helpers";
+import {
+  deleteQuote,
+  fetchQuotes,
+  saveQuote,
+  type DbQuote,
+  type QuoteStatus
+} from "@/lib/quotes-data";
 import {
   AdminCard,
   AdminEmpty,
+  AdminGhostButton,
   AdminHeading,
   AdminPrimaryButton,
   StatTile,
   StatusPill,
-  formatAdminDate,
   titleCase
 } from "./admin-kit";
 
-type StatusFilter = "all" | QuoteRecord["status"];
+type StatusFilter = "all" | QuoteStatus;
 
 const STATUS_OPTIONS: Array<{ id: StatusFilter; label: string }> = [
   { id: "all", label: "All" },
   { id: "draft", label: "Draft" },
   { id: "sent", label: "Sent" },
   { id: "accepted", label: "Accepted" },
-  { id: "invoiced", label: "Invoiced" }
+  { id: "invoiced", label: "Invoiced" },
+  { id: "converted", label: "Converted" }
 ];
 
-function quoteStatusTone(status: QuoteRecord["status"]): "indigo" | "amber" | "mint" | "neutral" {
+function quoteStatusTone(
+  status: QuoteStatus
+): "indigo" | "amber" | "mint" | "neutral" {
   if (status === "draft") return "amber";
   if (status === "sent") return "indigo";
   return "mint";
 }
 
-function quoteSubtotal(items: QuoteRecord["items"]) {
-  return items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-}
-
-function quoteTotal(items: QuoteRecord["items"]) {
-  const subtotal = quoteSubtotal(items);
-  return subtotal + calculateTax(subtotal);
-}
-
-/* Ledger admin quotes — the operations quote list. Reads and writes the
- * real quote store (useQuoteStore). Supports search, status filtering,
- * quote creation, and deletion. */
+/* Ledger admin quotes — the operations quote list backed by the DB
+ * (/api/quotes via quotes-data). Search, status filtering, quote
+ * creation, start-from-template, and deletion. */
 export function LedgerAdminQuotes() {
   const router = useRouter();
-  const quotes = useQuoteStore((state) => state.quotes);
-  const createQuote = useQuoteStore((state) => state.createQuote);
-  const deleteQuote = useQuoteStore((state) => state.deleteQuote);
-  const setActiveQuote = useQuoteStore((state) => state.setActiveQuote);
+  const [quotes, setQuotes] = useState<DbQuote[]>([]);
+  const [templates, setTemplates] = useState<DbQuote[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [configured, setConfigured] = useState(true);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<StatusFilter>("all");
-  const [hydrated, setHydrated] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+
+  const load = useCallback(async () => {
+    const [quoteResult, templateResult] = await Promise.all([
+      fetchQuotes(),
+      fetchQuotes({ templatesOnly: true })
+    ]);
+    setQuotes(quoteResult.quotes);
+    setTemplates(templateResult.quotes);
+    setConfigured(quoteResult.configured);
+    setLoaded(true);
+  }, []);
 
   useEffect(() => {
-    void useQuoteStore.persist.rehydrate();
-    setHydrated(true);
-  }, []);
+    void load();
+  }, [load]);
 
   const rows = useMemo(
     () =>
       quotes.map((quote) => ({
         quote,
-        status: quote.status || "draft",
-        total: quoteTotal(quote.items),
+        status: quote.status,
+        total: quote.total,
         units: quote.items.reduce((sum, item) => sum + item.quantity, 0)
       })),
     [quotes]
@@ -77,7 +88,12 @@ export function LedgerAdminQuotes() {
     return rows.filter(({ quote, status }) => {
       if (filter !== "all" && status !== filter) return false;
       if (!search) return true;
-      return [quote.name, quote.quoteNumber, quote.customerName, quote.customerEmail, status]
+      return [
+        quote.quoteNumber,
+        quote.customerName,
+        quote.customerEmail,
+        status
+      ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(search));
     });
@@ -85,18 +101,77 @@ export function LedgerAdminQuotes() {
 
   const summary = useMemo(() => {
     const pipeline = rows
-      .filter(({ status }) => status !== "invoiced")
+      .filter(({ status }) => status !== "invoiced" && status !== "converted")
       .reduce((sum, row) => sum + row.total, 0);
     const drafts = rows.filter(({ status }) => status === "draft").length;
     const sent = rows.filter(({ status }) => status === "sent").length;
-    const invoiced = rows.filter(({ status }) => status === "invoiced").length;
-    return { pipeline, drafts, sent, invoiced };
+    const converted = rows.filter(
+      ({ status }) => status === "converted" || status === "invoiced"
+    ).length;
+    return { pipeline, drafts, sent, converted };
   }, [rows]);
 
-  function handleNewQuote() {
-    const quoteId = createQuote("New quote");
-    setActiveQuote(quoteId);
-    router.push(`/ledger/admin/quotes/${quoteId}`);
+  async function handleNewQuote() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await saveQuote({
+        status: "draft",
+        createdBy: "Operations",
+        terms: "Net 30",
+        items: []
+      });
+      if (result.quote) {
+        router.push(`/ledger/admin/quotes/${result.quote.id}`);
+      } else {
+        await load();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function startFromTemplate(template: DbQuote) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await saveQuote({
+        status: "draft",
+        isTemplate: false,
+        templateName: "",
+        createdBy: "Operations",
+        customerName: template.customerName,
+        customerEmail: template.customerEmail,
+        customerId: template.customerId,
+        billingAddress: template.billingAddress,
+        jobsiteAddress: template.jobsiteAddress,
+        terms: template.terms,
+        notes: template.notes,
+        items: template.items.map((item) => ({
+          productId: item.productId,
+          variantId: item.variantId,
+          sku: item.sku,
+          title: item.title,
+          options: item.options,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          lineTotal: item.lineTotal
+        }))
+      });
+      if (result.quote) {
+        router.push(`/ledger/admin/quotes/${result.quote.id}`);
+      } else {
+        await load();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    setQuotes((current) => current.filter((quote) => quote.id !== id));
+    await deleteQuote(id);
+    void load();
   }
 
   return (
@@ -104,20 +179,103 @@ export function LedgerAdminQuotes() {
       <AdminHeading
         eyebrow="Operations"
         title="Quotes"
-        description="Build, price, and track formal quotes. Accepted quotes can be invoiced from the detail view."
+        description="Build, price, and track formal quotes. Drafts, templates, and customer assignment all persist to the quote database."
         action={
-          <AdminPrimaryButton onClick={handleNewQuote}>
-            <Plus className="h-4 w-4" /> New quote
-          </AdminPrimaryButton>
+          <div className="flex gap-2">
+            <AdminGhostButton onClick={() => setShowTemplates((open) => !open)}>
+              <LayoutTemplate className="h-4 w-4" /> Templates ({templates.length})
+            </AdminGhostButton>
+            <AdminPrimaryButton disabled={busy} onClick={handleNewQuote}>
+              <Plus className="h-4 w-4" /> New quote
+            </AdminPrimaryButton>
+          </div>
         }
       />
 
+      {loaded && !configured ? (
+        <div
+          className="rounded-xl px-4 py-3 text-[12px] font-semibold"
+          style={{ backgroundColor: LEDGER.amberSoft, color: LEDGER.amber }}
+        >
+          The quote database is not configured. Quotes are not yet persisted.
+        </div>
+      ) : null}
+
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile label="Pipeline value" value={formatUsd0(summary.pipeline)} sub="Open quotes" />
-        <StatTile label="Draft quotes" value={String(summary.drafts)} sub="Not yet sent" />
-        <StatTile label="Sent" value={String(summary.sent)} sub="Awaiting response" />
-        <StatTile label="Invoiced" value={String(summary.invoiced)} sub="Converted" />
+        <StatTile
+          label="Pipeline value"
+          value={formatUsd0(summary.pipeline)}
+          sub="Open quotes"
+        />
+        <StatTile
+          label="Draft quotes"
+          value={String(summary.drafts)}
+          sub="Not yet sent"
+        />
+        <StatTile
+          label="Sent"
+          value={String(summary.sent)}
+          sub="Awaiting response"
+        />
+        <StatTile
+          label="Converted"
+          value={String(summary.converted)}
+          sub="Became orders"
+        />
       </section>
+
+      {showTemplates ? (
+        <AdminCard className="p-4">
+          <p
+            className="text-[11px] font-semibold uppercase tracking-[0.14em]"
+            style={{ color: LEDGER.muted }}
+          >
+            Reusable templates
+          </p>
+          {templates.length ? (
+            <div className="mt-3 grid gap-2">
+              {templates.map((template) => (
+                <div
+                  key={template.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl px-3 py-2.5"
+                  style={{ border: `1px solid ${LEDGER.line}` }}
+                >
+                  <div className="min-w-0">
+                    <p
+                      className="text-[13px] font-semibold"
+                      style={{ color: LEDGER.ink }}
+                    >
+                      {template.templateName || template.quoteNumber}
+                    </p>
+                    <p className="text-[12px]" style={{ color: LEDGER.body }}>
+                      {template.items.length} line item
+                      {template.items.length === 1 ? "" : "s"} ·{" "}
+                      {formatUsd(template.total)}
+                    </p>
+                  </div>
+                  <button
+                    className="rounded-lg px-3 py-1.5 text-[12px] font-semibold transition disabled:opacity-60"
+                    disabled={busy}
+                    onClick={() => startFromTemplate(template)}
+                    style={{
+                      backgroundColor: LEDGER.indigoSoft,
+                      color: LEDGER.indigo
+                    }}
+                    type="button"
+                  >
+                    Start a quote
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-[13px]" style={{ color: LEDGER.body }}>
+              No templates yet. Save any quote as a template from its detail
+              page.
+            </p>
+          )}
+        </AdminCard>
+      ) : null}
 
       <AdminCard>
         <div
@@ -159,7 +317,14 @@ export function LedgerAdminQuotes() {
           </div>
         </div>
 
-        {hydrated && visible.length === 0 ? (
+        {!loaded ? (
+          <p
+            className="px-5 py-14 text-center text-sm font-medium"
+            style={{ color: LEDGER.muted }}
+          >
+            Loading quotes…
+          </p>
+        ) : visible.length === 0 ? (
           <AdminEmpty
             icon={<FileText className="h-9 w-9" />}
             title="No quotes in this view"
@@ -178,19 +343,18 @@ export function LedgerAdminQuotes() {
                     className="text-[11px] font-semibold uppercase tracking-[0.1em]"
                     style={{ color: LEDGER.muted }}
                   >
-                    {quote.quoteNumber} · {formatAdminDate(quote.createdAt)}
+                    {quote.quoteNumber} · {formatLedgerDate(quote.createdAt)}
                   </p>
                   <Link
                     className="mt-0.5 block truncate text-[14px] font-semibold transition hover:underline"
                     href={`/ledger/admin/quotes/${quote.id}`}
-                    onClick={() => setActiveQuote(quote.id)}
                     style={{ color: LEDGER.ink }}
                   >
-                    {quote.name}
+                    {quote.customerName || "Unassigned quote"}
                   </Link>
                   <p className="text-[12px]" style={{ color: LEDGER.body }}>
-                    {units} unit{units === 1 ? "" : "s"} · {quote.items.length} line
-                    item{quote.items.length === 1 ? "" : "s"}
+                    {units} unit{units === 1 ? "" : "s"} · {quote.items.length}{" "}
+                    line item{quote.items.length === 1 ? "" : "s"}
                   </p>
                 </div>
                 <div className="min-w-0">
@@ -200,7 +364,10 @@ export function LedgerAdminQuotes() {
                   >
                     {quote.customerName || "No customer"}
                   </p>
-                  <p className="truncate text-[12px]" style={{ color: LEDGER.muted }}>
+                  <p
+                    className="truncate text-[12px]"
+                    style={{ color: LEDGER.muted }}
+                  >
                     {quote.customerEmail || "Add an email"}
                   </p>
                 </div>
@@ -217,10 +384,13 @@ export function LedgerAdminQuotes() {
                 </div>
                 <div className="flex items-center gap-2 sm:justify-end">
                   <button
-                    aria-label={`Delete ${quote.name}`}
+                    aria-label={`Delete ${quote.quoteNumber}`}
                     className="grid h-9 w-9 place-items-center rounded-lg transition"
-                    onClick={() => deleteQuote(quote.id)}
-                    style={{ border: `1px solid ${LEDGER.line}`, color: LEDGER.muted }}
+                    onClick={() => void handleDelete(quote.id)}
+                    style={{
+                      border: `1px solid ${LEDGER.line}`,
+                      color: LEDGER.muted
+                    }}
                     type="button"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -228,8 +398,10 @@ export function LedgerAdminQuotes() {
                   <Link
                     className="grid h-9 w-9 place-items-center rounded-lg transition"
                     href={`/ledger/admin/quotes/${quote.id}`}
-                    onClick={() => setActiveQuote(quote.id)}
-                    style={{ backgroundColor: LEDGER.indigoSoft, color: LEDGER.indigo }}
+                    style={{
+                      backgroundColor: LEDGER.indigoSoft,
+                      color: LEDGER.indigo
+                    }}
                   >
                     <ArrowRight className="h-4 w-4" />
                   </Link>

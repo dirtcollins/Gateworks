@@ -14,6 +14,7 @@ import {
   PackageSearch,
   Plus,
   TrendingUp,
+  Truck,
   Users,
   Warehouse,
   X
@@ -42,6 +43,7 @@ const PRIMARY_NAV: AdminNavItem[] = [
   { href: "/ledger/admin", label: "Dashboard", Icon: LayoutDashboard },
   { href: "/ledger/admin/orders", label: "Orders", Icon: ClipboardList },
   { href: "/ledger/admin/quotes", label: "Quotes", Icon: FileText },
+  { href: "/ledger/admin/purchase-orders", label: "Customer POs", Icon: ClipboardCheck },
   { href: "/ledger/admin/customers", label: "Customers", Icon: Users },
   { href: "/ledger/admin/reports", label: "Reports", Icon: BarChart3 }
 ];
@@ -54,6 +56,7 @@ const CATALOG_NAV: AdminNavItem[] = [
 ];
 
 const FULFILLMENT_NAV: AdminNavItem[] = [
+  { href: "/ledger/admin/procurement", label: "Procurement", Icon: Truck },
   { href: "/ledger/admin/pick-tickets", label: "Pick tickets", Icon: ClipboardCheck },
   { href: "/ledger/admin/warehouse", label: "Warehouse", Icon: Warehouse }
 ];

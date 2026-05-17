@@ -12,30 +12,45 @@ import {
   AdminStatGrid,
   AdminTabs
 } from "@/features/sites/industrial/admin/kit";
-import { useQuoteStore, type QuoteRecord } from "@/lib/quote-store";
-import { calculateTax } from "@/lib/tax";
+import {
+  deleteQuote,
+  fetchQuotes,
+  quoteDisplayName,
+  saveQuote,
+  type DbQuote,
+  type QuoteStatus
+} from "@/features/sites/industrial/quote-data";
 
 /* ------------------------------------------------------------------ *
- * INDUSTRIAL PRO — Admin quotes list. Reads + writes the real quote
- * store (useQuoteStore): create, delete, filter by status, and link
- * into each quote's admin detail view.
+ * INDUSTRIAL PRO — Admin quotes list. Reads + writes the DB-backed
+ * quote system via `@/lib/quotes-data` (`/api/quotes`): real quote
+ * list, create a quote, start a quote from a saved template, filter
+ * by status, delete, and link into the admin quote detail.
  * ------------------------------------------------------------------ */
 
-type QuoteTab = "all" | "draft" | "sent" | "accepted" | "invoiced";
+type QuoteTab =
+  | "all"
+  | "draft"
+  | "sent"
+  | "accepted"
+  | "converted"
+  | "templates";
 
 const TABS: Array<{ id: QuoteTab; label: string }> = [
   { id: "all", label: "All" },
   { id: "draft", label: "Draft" },
   { id: "sent", label: "Sent" },
   { id: "accepted", label: "Accepted" },
-  { id: "invoiced", label: "Invoiced" }
+  { id: "converted", label: "Converted" },
+  { id: "templates", label: "Templates" }
 ];
 
-const STATUS_TONE: Record<QuoteRecord["status"], "neutral" | "amber" | "pine" | "ink"> = {
+const STATUS_TONE: Record<QuoteStatus, "neutral" | "amber" | "pine" | "ink"> = {
   draft: "amber",
   sent: "neutral",
   accepted: "pine",
-  invoiced: "ink"
+  invoiced: "ink",
+  converted: "ink"
 };
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
@@ -44,45 +59,60 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric"
 });
 
-function quoteTotal(quote: QuoteRecord) {
-  const subtotal = quote.items.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0
-  );
-  return subtotal + calculateTax(subtotal);
-}
-
 export function IndustrialAdminQuotes() {
   const router = useRouter();
-  const quotes = useQuoteStore((state) => state.quotes);
-  const createQuote = useQuoteStore((state) => state.createQuote);
-  const deleteQuote = useQuoteStore((state) => state.deleteQuote);
-  const setActiveQuote = useQuoteStore((state) => state.setActiveQuote);
 
   const [ready, setReady] = useState(false);
+  const [configured, setConfigured] = useState(true);
+  const [quotes, setQuotes] = useState<DbQuote[]>([]);
+  const [templates, setTemplates] = useState<DbQuote[]>([]);
   const [tab, setTab] = useState<QuoteTab>("all");
   const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function reload() {
+    const [quoteResult, templateResult] = await Promise.all([
+      fetchQuotes(),
+      fetchQuotes({ templatesOnly: true })
+    ]);
+    setQuotes(quoteResult.quotes);
+    setTemplates(templateResult.quotes);
+    setConfigured(quoteResult.configured);
+    setReady(true);
+  }
 
   useEffect(() => {
-    void useQuoteStore.persist.rehydrate();
-    setReady(true);
+    void reload();
   }, []);
+
+  useEffect(() => {
+    if (!message) return;
+    const handle = window.setTimeout(() => setMessage(""), 3200);
+    return () => window.clearTimeout(handle);
+  }, [message]);
 
   const rows = useMemo(
     () =>
-      (ready ? quotes : []).map((quote) => ({
+      (tab === "templates" ? templates : quotes).map((quote) => ({
         quote,
         status: quote.status || "draft",
-        total: quoteTotal(quote)
+        total: quote.total
       })),
-    [ready, quotes]
+    [tab, quotes, templates]
   );
 
   const filtered = rows.filter(({ quote, status }) => {
-    if (tab !== "all" && status !== tab) return false;
+    if (tab !== "all" && tab !== "templates" && status !== tab) return false;
     const term = query.trim().toLowerCase();
     if (!term) return true;
-    return [quote.name, quote.quoteNumber, quote.customerName, quote.customerEmail]
+    return [
+      quoteDisplayName(quote),
+      quote.templateName,
+      quote.quoteNumber,
+      quote.customerName,
+      quote.customerEmail
+    ]
       .filter(Boolean)
       .some((value) => value.toLowerCase().includes(term));
   });
@@ -90,32 +120,95 @@ export function IndustrialAdminQuotes() {
   const tabsWithCount = TABS.map((entry) => ({
     ...entry,
     count:
-      entry.id === "all"
-        ? rows.length
-        : rows.filter((row) => row.status === entry.id).length
+      entry.id === "templates"
+        ? templates.length
+        : entry.id === "all"
+          ? quotes.length
+          : quotes.filter((quote) => quote.status === entry.id).length
   }));
 
-  const openValue = rows
-    .filter((row) => row.status !== "invoiced")
-    .reduce((sum, row) => sum + row.total, 0);
+  const openValue = quotes
+    .filter(
+      (quote) => quote.status !== "invoiced" && quote.status !== "converted"
+    )
+    .reduce((sum, quote) => sum + quote.total, 0);
 
   const stats = [
     { label: "Open quote value", value: formatUsd(openValue) },
     {
       label: "Draft quotes",
-      value: String(rows.filter((row) => row.status === "draft").length)
+      value: String(quotes.filter((quote) => quote.status === "draft").length)
     },
     {
-      label: "Accepted",
-      value: String(rows.filter((row) => row.status === "accepted").length)
+      label: "Templates",
+      value: String(templates.length)
     },
-    { label: "Total documents", value: String(rows.length) }
+    { label: "Total quotes", value: String(quotes.length) }
   ];
 
-  function handleNewQuote() {
-    const quoteId = createQuote("New job quote");
-    setActiveQuote(quoteId);
-    router.push(`/industrial/admin/quotes/${quoteId}`);
+  async function handleNewQuote() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { quote, persisted } = await saveQuote({
+        status: "draft",
+        notes: "New job quote",
+        createdBy: "Admin",
+        items: []
+      });
+      if (persisted && quote?.id) {
+        router.push(`/industrial/admin/quotes/${quote.id}`);
+        return;
+      }
+      setMessage("Supabase is not configured — the quote was not created.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleFromTemplate(templateId: string) {
+    if (busy) return;
+    const template = templates.find((entry) => entry.id === templateId);
+    if (!template) return;
+    setBusy(true);
+    try {
+      const { quote, persisted } = await saveQuote({
+        status: "draft",
+        isTemplate: false,
+        templateName: "",
+        notes: quoteDisplayName(template),
+        terms: template.terms,
+        subtotal: template.subtotal,
+        tax: template.tax,
+        total: template.total,
+        createdBy: "Admin",
+        items: template.items.map((item) => ({
+          productId: item.productId,
+          variantId: item.variantId,
+          sku: item.sku,
+          title: item.title,
+          options: item.options,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          lineTotal: item.lineTotal
+        }))
+      });
+      if (persisted && quote?.id) {
+        router.push(`/industrial/admin/quotes/${quote.id}`);
+        return;
+      }
+      setMessage("Supabase is not configured — could not start from template.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    const { persisted } = await deleteQuote(id);
+    if (persisted) {
+      setQuotes((current) => current.filter((quote) => quote.id !== id));
+      setTemplates((current) => current.filter((quote) => quote.id !== id));
+    }
   }
 
   return (
@@ -123,17 +216,53 @@ export function IndustrialAdminQuotes() {
       <AdminHeader
         eyebrow="Estimate center"
         title="Quotes"
-        description="The full quote pipeline — create, price, and convert estimates into orders."
+        description="The full quote pipeline — create, price, save templates, and convert estimates into orders."
         action={
-          <button
-            className="inline-flex items-center gap-2 bg-d1-ink px-5 py-2.5 text-[12px] font-bold uppercase tracking-[0.1em] text-d1-paper transition hover:bg-d1-pine"
-            onClick={handleNewQuote}
-            type="button"
-          >
-            <Plus className="h-4 w-4" /> New quote
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="inline-flex items-center gap-2 bg-d1-ink px-5 py-2.5 text-[12px] font-bold uppercase tracking-[0.1em] text-d1-paper transition hover:bg-d1-pine disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={busy}
+              onClick={handleNewQuote}
+              type="button"
+            >
+              <Plus className="h-4 w-4" /> New quote
+            </button>
+            {templates.length ? (
+              <select
+                aria-label="Start from a template"
+                className="border border-d1-ink bg-white px-3 py-2.5 text-[12px] font-bold uppercase tracking-[0.1em] text-d1-ink outline-none"
+                disabled={busy}
+                onChange={(event) => {
+                  if (event.target.value) {
+                    void handleFromTemplate(event.target.value);
+                    event.target.value = "";
+                  }
+                }}
+                value=""
+              >
+                <option value="">From template…</option>
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.templateName || quoteDisplayName(template)}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </div>
         }
       />
+
+      {!configured ? (
+        <p className="border border-d1-amber bg-d1-amber/10 px-4 py-3 text-[12px] font-bold text-d1-ink">
+          Quotes are not yet persisted — Supabase is not configured. Quote
+          changes will not be saved.
+        </p>
+      ) : null}
+      {message ? (
+        <p className="border border-d1-amber bg-d1-amber/10 px-4 py-3 text-[12px] font-bold text-d1-ink">
+          {message}
+        </p>
+      ) : null}
 
       <AdminStatGrid stats={stats} />
 
@@ -158,6 +287,7 @@ export function IndustrialAdminQuotes() {
               (sum, item) => sum + item.quantity,
               0
             );
+            const isTemplate = quote.isTemplate;
             return (
               <div
                 className="grid gap-3 bg-d1-card p-4 sm:grid-cols-[1.4fr_1fr_auto] sm:items-center"
@@ -168,16 +298,20 @@ export function IndustrialAdminQuotes() {
                     <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-d1-steel">
                       {quote.quoteNumber}
                     </span>
-                    <AdminPill tone={STATUS_TONE[status]}>{status}</AdminPill>
+                    {isTemplate ? (
+                      <AdminPill tone="pine">Template</AdminPill>
+                    ) : (
+                      <AdminPill tone={STATUS_TONE[status]}>{status}</AdminPill>
+                    )}
                   </div>
                   <p className="mt-1.5 text-base font-bold text-d1-ink">
-                    {quote.name}
+                    {isTemplate
+                      ? quote.templateName || quoteDisplayName(quote)
+                      : quoteDisplayName(quote)}
                   </p>
                   <p className="text-[12px] text-d1-steel">
-                    {unitCount} unit{unitCount === 1 ? "" : "s"} &middot; Due{" "}
-                    {dateFormatter.format(
-                      new Date(quote.dueAt || quote.expiresAt)
-                    )}
+                    {unitCount} unit{unitCount === 1 ? "" : "s"} &middot; Updated{" "}
+                    {dateFormatter.format(new Date(quote.updatedAt))}
                   </p>
                 </div>
                 <div>
@@ -193,17 +327,26 @@ export function IndustrialAdminQuotes() {
                     {formatUsd(total)}
                   </span>
                   <div className="flex gap-2">
+                    {isTemplate ? (
+                      <button
+                        className="inline-flex items-center gap-1.5 bg-d1-pine px-3 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-d1-paper transition hover:bg-d1-ink disabled:opacity-50"
+                        disabled={busy}
+                        onClick={() => handleFromTemplate(quote.id)}
+                        type="button"
+                      >
+                        Use
+                      </button>
+                    ) : null}
                     <Link
                       className="inline-flex items-center gap-1.5 bg-d1-ink px-3 py-2 text-[11px] font-bold uppercase tracking-[0.1em] text-d1-paper transition hover:bg-d1-pine"
                       href={`/industrial/admin/quotes/${quote.id}`}
-                      onClick={() => setActiveQuote(quote.id)}
                     >
                       Open <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                     <button
-                      aria-label={`Delete ${quote.name}`}
+                      aria-label={`Delete ${quoteDisplayName(quote)}`}
                       className="grid h-9 w-9 place-items-center border border-d1-line text-d1-steel transition hover:border-d1-red hover:text-d1-red"
-                      onClick={() => deleteQuote(quote.id)}
+                      onClick={() => handleDelete(quote.id)}
                       type="button"
                     >
                       <Trash2 className="h-3.5 w-3.5" />

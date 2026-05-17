@@ -2,27 +2,38 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import {
-  ArrowRight,
-  Minus,
-  Plus,
-  Search,
-  Trash2
-} from "lucide-react";
+import { ArrowRight, Minus, Plus, Search, Trash2 } from "lucide-react";
 import { Eyebrow, IndustrialPage, formatUsd } from "./kit";
-import { useQuoteStore } from "@/lib/quote-store";
 import { useCartStore } from "@/lib/cart-store";
+import { useUserStore } from "@/lib/user-store";
 import { products } from "@/lib/catalog";
 import { customerDirectory, getCustomerById } from "@/lib/customers";
 import { calculateTax } from "@/lib/tax";
+import {
+  composeQuoteNotes,
+  saveQuote,
+  type QuoteItemInput
+} from "./quote-data";
 import type { Product } from "@/lib/types";
 
 /* ------------------------------------------------------------------ *
- * INDUSTRIAL PRO — Quote builder. Builds the active quote from
- * useQuoteStore: catalog quick-add, line-item edit, customer details,
- * and submit (status -> sent). Quote totals run the real tax helper.
+ * INDUSTRIAL PRO — Customer quote builder. Builds a quote in local
+ * draft state, then persists it to the DB (`/api/quotes`) scoped to
+ * the signed-in account via `siteUserId`. Submitting sets status to
+ * `sent`. Degrades gracefully when Supabase is not configured.
  * ------------------------------------------------------------------ */
+
+type DraftItem = QuoteItemInput & {
+  variantId: string;
+  productId: string;
+  sku: string;
+  title: string;
+  image: string;
+  unitPrice: number;
+  quantity: number;
+};
 
 function pickDefaultVariant(product: Product) {
   return (
@@ -32,36 +43,45 @@ function pickDefaultVariant(product: Product) {
 }
 
 export function IndustrialQuote() {
-  const quotes = useQuoteStore((state) => state.quotes);
-  const activeQuoteId = useQuoteStore((state) => state.activeQuoteId);
-  const addItem = useQuoteStore((state) => state.addItem);
-  const removeItem = useQuoteStore((state) => state.removeItem);
-  const updateQuantity = useQuoteStore((state) => state.updateQuantity);
-  const clearQuote = useQuoteStore((state) => state.clearQuote);
-  const saveQuote = useQuoteStore((state) => state.saveQuote);
-  const updateQuoteDetails = useQuoteStore((state) => state.updateQuoteDetails);
+  const router = useRouter();
   const addCartItem = useCartStore((state) => state.addItem);
+  const userId = useUserStore((state) => state.userId);
+  const displayName = useUserStore((state) => state.displayName);
+  const email = useUserStore((state) => state.email);
 
   const [ready, setReady] = useState(false);
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const [name, setName] = useState("New job quote");
+  const [customerId, setCustomerId] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [billingAddress, setBillingAddress] = useState("");
+  const [jobsiteAddress, setJobsiteAddress] = useState("");
+  const [terms, setTerms] = useState("Due on receipt");
+  const [notes, setNotes] = useState("");
+  const [items, setItems] = useState<DraftItem[]>([]);
 
   useEffect(() => {
-    void useQuoteStore.persist.rehydrate();
     void useCartStore.persist.rehydrate();
     setReady(true);
   }, []);
 
+  // Prefill customer fields from the signed-in account.
+  useEffect(() => {
+    setCustomerName((current) =>
+      current || (displayName && displayName !== "Guest" ? displayName : "")
+    );
+    setCustomerEmail((current) => current || email);
+  }, [displayName, email]);
+
   useEffect(() => {
     if (!message) return;
-    const handle = window.setTimeout(() => setMessage(""), 2600);
+    const handle = window.setTimeout(() => setMessage(""), 3200);
     return () => window.clearTimeout(handle);
   }, [message]);
-
-  const quote = useMemo(
-    () => quotes.find((record) => record.id === activeQuoteId) || quotes[0],
-    [quotes, activeQuoteId]
-  );
 
   const results = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -86,7 +106,7 @@ export function IndustrialQuote() {
     []
   );
 
-  if (!ready || !quote) {
+  if (!ready) {
     return (
       <IndustrialPage>
         <div className="py-24 text-center text-sm font-bold text-d1-steel">
@@ -96,9 +116,8 @@ export function IndustrialQuote() {
     );
   }
 
-  const items = quote.items;
   const subtotal = items.reduce(
-    (total, item) => total + item.price * item.quantity,
+    (total, item) => total + item.unitPrice * item.quantity,
     0
   );
   const tax = calculateTax(subtotal);
@@ -106,62 +125,136 @@ export function IndustrialQuote() {
 
   function addCatalogItem(product: Product) {
     const variant = pickDefaultVariant(product);
-    if (!variant || !quote) return;
-    addItem(
-      {
-        productId: product.id,
-        variantId: variant.id,
-        title: product.title,
-        sku: variant.sku,
-        image: variant.image || product.images[0]?.url || "/assets/logo.svg",
-        price: variant.price,
-        weightLbs: variant.calculated_weight_lb,
-        cwtPrice: variant.steel_cwt_price,
-        pricingMethod: variant.pricing_method,
-        quantity: 1,
-        options: variant.options
-      },
-      quote.id
-    );
+    if (!variant) return;
+    setItems((current) => {
+      const existing = current.find(
+        (item) => item.variantId === variant.id
+      );
+      if (existing) {
+        return current.map((item) =>
+          item.variantId === variant.id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        );
+      }
+      return [
+        {
+          productId: product.id,
+          variantId: variant.id,
+          sku: variant.sku,
+          title: product.title,
+          image:
+            variant.image || product.images[0]?.url || "/assets/logo.svg",
+          unitPrice: variant.price,
+          quantity: 1,
+          options: variant.options
+        },
+        ...current
+      ];
+    });
     setMessage(`Added ${product.title} to the quote.`);
   }
 
-  function updateField(details: Parameters<typeof updateQuoteDetails>[1]) {
-    updateQuoteDetails(quote.id, details);
+  function updateQuantity(variantId: string, quantity: number) {
+    setItems((current) =>
+      current.map((item) =>
+        item.variantId === variantId
+          ? { ...item, quantity: Math.max(1, quantity) }
+          : item
+      )
+    );
   }
 
-  function applyCustomer(customerId: string) {
-    const customer = getCustomerById(customerId);
-    if (!customer) {
-      updateField({ customerId: "" });
-      return;
-    }
-    updateField({
-      customerId: customer.id,
-      customerName: customer.name,
-      customerEmail: customer.email,
-      billingAddress: customer.billingAddress,
-      jobsiteAddress: customer.jobsiteAddress,
-      terms: customer.terms
-    });
+  function removeItem(variantId: string) {
+    setItems((current) =>
+      current.filter((item) => item.variantId !== variantId)
+    );
   }
 
-  function submitQuote() {
+  function applyCustomer(id: string) {
+    setCustomerId(id);
+    const customer = getCustomerById(id);
+    if (!customer) return;
+    setCustomerName(customer.name);
+    setCustomerEmail(customer.email);
+    setBillingAddress(customer.billingAddress);
+    setJobsiteAddress(customer.jobsiteAddress);
+    setTerms(customer.terms);
+  }
+
+  async function persist(status: "draft" | "sent") {
+    if (busy) return;
     if (!items.length) {
-      setMessage("Add at least one line item before submitting.");
+      setMessage("Add at least one line item before saving.");
       return;
     }
-    if (!quote.customerName.trim()) {
-      setMessage("Add a customer name before submitting the request.");
+    if (!customerName.trim()) {
+      setMessage("Add a customer name before saving the quote.");
       return;
     }
-    updateQuoteDetails(quote.id, { status: "sent" });
-    saveQuote(quote.id);
-    setMessage("Quote request submitted. Our team will follow up with pricing.");
+
+    setBusy(true);
+    try {
+      const { quote, persisted } = await saveQuote({
+        status,
+        siteUserId: userId === "guest" ? null : userId,
+        customerId,
+        customerName: customerName.trim(),
+        customerEmail: customerEmail.trim(),
+        billingAddress,
+        jobsiteAddress,
+        terms,
+        notes: composeQuoteNotes(name, notes),
+        subtotal,
+        tax,
+        total,
+        createdBy: displayName || "Customer",
+        items: items.map((item) => ({
+          productId: item.productId,
+          variantId: item.variantId,
+          sku: item.sku,
+          title: item.title,
+          options: item.options,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          lineTotal: Number((item.unitPrice * item.quantity).toFixed(2))
+        }))
+      });
+
+      if (!persisted) {
+        setMessage(
+          "Quotes are not yet persisted — Supabase is not configured. Your quote was not saved."
+        );
+        return;
+      }
+
+      if (quote?.id) {
+        router.push(`/industrial/quotes/${quote.id}`);
+        return;
+      }
+      setMessage(
+        status === "sent"
+          ? "Quote request submitted. Our team will follow up with pricing."
+          : "Quote saved."
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   function moveToCart() {
-    items.forEach((item) => addCartItem(item));
+    items.forEach((item) =>
+      addCartItem({
+        productId: item.productId,
+        variantId: item.variantId,
+        title: item.title,
+        sku: item.sku,
+        image: item.image,
+        price: item.unitPrice,
+        quantity: item.quantity,
+        options: item.options || {}
+      })
+    );
     setMessage("Quote line items copied to your cart.");
   }
 
@@ -187,22 +280,14 @@ export function IndustrialQuote() {
           <div className="grid gap-6">
             {/* Quote header */}
             <div className="border border-d1-line bg-d1-card p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-d1-steel">
-                  {quote.quoteNumber}
-                </span>
-                <span className="border border-d1-ink bg-white px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-d1-ink">
-                  {quote.status}
-                </span>
-              </div>
-              <label className="mt-3 grid gap-1.5">
+              <label className="grid gap-1.5">
                 <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-d1-steel">
                   Quote name
                 </span>
                 <input
                   className="h-11 border border-d1-line bg-white px-3 text-base font-bold text-d1-ink outline-none focus:border-d1-ink"
-                  onChange={(event) => updateField({ name: event.target.value })}
-                  value={quote.name}
+                  onChange={(event) => setName(event.target.value)}
+                  value={name}
                 />
               </label>
             </div>
@@ -227,7 +312,9 @@ export function IndustrialQuote() {
                     const variant = pickDefaultVariant(product);
                     if (!variant) return null;
                     const image =
-                      variant.image || product.images[0]?.url || "/assets/logo.svg";
+                      variant.image ||
+                      product.images[0]?.url ||
+                      "/assets/logo.svg";
                     return (
                       <button
                         className="grid grid-cols-[44px_1fr_auto] items-center gap-3 bg-white px-3 py-2.5 text-left transition hover:bg-d1-card"
@@ -291,7 +378,7 @@ export function IndustrialQuote() {
                           {item.title}
                         </p>
                         <p className="text-[12px] text-d1-steel">
-                          SKU {item.sku} · {formatUsd(item.price)} each
+                          SKU {item.sku} · {formatUsd(item.unitPrice)} each
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -300,11 +387,7 @@ export function IndustrialQuote() {
                             aria-label="Decrease quantity"
                             className="grid h-9 w-9 place-items-center text-d1-ink transition hover:bg-d1-ink hover:text-d1-paper"
                             onClick={() =>
-                              updateQuantity(
-                                quote.id,
-                                item.variantId,
-                                Math.max(1, item.quantity - 1)
-                              )
+                              updateQuantity(item.variantId, item.quantity - 1)
                             }
                             type="button"
                           >
@@ -317,11 +400,7 @@ export function IndustrialQuote() {
                             aria-label="Increase quantity"
                             className="grid h-9 w-9 place-items-center text-d1-ink transition hover:bg-d1-ink hover:text-d1-paper"
                             onClick={() =>
-                              updateQuantity(
-                                quote.id,
-                                item.variantId,
-                                item.quantity + 1
-                              )
+                              updateQuantity(item.variantId, item.quantity + 1)
                             }
                             type="button"
                           >
@@ -329,12 +408,12 @@ export function IndustrialQuote() {
                           </button>
                         </div>
                         <span className="w-20 text-right text-sm font-extrabold text-d1-ink">
-                          {formatUsd(item.price * item.quantity)}
+                          {formatUsd(item.unitPrice * item.quantity)}
                         </span>
                         <button
                           aria-label={`Remove ${item.title}`}
                           className="grid h-9 w-9 place-items-center border border-d1-line text-d1-steel transition hover:border-d1-red hover:text-d1-red"
-                          onClick={() => removeItem(quote.id, item.variantId)}
+                          onClick={() => removeItem(item.variantId)}
                           type="button"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -362,7 +441,7 @@ export function IndustrialQuote() {
                 <select
                   className="h-11 border border-d1-line bg-white px-3 text-sm text-d1-ink outline-none focus:border-d1-ink"
                   onChange={(event) => applyCustomer(event.target.value)}
-                  value={quote.customerId || ""}
+                  value={customerId}
                 >
                   <option value="">Manual entry</option>
                   {sortedCustomers.map((customer) => (
@@ -379,13 +458,11 @@ export function IndustrialQuote() {
                   </span>
                   <input
                     className="h-11 border border-d1-line bg-white px-3 text-sm text-d1-ink outline-none focus:border-d1-ink"
-                    onChange={(event) =>
-                      updateField({
-                        customerId: "",
-                        customerName: event.target.value
-                      })
-                    }
-                    value={quote.customerName}
+                    onChange={(event) => {
+                      setCustomerId("");
+                      setCustomerName(event.target.value);
+                    }}
+                    value={customerName}
                   />
                 </label>
                 <label className="grid gap-1.5">
@@ -394,14 +471,12 @@ export function IndustrialQuote() {
                   </span>
                   <input
                     className="h-11 border border-d1-line bg-white px-3 text-sm text-d1-ink outline-none focus:border-d1-ink"
-                    onChange={(event) =>
-                      updateField({
-                        customerId: "",
-                        customerEmail: event.target.value
-                      })
-                    }
+                    onChange={(event) => {
+                      setCustomerId("");
+                      setCustomerEmail(event.target.value);
+                    }}
                     type="email"
-                    value={quote.customerEmail}
+                    value={customerEmail}
                   />
                 </label>
               </div>
@@ -411,13 +486,8 @@ export function IndustrialQuote() {
                 </span>
                 <textarea
                   className="min-h-20 resize-y border border-d1-line bg-white px-3 py-2 text-sm leading-relaxed text-d1-ink outline-none focus:border-d1-ink"
-                  onChange={(event) =>
-                    updateField({
-                      customerId: "",
-                      jobsiteAddress: event.target.value
-                    })
-                  }
-                  value={quote.jobsiteAddress}
+                  onChange={(event) => setJobsiteAddress(event.target.value)}
+                  value={jobsiteAddress}
                 />
               </label>
               <label className="mt-3 grid gap-1.5">
@@ -426,8 +496,8 @@ export function IndustrialQuote() {
                 </span>
                 <textarea
                   className="min-h-16 resize-y border border-d1-line bg-white px-3 py-2 text-sm leading-relaxed text-d1-ink outline-none focus:border-d1-ink"
-                  onChange={(event) => updateField({ notes: event.target.value })}
-                  value={quote.notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  value={notes}
                 />
               </label>
             </div>
@@ -458,18 +528,17 @@ export function IndustrialQuote() {
                 </div>
               </dl>
               <button
-                className="mt-4 flex w-full items-center justify-center bg-d1-ink px-5 py-3.5 text-sm font-bold uppercase tracking-[0.1em] text-d1-paper transition hover:bg-d1-pine"
-                onClick={submitQuote}
+                className="mt-4 flex w-full items-center justify-center bg-d1-ink px-5 py-3.5 text-sm font-bold uppercase tracking-[0.1em] text-d1-paper transition hover:bg-d1-pine disabled:cursor-not-allowed disabled:bg-d1-line disabled:text-d1-steel"
+                disabled={busy}
+                onClick={() => persist("sent")}
                 type="button"
               >
-                Submit quote request
+                {busy ? "Saving…" : "Submit quote request"}
               </button>
               <button
-                className="mt-2 flex w-full items-center justify-center border border-d1-ink px-5 py-3 text-[12px] font-bold uppercase tracking-[0.1em] text-d1-ink transition hover:bg-d1-ink hover:text-d1-paper"
-                onClick={() => {
-                  saveQuote(quote.id);
-                  setMessage("Quote saved.");
-                }}
+                className="mt-2 flex w-full items-center justify-center border border-d1-ink px-5 py-3 text-[12px] font-bold uppercase tracking-[0.1em] text-d1-ink transition hover:bg-d1-ink hover:text-d1-paper disabled:cursor-not-allowed disabled:border-d1-line disabled:text-d1-steel"
+                disabled={busy}
+                onClick={() => persist("draft")}
                 type="button"
               >
                 Save draft
@@ -481,14 +550,6 @@ export function IndustrialQuote() {
                 type="button"
               >
                 Move to cart
-              </button>
-              <button
-                className="mt-2 flex w-full items-center justify-center border border-d1-line px-5 py-3 text-[12px] font-bold uppercase tracking-[0.1em] text-d1-red transition hover:bg-d1-red/10 disabled:cursor-not-allowed disabled:text-d1-steel"
-                disabled={!items.length}
-                onClick={() => clearQuote(quote.id)}
-                type="button"
-              >
-                Clear line items
               </button>
               {message ? (
                 <p className="mt-3 text-center text-[12px] font-bold text-d1-pine">
