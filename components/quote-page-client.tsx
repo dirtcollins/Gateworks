@@ -78,6 +78,8 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
   const [focusTargetVariantId, setFocusTargetVariantId] = useState<string | null>(null);
   const [focusToken, setFocusToken] = useState(0);
   const quoteItemQtyRef = useRef<HTMLInputElement>(null);
+  const addItemRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const quickAddResults = useMemo(() => {
     const normalized = quickAddQuery.trim().toLowerCase();
@@ -109,6 +111,26 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
       setActiveQuote(quote.id);
     }
   }, [quote, setActiveQuote]);
+
+  useEffect(() => {
+    if (isQuickAddOpen) {
+      searchInputRef.current?.focus({ preventScroll: true });
+    }
+  }, [isQuickAddOpen]);
+
+  useEffect(() => {
+    if (!isQuickAddOpen) return;
+
+    function handlePointerDown(event: MouseEvent) {
+      if (addItemRef.current && !addItemRef.current.contains(event.target as Node)) {
+        setIsQuickAddOpen(false);
+        setQuickAddQuery("");
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [isQuickAddOpen]);
 
   useEffect(() => {
     if (!focusTargetVariantId || !focusToken) return;
@@ -244,13 +266,6 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
     setQuickAddQuery("");
     setIsQuickAddOpen(false);
     showActionMessage(`Added ${product.title} to invoice.`);
-  }
-
-  function closeQuickAdd() {
-    setIsQuickAddOpen(false);
-    setQuickAddQuery("");
-    setQuickAddQuantity("1");
-    setFocusTargetVariantId(null);
   }
 
   return (
@@ -390,14 +405,14 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
 
                     return (
                       <article
-                        className="group grid gap-3 px-4 py-4 transition hover:bg-[#fafaf8] md:grid-cols-[minmax(0,1fr)_140px_120px_120px_48px] md:items-center md:gap-4"
+                        className="group grid gap-3 px-4 py-3 transition hover:bg-[#fafaf8] md:grid-cols-[minmax(0,1fr)_140px_120px_120px_48px] md:items-center md:gap-4"
                         key={item.variantId}
                       >
                         <Link
-                          className="grid min-w-0 grid-cols-[56px_1fr] items-center gap-3"
+                          className="grid min-w-0 grid-cols-[48px_1fr] items-center gap-3"
                           href={`/products/${productSlug}`}
                         >
-                          <span className="relative size-14 shrink-0 rounded-md border border-black/10 bg-[#fafaf8]">
+                          <span className="relative size-12 shrink-0 rounded-md border border-black/10 bg-[#fafaf8]">
                             <Image
                               alt={item.title}
                               className="object-contain p-1.5"
@@ -461,15 +476,15 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
               )}
 
               {isQuickAddOpen ? (
-                <div className="border-t border-black/10">
+                <div className="border-t border-black/10" ref={addItemRef}>
                   <div className="flex flex-wrap items-center gap-2 border-b border-black/10 bg-[#fafaf8] px-4 py-3">
                     <Search className="text-jobsite-steel" size={18} />
                     <input
-                      autoFocus
                       className="h-9 min-w-[200px] flex-1 rounded border border-black/10 bg-white px-3 text-sm outline-none focus:border-industrial-ink"
                       id="quote-product-search"
                       onChange={(event) => setQuickAddQuery(event.target.value)}
                       placeholder="Search product title, SKU, or category"
+                      ref={searchInputRef}
                       value={quickAddQuery}
                     />
                     <label className="flex items-center gap-1.5 text-xs font-semibold text-industrial-muted">
@@ -484,16 +499,8 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
                         value={quickAddQuantity}
                       />
                     </label>
-                    <button
-                      aria-label="Close add item"
-                      className="grid size-9 place-items-center rounded-md border border-black/10 bg-white text-jobsite-ink transition hover:border-industrial-ink"
-                      onClick={closeQuickAdd}
-                      type="button"
-                    >
-                      <X size={16} />
-                    </button>
                   </div>
-                  <div className="max-h-72 overflow-y-auto">
+                  <div className="h-60 overflow-y-auto">
                     {!quickAddResults.length ? (
                       <p className="px-4 py-6 text-center text-sm text-industrial-muted">
                         No products match your search.
@@ -512,18 +519,18 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
 
                           return (
                             <button
-                              className="group grid w-full grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition hover:bg-[#fafaf8]"
+                              className="group grid w-full grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition hover:bg-[#fafaf8]"
                               key={product.id}
                               onClick={() => addCatalogItem(product)}
                               type="button"
                             >
-                              <span className="relative size-14 shrink-0 rounded-md border border-black/10 bg-[#fafaf8]">
+                              <span className="relative size-12 shrink-0 rounded-md border border-black/10 bg-[#fafaf8]">
                                 <Image
                                   alt={product.title}
                                   className="object-contain p-1.5"
                                   fill
                                   quality={45}
-                                  sizes="56px"
+                                  sizes="48px"
                                   src={resultImage}
                                 />
                               </span>
