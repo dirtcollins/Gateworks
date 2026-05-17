@@ -8,10 +8,13 @@ import {
   Search,
   Send
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Input, Select } from "@/components/ui/input";
 import type { OrderStatus } from "@/lib/platform-backend";
 import { useOrderStore, type OrderRecord } from "@/lib/order-store";
+import { getOrderStatusTone } from "@/lib/order-status";
 import { formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 
@@ -604,6 +607,93 @@ export function QuotesDashboard() {
     window.location.href = `mailto:${quote.email}?subject=${subject}&body=${body}`;
   }
 
+  const quoteColumns: DataTableColumn<OrderRecord>[] = [
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      sortValue: (quote) => quoteStatusLabels[quote.status],
+      render: (quote) => (
+        <Badge tone={getOrderStatusTone(quote.status)}>{quoteStatusLabels[quote.status]}</Badge>
+      )
+    },
+    {
+      key: "date",
+      header: "Date",
+      sortable: true,
+      sortValue: (quote) => quote.requestedDate || quote.createdAt,
+      render: (quote) => (
+        <div>
+          <p className="font-medium text-industrial-ink">
+            {formatDate(quote.requestedDate || quote.createdAt)}
+          </p>
+          <p className="text-xs text-industrial-muted">Requested</p>
+        </div>
+      )
+    },
+    {
+      key: "number",
+      header: "Number",
+      sortable: true,
+      sortValue: (quote) => quote.orderNumber,
+      render: (quote) => (
+        <span className="font-semibold text-industrial-ink">{quote.orderNumber}</span>
+      )
+    },
+    {
+      key: "customer",
+      header: "Customer",
+      sortable: true,
+      sortValue: (quote) => (quote.companyName || quote.customerName).toLowerCase(),
+      render: (quote) => (
+        <div className="min-w-0">
+          <p className="truncate font-semibold text-industrial-ink">
+            {quote.companyName || quote.customerName}
+          </p>
+          <p className="truncate text-xs text-industrial-muted">
+            {quote.customerName} · {quote.jobName || "Material quote"}
+          </p>
+        </div>
+      )
+    },
+    {
+      key: "total",
+      header: "Total",
+      className: "text-right",
+      sortable: true,
+      sortValue: (quote) => getQuotedTotal(quote),
+      render: (quote) => (
+        <span className="font-semibold text-industrial-ink">
+          {formatCurrency(getQuotedTotal(quote))}
+        </span>
+      )
+    },
+    {
+      key: "fulfillment",
+      header: "Fulfillment",
+      sortable: true,
+      sortValue: (quote) => quote.fulfillmentMethod,
+      render: (quote) => (
+        <span className="font-medium capitalize text-industrial-ink">
+          {quote.fulfillmentMethod}
+        </span>
+      )
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      className: "text-right",
+      render: (quote) => (
+        <Link
+          className="inline-flex h-8 items-center justify-center rounded-md border border-industrial-rail bg-white px-3 text-xs font-black uppercase tracking-[0.08em] text-industrial-ink transition hover:border-industrial-ink"
+          href={`/admin/quotes/${quote.id}`}
+        >
+          Open
+        </Link>
+      )
+    }
+  ];
+
   return (
     <main className="px-3 py-4 md:px-6 md:py-6">
       <div className="mx-auto grid max-w-[1280px] gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -686,83 +776,16 @@ export function QuotesDashboard() {
             </div>
           ) : null}
 
-          <div className="overflow-x-auto">
-            <div className="min-w-[980px]">
-              <div className="grid grid-cols-[130px_130px_150px_minmax(220px,1fr)_120px_130px_150px] gap-3 border-b border-black/10 bg-[#f7f7f4] px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">
-                <span>Status</span>
-                <span>Date</span>
-                <span>Number</span>
-                <span>Customer</span>
-                <span className="text-right">Total</span>
-                <span>Fulfillment</span>
-                <span className="text-right">Actions</span>
-              </div>
-
-              {!filteredQuotes.length ? (
-                <div className="grid place-items-center p-10 text-center">
-                  <FileText className="text-industrial-muted" size={24} />
-                  <p className="mt-3 text-sm font-semibold text-industrial-ink">
-                    No matching quote requests.
-                  </p>
-                </div>
-              ) : (
-                <div className="divide-y divide-black/10">
-                  {filteredQuotes.map((quote) => (
-                    <div
-                      className="grid cursor-pointer grid-cols-[130px_130px_150px_minmax(220px,1fr)_120px_130px_150px] items-center gap-3 px-4 py-3 text-sm transition hover:bg-[#fafaf8]"
-                      key={quote.id}
-                      onClick={() => router.push(`/admin/quotes/${quote.id}`)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          router.push(`/admin/quotes/${quote.id}`);
-                        }
-                      }}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <span className="inline-flex w-fit rounded border border-black/10 bg-[#f7f7f4] px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-industrial-ink">
-                        {quoteStatusLabels[quote.status]}
-                      </span>
-                      <span>
-                        <span className="block font-medium text-industrial-ink">
-                          {formatDate(quote.requestedDate || quote.createdAt)}
-                        </span>
-                        <span className="text-xs text-industrial-muted">
-                          Requested
-                        </span>
-                      </span>
-                      <span className="font-semibold text-industrial-ink">
-                        {quote.orderNumber}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block truncate font-semibold text-industrial-ink">
-                          {quote.companyName || quote.customerName}
-                        </span>
-                        <span className="block truncate text-xs text-industrial-muted">
-                          {quote.customerName} · {quote.jobName || "Material quote"}
-                        </span>
-                      </span>
-                      <span className="text-right font-semibold text-industrial-ink">
-                        {formatCurrency(getQuotedTotal(quote))}
-                      </span>
-                      <span className="font-medium capitalize text-industrial-ink">
-                        {quote.fulfillmentMethod}
-                      </span>
-                      <span className="flex justify-end gap-2">
-                        <Link
-                          className="inline-flex h-8 items-center justify-center rounded-lg border border-black/10 bg-white px-3 text-xs font-semibold text-industrial-ink transition hover:bg-[#f7f7f4]"
-                          href={`/admin/quotes/${quote.id}`}
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          Open
-                        </Link>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+          <div className="p-4">
+            <DataTable
+              caption="Quote requests"
+              columns={quoteColumns}
+              emptyDescription="No matching quote requests."
+              emptyTitle="No quote requests"
+              getRowKey={(quote) => quote.id}
+              pageSize={25}
+              rows={filteredQuotes}
+            />
           </div>
         </section>
 

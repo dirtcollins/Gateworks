@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Input, Select } from "@/components/ui/input";
 import { PageShell } from "@/components/ui/page-shell";
 import { useOrderStore } from "@/lib/order-store";
@@ -393,6 +394,96 @@ export function CustomersDashboard() {
     [accounts.length, orders.length, savedCarts.length, activeAccountsFromOrders.length]
   );
 
+  const accountColumns: DataTableColumn<ContractorAccount>[] = [
+    {
+      key: "company",
+      header: "Company",
+      sortable: true,
+      sortValue: (account) => account.company.toLowerCase(),
+      render: (account) => (
+        <button
+          className="w-full text-left"
+          onClick={() => setSelectedCustomerId(account.id)}
+          type="button"
+        >
+          <p className="font-black text-industrial-ink">{account.company}</p>
+          <p className="text-xs text-industrial-steel">{account.name}</p>
+        </button>
+      )
+    },
+    {
+      key: "type",
+      header: "Type",
+      sortable: true,
+      sortValue: (account) => account.type,
+      render: (account) => <span className="capitalize">{account.type}</span>
+    },
+    {
+      key: "pricing",
+      header: "Pricing",
+      sortable: true,
+      sortValue: (account) => account.pricingTier,
+      render: (account) => account.pricingTier
+    },
+    {
+      key: "terms",
+      header: "Terms",
+      render: (account) => account.netTerms
+    },
+    {
+      key: "users",
+      header: "Users",
+      className: "text-right",
+      sortable: true,
+      sortValue: (account) => account.users,
+      render: (account) => account.users
+    },
+    {
+      key: "jobsites",
+      header: "Jobsites",
+      className: "text-right",
+      sortable: true,
+      sortValue: (account) => account.jobsites,
+      render: (account) => account.jobsites
+    },
+    {
+      key: "orders",
+      header: "Orders",
+      className: "text-right",
+      sortable: true,
+      sortValue: (account) => account.orderCount,
+      render: (account) => account.orderCount
+    },
+    {
+      key: "value",
+      header: "Value",
+      className: "text-right",
+      sortable: true,
+      sortValue: (account) => account.orderValue,
+      render: (account) => (
+        <span className="font-black text-industrial-ink">
+          {formatCurrency(account.orderValue)}
+        </span>
+      )
+    },
+    {
+      key: "controls",
+      header: "Controls",
+      render: () => (
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm">
+            <Building2 size={15} />
+            Jobsites
+          </Button>
+          <Button size="sm">
+            <ShieldCheck size={15} />
+            Permissions
+          </Button>
+        </div>
+      )
+    }
+  ];
+
   return (
     <PageShell
       title="Customers"
@@ -462,75 +553,15 @@ export function CustomersDashboard() {
                 </Select>
               </div>
 
-              <div className="overflow-x-auto border border-industrial-rail">
-                <table className="min-w-[980px] w-full text-left text-sm">
-                  <thead className="sticky top-0 z-10 bg-industrial-paper text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">
-                    <tr>
-                      <th className="px-3 py-3">Company</th>
-                      <th className="px-3 py-3">Type</th>
-                      <th className="px-3 py-3">Pricing</th>
-                      <th className="px-3 py-3">Terms</th>
-                      <th className="px-3 py-3">Users</th>
-                      <th className="px-3 py-3">Jobsites</th>
-                      <th className="px-3 py-3">Orders</th>
-                      <th className="px-3 py-3">Value</th>
-                      <th className="px-3 py-3">Controls</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredAccounts.map((account) => {
-                      const isSelected = selectedCustomerId === account.id;
-
-                      return (
-                        <tr
-                          className={`border-t border-industrial-rail transition hover:bg-industrial-paper ${
-                            isSelected ? "bg-amber-50/70" : "bg-white"
-                          }`}
-                          key={account.id}
-                        >
-                          <td className="px-3 py-3">
-                            <button
-                              className="w-full text-left"
-                              onClick={() => setSelectedCustomerId(account.id)}
-                              type="button"
-                            >
-                              <p className="font-black text-industrial-ink">{account.company}</p>
-                              <p className="text-xs text-industrial-steel">{account.name}</p>
-                            </button>
-                          </td>
-                          <td className="px-3 py-3 capitalize">{account.type}</td>
-                          <td className="px-3 py-3">{account.pricingTier}</td>
-                          <td className="px-3 py-3">{account.netTerms}</td>
-                          <td className="px-3 py-3">{account.users}</td>
-                          <td className="px-3 py-3">{account.jobsites}</td>
-                          <td className="px-3 py-3">{account.orderCount}</td>
-                          <td className="px-3 py-3 font-black">{formatCurrency(account.orderValue)}</td>
-                          <td className="px-3 py-3">
-                            <div className="flex flex-wrap gap-2">
-                              <Button size="sm">
-                                <Building2 size={15} />
-                                Jobsites
-                              </Button>
-                              <Button size="sm">
-                                <ShieldCheck size={15} />
-                                Permissions
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-
-                    {!filteredAccounts.length ? (
-                      <tr>
-                        <td className="px-3 py-8 text-sm text-industrial-muted" colSpan={9}>
-                          No customers found for this search.
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                caption="Customer accounts"
+                columns={accountColumns}
+                emptyDescription="No customers found for this search."
+                emptyTitle="No customers found"
+                getRowKey={(account) => account.id}
+                pageSize={25}
+                rows={filteredAccounts}
+              />
             </CardBody>
           </Card>
         </div>
