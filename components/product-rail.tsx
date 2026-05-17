@@ -75,7 +75,7 @@ export function ProductRail({ title, products }: ProductRailProps) {
       <div className="relative mt-4">
         <button
           aria-label={`Scroll ${title} left`}
-          className="absolute left-0 top-1/2 z-10 grid size-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-jobsite-safety text-white shadow-toolbar"
+          className="absolute left-0 top-1/2 z-10 hidden size-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-jobsite-safety text-white shadow-toolbar sm:grid"
           type="button"
           onClick={() => scrollRail("left")}
         >
@@ -93,7 +93,7 @@ export function ProductRail({ title, products }: ProductRailProps) {
 
         <button
           aria-label={`Scroll ${title} right`}
-          className="absolute right-0 top-1/2 z-10 grid size-10 -translate-y-1/2 translate-x-1/2 place-items-center rounded-full bg-jobsite-ink text-white shadow-toolbar"
+          className="absolute right-0 top-1/2 z-10 hidden size-10 -translate-y-1/2 translate-x-1/2 place-items-center rounded-full bg-jobsite-ink text-white shadow-toolbar sm:grid"
           type="button"
           onClick={() => scrollRail("right")}
         >

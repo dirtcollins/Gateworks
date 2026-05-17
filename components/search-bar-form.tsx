@@ -49,9 +49,11 @@ export function SearchBarForm({
       action={action}
       onSubmit={submitSearch}
     >
-      <label className="relative block">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-industrial-muted" size={18} />
+      <div className="relative block">
+        <label htmlFor="search-bar-input" className="sr-only">Search products</label>
+        <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-industrial-muted" size={18} />
         <input
+          id="search-bar-input"
           className="h-12 w-full rounded-lg border border-transparent bg-[#f7f7f4] pl-11 pr-14 text-base text-industrial-ink outline-none transition placeholder:text-industrial-muted focus:border-black/10 focus:bg-white"
           defaultValue={query}
           name="q"
@@ -65,7 +67,7 @@ export function SearchBarForm({
         >
           <Search size={16} />
         </button>
-      </label>
+      </div>
       <select
         className="h-12 w-full rounded-lg border border-transparent bg-[#f7f7f4] px-4 text-sm font-medium text-industrial-ink outline-none transition focus:border-black/10 focus:bg-white"
         defaultValue={category}

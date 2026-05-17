@@ -134,6 +134,7 @@ export function SiteHeader() {
         <form className="relative min-w-0 flex-1 lg:flex-none" action="/search">
           <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-industrial-muted" size={16} />
           <input
+            aria-label="Search Gateworks"
             className="h-10 w-full rounded-lg border border-black/10 bg-white pl-9 pr-10 text-sm text-industrial-ink outline-none transition placeholder:text-industrial-muted focus:border-black/20"
             name="q"
             placeholder="Search Gateworks"
@@ -251,7 +252,6 @@ export function SiteHeader() {
           ref={createMenuRef}
           className="fixed left-3 right-3 top-[68px] z-50 rounded-lg border border-black/10 bg-white p-3 shadow-[0_18px_48px_rgba(15,23,42,0.16)] lg:left-[260px] lg:right-auto lg:top-[68px] lg:w-[min(760px,calc(100vw-284px))] lg:p-4"
           id="site-create-menu"
-          role="menu"
           aria-label="Create menu"
         >
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -267,7 +267,6 @@ export function SiteHeader() {
                       href={item.href}
                       key={item.label}
                       onClick={() => setIsCreateMenuOpen(false)}
-                      role="menuitem"
                     >
                       {item.label}
                     </Link>

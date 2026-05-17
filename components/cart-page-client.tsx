@@ -83,7 +83,10 @@ export function CartPageClient() {
           <button
             className="h-11 border border-jobsite-rail bg-white px-4 text-sm font-bold text-jobsite-ink hover:border-jobsite-ink"
             type="button"
-            onClick={clearCart}
+            onClick={() => {
+              if (!window.confirm("Clear all items from the cart?")) return;
+              clearCart();
+            }}
           >
             Clear cart
           </button>
@@ -173,13 +176,17 @@ export function CartPageClient() {
               <h3 className="text-sm font-black uppercase tracking-[0.12em] text-jobsite-steel">
                 Save cart
               </h3>
+              <label htmlFor="save-cart-name" className="sr-only">Cart name</label>
               <input
+                id="save-cart-name"
                 className="h-10 border border-jobsite-rail px-3 text-sm font-bold outline-none focus:border-jobsite-ink"
                 onChange={(event) => setCartName(event.target.value)}
                 placeholder="Cart name"
                 value={cartName}
               />
+              <label htmlFor="save-cart-job-name" className="sr-only">Job name</label>
               <input
+                id="save-cart-job-name"
                 className="h-10 border border-jobsite-rail px-3 text-sm font-bold outline-none focus:border-jobsite-ink"
                 onChange={(event) => setJobName(event.target.value)}
                 placeholder="Job name"

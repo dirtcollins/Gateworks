@@ -479,20 +479,28 @@ export function ProductPageClient({
   return (
     <main className="pb-24 md:pb-0">
       <section className="border-b border-jobsite-rail bg-jobsite-paper">
-        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-2 px-4 py-2 text-xs font-semibold text-jobsite-steel">
-          <Link className="hover:text-jobsite-ink hover:underline" href="/">
-            Fencing & Gates
-          </Link>
-          <span>/</span>
-          <Link
-            className="hover:text-jobsite-ink hover:underline"
-            href={`/?category=${product.category.slug}`}
-          >
-            {product.category.name}
-          </Link>
-          <span>/</span>
-          <span className="text-jobsite-ink">{product.title}</span>
-        </div>
+        <nav aria-label="Breadcrumb" className="mx-auto max-w-[1500px] px-4 py-2">
+          <ol className="flex flex-wrap items-center gap-2 text-xs font-semibold text-jobsite-steel">
+            <li>
+              <Link className="hover:text-jobsite-ink hover:underline" href="/">
+                Home
+              </Link>
+            </li>
+            <li aria-hidden="true">/</li>
+            <li>
+              <Link
+                className="hover:text-jobsite-ink hover:underline"
+                href={`/categories/${product.category.slug}`}
+              >
+                {product.category.name}
+              </Link>
+            </li>
+            <li aria-hidden="true">/</li>
+            <li aria-current="page" className="text-jobsite-ink">
+              {product.title}
+            </li>
+          </ol>
+        </nav>
       </section>
 
       <section className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 lg:grid-cols-[minmax(0,1fr)_588px]">
@@ -558,17 +566,14 @@ export function ProductPageClient({
               {product.title}
             </h1>
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-1 text-jobsite-safety">
+              <span aria-label="Rated 5 out of 5" className="flex items-center gap-1 text-jobsite-safety">
                 {Array.from({ length: 5 }).map((_, index) => (
-                  <Star key={index} size={16} fill="currentColor" />
+                  <Star aria-hidden="true" key={index} size={16} fill="currentColor" />
                 ))}
-              </div>
-              <span className="text-sm font-semibold text-jobsite-steel">
-                ({120 + product.variants.length})
               </span>
-              <button className="text-sm font-bold text-jobsite-ink underline" type="button">
-                Questions & Answers
-              </button>
+              <span className="text-sm font-semibold text-jobsite-steel">
+                ({120 + product.variants.length} reviews)
+              </span>
             </div>
           </div>
 
@@ -580,11 +585,6 @@ export function ProductPageClient({
               <p className="text-4xl font-black text-jobsite-ink">
                 {selectedPriceLabel}
               </p>
-              {pricedSelectedVariant.price > 0 ? (
-                <p className="pb-1 text-sm font-semibold text-jobsite-pine">
-                  Save 9%
-                </p>
-              ) : null}
             </div>
             <p className="mt-1 text-xs font-semibold text-jobsite-steel">
               {pricedSelectedVariant.price > 0
@@ -630,11 +630,22 @@ export function ProductPageClient({
           </div>
 
           <div className="mt-3 border border-jobsite-rail bg-white p-4">
-            <ul className="grid gap-2 text-sm leading-5 text-jobsite-ink">
-              <li>• {product.description}</li>
-              <li>• Updates price, SKU, image, and inventory without page reload.</li>
-              <li>• Built for durable construction ecommerce workflows.</li>
-            </ul>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-jobsite-steel">
+              About this product
+            </p>
+            <p className="mt-2 text-sm leading-6 text-jobsite-ink">{product.description}</p>
+            {product.details.length ? (
+              <ul className="mt-3 grid gap-1.5 text-sm leading-5 text-jobsite-ink">
+                {product.details.map((detail) => (
+                  <li className="flex gap-2" key={detail}>
+                    <span aria-hidden="true" className="text-jobsite-pine">
+                      •
+                    </span>
+                    <span>{detail}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
 
           {isTubingProduct(product) ? (
@@ -846,8 +857,9 @@ export function ProductPageClient({
               </span>
             </button>
             <button
+              aria-label="Share product"
               className={cn(
-                "grid h-16 content-center gap-1 px-3 py-2 text-jobsite-ink transition hover:bg-jobsite-paper",
+                "grid h-16 content-center gap-1 px-3 py-2 text-jobsite-ink transition hover:bg-jobsite-paper focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-jobsite-ink",
                 shareCopied && "bg-jobsite-amber"
               )}
               type="button"
@@ -868,7 +880,7 @@ export function ProductPageClient({
               actionMessage ? "py-1.5 opacity-100" : "h-0 overflow-hidden border-t-0 opacity-0"
             )}
           >
-            {actionMessage || "Action ready"}
+            {actionMessage}
           </div>
         </div>
         </div>

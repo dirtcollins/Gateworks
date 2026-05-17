@@ -94,9 +94,11 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
         {product.title}
       </h3>
       <div className="flex items-center gap-1 text-industrial-ink/80">
-        {Array.from({ length: 5 }).map((_, index) => (
-          <Star key={index} size={13} fill="currentColor" />
-        ))}
+        <span aria-label="Rated 5 out of 5">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <Star key={index} size={13} fill="currentColor" aria-hidden="true" />
+          ))}
+        </span>
         <span className="ml-1 text-xs font-medium text-industrial-muted">
           ({120 + product.variants.length})
         </span>
@@ -111,7 +113,7 @@ export function ProductCard({ product, layout = "grid" }: ProductCardProps) {
           {priceLabel}
         </p>
         <p className="text-xs font-medium text-jobsite-pine">
-          {defaultVariant?.inventoryQuantity ?? 100} in stock - {product.variants.length} option
+          {defaultVariant?.inventoryQuantity != null ? `${defaultVariant.inventoryQuantity} in stock` : "In stock"} - {product.variants.length} option
           {product.variants.length === 1 ? "" : "s"}
         </p>
         {isRail ? (
