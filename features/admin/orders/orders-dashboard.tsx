@@ -487,6 +487,7 @@ export function OrdersDashboard() {
         return (
           <div className="flex items-center justify-end gap-2">
             <Button
+              aria-label={`${nextAction.label} order ${order.orderNumber}`}
               className="h-7 px-2 text-[10px]"
               onClick={() => persistOrderStatus(order.id, nextAction.next, nextAction.detail)}
               size="sm"
@@ -544,7 +545,7 @@ export function OrdersDashboard() {
                 Controls
               </Button>
               {isControlsOpen ? (
-                <div className="absolute right-0 z-20 mt-2 grid w-64 gap-3 border border-industrial-rail bg-white p-3 shadow-lg">
+                <div className="absolute right-0 z-20 mt-2 grid w-64 gap-3 border border-industrial-rail bg-white p-3 shadow-lg" role="menu">
                   <div className="grid gap-1.5">
                     <p className="text-[10px] font-black uppercase tracking-[0.12em] text-industrial-muted">Channel</p>
                     <div className="grid grid-cols-3 gap-1.5">

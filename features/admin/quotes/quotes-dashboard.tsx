@@ -752,6 +752,7 @@ export function QuotesDashboard() {
 
           <div className="grid gap-4 border-b border-black/10 p-4 lg:grid-cols-[1fr_220px_200px]">
             <label className="relative">
+              <span className="sr-only">Search quotes</span>
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-industrial-muted"
                 size={16}

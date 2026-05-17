@@ -281,6 +281,8 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
   const [quickEdit, setQuickEdit] = useState<QuickEditState>(null);
   const [quickEditError, setQuickEditError] = useState("");
   const importInputRef = useRef<HTMLInputElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     async function loadPersistedInventory() {
@@ -353,7 +355,8 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
     [items]
   );
 
-  function openOperation(mode: OperationMode, row?: InventoryRow) {
+  function openOperation(mode: OperationMode, row?: InventoryRow, opener?: HTMLElement) {
+    openerRef.current = opener ?? (document.activeElement as HTMLElement) ?? null;
     setOperation({ mode, rowId: row?.id });
     setForm(createForm(row));
     setFormError("");
@@ -363,7 +366,29 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
     setOperation(null);
     setForm(createForm());
     setFormError("");
+    openerRef.current?.focus();
+    openerRef.current = null;
   }
+
+  useEffect(() => {
+    if (!operation) return;
+    const firstFocusable = modalRef.current?.querySelector<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    firstFocusable?.focus();
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOperation(null);
+        setForm(createForm());
+        setFormError("");
+        openerRef.current?.focus();
+        openerRef.current = null;
+      }
+    }
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [operation]);
 
   function requireReason(mode: OperationMode) {
     return !["history", "purchase_order"].includes(mode);
@@ -979,9 +1004,10 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
         <div className="flex w-[250px] flex-wrap gap-1.5">
           {rowActions.map((action) => (
             <button
+              aria-label={`${action.label} for ${row.sku}`}
               className="border border-industrial-rail bg-white px-2 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
               key={action.mode}
-              onClick={() => openOperation(action.mode, row)}
+              onClick={(event) => openOperation(action.mode, row, event.currentTarget)}
               type="button"
             >
               {action.label}
@@ -1041,7 +1067,7 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
             </div>
           </CardHeader>
           <CardBody className="flex flex-wrap gap-2">
-            <Button onClick={() => openOperation("add_item")} size="sm" variant="primary">
+            <Button onClick={(event) => openOperation("add_item", undefined, event.currentTarget)} size="sm" variant="primary">
               <Plus size={15} />
               Add new item
             </Button>
@@ -1053,31 +1079,32 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
               <Download size={15} />
               Export CSV
             </Button>
-            <Button onClick={() => openOperation("purchase_order")} size="sm">
+            <Button onClick={(event) => openOperation("purchase_order", undefined, event.currentTarget)} size="sm">
               <ShoppingCart size={15} />
               Create PO
             </Button>
-            <Button onClick={() => openOperation("receive")} size="sm">
+            <Button onClick={(event) => openOperation("receive", undefined, event.currentTarget)} size="sm">
               <ArrowDownToLine size={15} />
               Receive
             </Button>
-            <Button onClick={() => openOperation("audit")} size="sm">
+            <Button onClick={(event) => openOperation("audit", undefined, event.currentTarget)} size="sm">
               <ClipboardCheck size={15} />
               Run audit
             </Button>
-            <Button onClick={() => setLowOnly((value) => !value)} size="sm">
+            <Button aria-pressed={lowOnly} onClick={() => setLowOnly((value) => !value)} size="sm">
               <TriangleAlert size={15} />
               Low stock
             </Button>
-            <Button onClick={() => setOutOnly((value) => !value)} size="sm">
+            <Button aria-pressed={outOnly} onClick={() => setOutOnly((value) => !value)} size="sm">
               <PackageCheck size={15} />
               Out of stock
             </Button>
-            <Button onClick={() => setDamagedOnly((value) => !value)} size="sm">
+            <Button aria-pressed={damagedOnly} onClick={() => setDamagedOnly((value) => !value)} size="sm">
               <Wrench size={15} />
               Damaged
             </Button>
             <input
+              aria-label="Import inventory CSV"
               className="hidden"
               onChange={(event) => {
                 if (event.target.files?.[0]) {
@@ -1181,6 +1208,7 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
                   ["Damaged only", damagedOnly, setDamagedOnly]
                 ].map(([label, value, setValue]) => (
                   <button
+                    aria-pressed={Boolean(value)}
                     className={`${actionLinkClass} ${
                       topActionClass(Boolean(value))
                     }`}
@@ -1229,7 +1257,7 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
                   <button
                     className="grid gap-2 border border-industrial-rail p-3 text-left transition hover:border-industrial-ink"
                     key={row.id}
-                    onClick={() => openOperation("receive", row)}
+                    onClick={(event) => openOperation("receive", row, event.currentTarget)}
                     type="button"
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -1282,13 +1310,19 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
 
       {operation && (
         <div className="fixed inset-0 z-50 grid bg-black/30 p-4 lg:place-items-center">
-          <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto border border-industrial-rail bg-white shadow-xl">
+          <div
+            aria-labelledby="inv-op-title"
+            aria-modal="true"
+            className="max-h-[92vh] w-full max-w-3xl overflow-y-auto border border-industrial-rail bg-white shadow-xl"
+            ref={modalRef}
+            role="dialog"
+          >
             <div className="flex items-start justify-between gap-4 border-b border-industrial-rail p-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
                   Inventory Operation
                 </p>
-                <h2 className="text-xl font-black text-industrial-ink">
+                <h2 className="text-xl font-black text-industrial-ink" id="inv-op-title">
                   {operationLabels[operation.mode]}
                 </h2>
                 {selectedRow && (
@@ -1320,13 +1354,13 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
                       </p>
                       <div className="mt-3 grid gap-2 text-xs font-bold text-industrial-muted sm:grid-cols-3">
                         <span>
-                          On hand: {event.previousOnHand} {"->"} {event.newOnHand}
+                          On hand: {event.previousOnHand} {"→"} {event.newOnHand}
                         </span>
                         <span>
-                          Reserved: {event.previousReserved} {"->"} {event.newReserved}
+                          Reserved: {event.previousReserved} {"→"} {event.newReserved}
                         </span>
                         <span>
-                          Location: {event.previousLocation} {"->"} {event.newLocation}
+                          Location: {event.previousLocation} {"→"} {event.newLocation}
                         </span>
                       </div>
                     </div>

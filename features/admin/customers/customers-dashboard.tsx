@@ -287,10 +287,13 @@ export function CustomersDashboard() {
     setType("all");
     setQuery("");
     setActionNotice("Added local placeholder account. Backend creation is not connected yet.");
-    setTimeout(() => {
-      setActionNotice("");
-    }, 2500);
   };
+
+  useEffect(() => {
+    if (!actionNotice) return;
+    const timer = setTimeout(() => setActionNotice(""), 2500);
+    return () => clearTimeout(timer);
+  }, [actionNotice]);
 
   const filteredAccounts = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -548,9 +551,6 @@ export function CustomersDashboard() {
                   <option value="contractor">Contractor</option>
                 </Select>
 
-                <Select onChange={() => undefined} value="all" aria-label="Relationship scope">
-                  <option value="all">Relationship scope</option>
-                </Select>
               </div>
 
               <DataTable
@@ -656,10 +656,6 @@ export function CustomersDashboard() {
                   No saved quote records loaded yet.
                 </p>
               )}
-              <Button className="h-9 w-full normal-case tracking-normal" size="sm" variant="secondary" type="button">
-                <FileText size={14} />
-                Convert to order placeholder
-              </Button>
             </CardBody>
           </Card>
 

@@ -966,7 +966,7 @@ export function QuoteDetailPage({
                         {/* Delete button — hidden until row hover */}
                         <button
                           aria-label={`Remove ${item.title}`}
-                          className="grid size-9 place-items-center justify-self-start rounded-md text-industrial-muted opacity-50 transition hover:bg-red-50 hover:text-red-700 group-hover:opacity-100 md:justify-self-center"
+                          className="grid size-9 place-items-center justify-self-start rounded-md text-industrial-muted opacity-50 transition hover:bg-red-50 hover:text-red-700 focus:opacity-100 focus-visible:opacity-100 group-hover:opacity-100 md:justify-self-center"
                           onClick={() => removeLineItem(item.variantId)}
                           type="button"
                         >
@@ -1230,6 +1230,7 @@ export function QuoteDetailPage({
                 <div className="grid gap-2 pt-2">
                   <Truck size={15} />
                   <Textarea
+                    aria-label="Internal delivery notes"
                     value={internalNotes}
                     onChange={(event) => setInternalNotes(event.target.value)}
                   />
