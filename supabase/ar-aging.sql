@@ -26,7 +26,7 @@ left join (
   group by order_id
 ) p on p.order_id = o.id
 where coalesce(o.is_quote_request, false) = false
-  and coalesce(o.status, '') <> 'cancelled';
+  and coalesce(o.status::text, '') <> 'cancelled';
 
 -- Per-customer aging summary.
 create or replace view public.ar_aging_by_customer as

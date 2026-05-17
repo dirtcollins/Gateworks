@@ -96,6 +96,7 @@ to anon, authenticated
 with check (true);
 
 drop policy if exists "Site users can read their checkout orders" on public.orders;
+drop policy if exists "Checkout orders are read through service routes" on public.orders;
 create policy "Checkout orders are read through service routes"
 on public.orders for select
 to anon, authenticated
@@ -108,12 +109,14 @@ to anon, authenticated
 with check (true);
 
 drop policy if exists "Public can read checkout order items" on public.order_items;
+drop policy if exists "Checkout order items are read through service routes" on public.order_items;
 create policy "Checkout order items are read through service routes"
 on public.order_items for select
 to anon, authenticated
 using (false);
 
 drop policy if exists "Public can manage saved carts" on public.saved_carts;
+drop policy if exists "Saved carts are managed through service routes" on public.saved_carts;
 create policy "Saved carts are managed through service routes"
 on public.saved_carts for all
 to anon, authenticated
@@ -121,6 +124,7 @@ using (false)
 with check (false);
 
 drop policy if exists "Public can manage saved cart items" on public.saved_cart_items;
+drop policy if exists "Saved cart items are managed through service routes" on public.saved_cart_items;
 create policy "Saved cart items are managed through service routes"
 on public.saved_cart_items for all
 to anon, authenticated
@@ -128,6 +132,7 @@ using (false)
 with check (false);
 
 drop policy if exists "Public can manage saved jobsites" on public.customer_saved_jobsites;
+drop policy if exists "Saved jobsites are managed through service routes" on public.customer_saved_jobsites;
 create policy "Saved jobsites are managed through service routes"
 on public.customer_saved_jobsites for all
 to anon, authenticated
@@ -135,6 +140,7 @@ using (false)
 with check (false);
 
 drop policy if exists "Public can manage customer drawings" on public.customer_drawing_uploads;
+drop policy if exists "Customer drawings are managed through service routes" on public.customer_drawing_uploads;
 create policy "Customer drawings are managed through service routes"
 on public.customer_drawing_uploads for all
 to anon, authenticated
