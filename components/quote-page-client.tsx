@@ -242,7 +242,7 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
     setFocusToken((value) => value + 1);
     setQuickAddQuantity("1");
     setQuickAddQuery("");
-    setIsQuickAddOpen(true);
+    setIsQuickAddOpen(false);
     showActionMessage(`Added ${product.title} to invoice.`);
   }
 
@@ -460,134 +460,120 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
                 </div>
               )}
 
-              <div className="border-t border-black/10 p-3">
-                <button
-                  className={cn(
-                    "inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold transition",
-                    isQuickAddOpen
-                      ? "bg-industrial-ink text-white"
-                      : "text-industrial-steel hover:bg-[#f7f7f4] hover:text-industrial-ink"
-                  )}
-                  onClick={() => setIsQuickAddOpen((current) => !current)}
-                  type="button"
-                >
-                  <Plus size={16} />
-                  Add an item
-                </button>
-
-                {isQuickAddOpen ? (
-                  <div className="mt-3 rounded-lg border border-black/10 bg-[#fafaf8] p-3">
-                    <div className="flex items-center gap-2">
-                      <Search className="text-jobsite-steel" size={18} />
-                      <label
-                        className="flex-1 text-xs font-semibold text-industrial-muted"
-                        htmlFor="quote-product-search"
-                      >
-                        Search products to add
-                      </label>
-                      <button
-                        aria-label="Close add item"
-                        className="grid size-7 place-items-center rounded border border-black/10 text-jobsite-ink transition hover:bg-white"
-                        onClick={closeQuickAdd}
-                        type="button"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
+              {isQuickAddOpen ? (
+                <div className="border-t border-black/10">
+                  <div className="flex flex-wrap items-center gap-2 border-b border-black/10 bg-[#fafaf8] px-4 py-3">
+                    <Search className="text-jobsite-steel" size={18} />
+                    <input
+                      autoFocus
+                      className="h-9 min-w-[200px] flex-1 rounded border border-black/10 bg-white px-3 text-sm outline-none focus:border-industrial-ink"
+                      id="quote-product-search"
+                      onChange={(event) => setQuickAddQuery(event.target.value)}
+                      placeholder="Search product title, SKU, or category"
+                      value={quickAddQuery}
+                    />
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-industrial-muted">
+                      Qty
                       <input
-                        autoFocus
-                        className="h-9 min-w-[200px] flex-1 rounded border border-black/10 bg-white px-3 text-sm outline-none focus:border-industrial-ink"
-                        id="quote-product-search"
-                        onChange={(event) => setQuickAddQuery(event.target.value)}
-                        placeholder="Search product title, SKU, or category"
-                        value={quickAddQuery}
+                        className="h-9 w-16 rounded border border-black/10 bg-white px-2 text-sm outline-none focus:border-industrial-ink"
+                        min={1}
+                        onChange={(event) =>
+                          setQuickAddQuantity(String(Math.max(1, Number(event.target.value) || 1)))
+                        }
+                        type="number"
+                        value={quickAddQuantity}
                       />
-                      <label className="flex items-center gap-1.5 text-xs font-semibold text-industrial-muted">
-                        Qty
-                        <input
-                          className="h-9 w-16 rounded border border-black/10 bg-white px-2 text-sm outline-none focus:border-industrial-ink"
-                          min={1}
-                          onChange={(event) =>
-                            setQuickAddQuantity(
-                              String(Math.max(1, Number(event.target.value) || 1))
-                            )
-                          }
-                          type="number"
-                          value={quickAddQuantity}
-                        />
-                      </label>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between text-xs font-semibold text-industrial-muted">
-                      <span>
-                        {quickAddResults.length} product{quickAddResults.length === 1 ? "" : "s"}
-                      </span>
-                      <span>Press any result to add</span>
-                    </div>
-                    <div className="mt-2 max-h-60 overflow-y-auto pr-1">
-                      {!quickAddResults.length ? (
-                        <p className="rounded border border-dashed border-black/10 p-3 text-xs text-industrial-muted">
-                          No products match your search.
-                        </p>
-                      ) : (
-                        <div className="grid gap-1">
-                          {quickAddResults.slice(0, 10).map((product) => {
-                            const variant = pickDefaultQuoteVariant(product);
-
-                            if (!variant) {
-                              return null;
-                            }
-
-                            const resultImage =
-                              variant.image || product.images[0]?.url || "/assets/logo.svg";
-
-                            return (
-                              <button
-                                className="grid grid-cols-[34px_minmax(0,1fr)_76px_52px] items-center gap-2 rounded border border-black/10 bg-white px-2 py-1.5 text-left text-sm transition hover:border-industrial-ink"
-                                key={product.id}
-                                onClick={() => addCatalogItem(product)}
-                                type="button"
-                              >
-                                <span className="relative size-[34px] overflow-hidden rounded border border-black/10 bg-[#fafaf8]">
-                                  <Image
-                                    alt={product.title}
-                                    className="object-contain p-1"
-                                    fill
-                                    quality={45}
-                                    sizes="34px"
-                                    src={resultImage}
-                                  />
-                                </span>
-                                <span className="min-w-0 text-industrial-ink">
-                                  <span className="block truncate font-semibold leading-tight">
-                                    {product.title}
-                                  </span>
-                                  <span className="block truncate text-xs text-industrial-muted">
-                                    SKU {variant.sku}
-                                  </span>
-                                </span>
-                                <span className="text-right font-semibold text-industrial-ink">
-                                  {formatCurrency(variant.price)}
-                                </span>
-                                <span
-                                  className={cn(
-                                    "text-right text-xs font-semibold",
-                                    variant.inventory === "in_stock"
-                                      ? "text-jobsite-pine"
-                                      : "text-red-700"
-                                  )}
-                                >
-                                  {variant.inventory === "in_stock" ? "Stock" : "Out"}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
+                    </label>
+                    <button
+                      aria-label="Close add item"
+                      className="grid size-9 place-items-center rounded-md border border-black/10 bg-white text-jobsite-ink transition hover:border-industrial-ink"
+                      onClick={closeQuickAdd}
+                      type="button"
+                    >
+                      <X size={16} />
+                    </button>
                   </div>
-                ) : null}
-              </div>
+                  <div className="max-h-72 overflow-y-auto">
+                    {!quickAddResults.length ? (
+                      <p className="px-4 py-6 text-center text-sm text-industrial-muted">
+                        No products match your search.
+                      </p>
+                    ) : (
+                      <div className="divide-y divide-black/10">
+                        {quickAddResults.slice(0, 10).map((product) => {
+                          const variant = pickDefaultQuoteVariant(product);
+
+                          if (!variant) {
+                            return null;
+                          }
+
+                          const resultImage =
+                            variant.image || product.images[0]?.url || "/assets/logo.svg";
+
+                          return (
+                            <button
+                              className="group grid w-full grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition hover:bg-[#fafaf8]"
+                              key={product.id}
+                              onClick={() => addCatalogItem(product)}
+                              type="button"
+                            >
+                              <span className="relative size-14 shrink-0 rounded-md border border-black/10 bg-[#fafaf8]">
+                                <Image
+                                  alt={product.title}
+                                  className="object-contain p-1.5"
+                                  fill
+                                  quality={45}
+                                  sizes="56px"
+                                  src={resultImage}
+                                />
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-semibold text-industrial-ink">
+                                  {product.title}
+                                </span>
+                                <span className="mt-0.5 block truncate text-xs text-industrial-muted">
+                                  SKU {variant.sku}
+                                </span>
+                              </span>
+                              <span className="flex items-center gap-3">
+                                <span className="text-right">
+                                  <span className="block text-sm font-semibold text-industrial-ink">
+                                    {formatCurrency(variant.price)}
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      "block text-xs font-semibold",
+                                      variant.inventory === "in_stock"
+                                        ? "text-jobsite-pine"
+                                        : "text-red-700"
+                                    )}
+                                  >
+                                    {variant.inventory === "in_stock" ? "In stock" : "Out of stock"}
+                                  </span>
+                                </span>
+                                <span className="grid size-8 place-items-center rounded-md border border-black/10 text-industrial-muted transition group-hover:border-industrial-ink group-hover:bg-industrial-ink group-hover:text-white">
+                                  <Plus size={16} />
+                                </span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="border-t border-black/10 p-3">
+                  <button
+                    className="inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-industrial-steel transition hover:bg-[#f7f7f4] hover:text-industrial-ink"
+                    onClick={() => setIsQuickAddOpen(true)}
+                    type="button"
+                  >
+                    <Plus size={16} />
+                    Add an item
+                  </button>
+                </div>
+              )}
             </section>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_340px]">
