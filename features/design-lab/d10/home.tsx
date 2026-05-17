@@ -255,7 +255,7 @@ export function D10Home() {
                 src={productImage(featured)}
                 alt={featured.title}
                 fill
-                quality={80}
+                quality={75}
                 sizes="(max-width: 768px) 100vw, 520px"
                 className="object-contain p-8"
               />

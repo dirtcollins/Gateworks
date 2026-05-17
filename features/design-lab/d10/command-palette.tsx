@@ -188,7 +188,7 @@ export function CommandPalette({
                     src={result.image}
                     alt={result.title}
                     fill
-                    quality={55}
+                    quality={60}
                     sizes="36px"
                     className="object-contain p-1"
                   />

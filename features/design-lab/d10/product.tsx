@@ -105,7 +105,7 @@ export function D10Product() {
                   src={gallery[activeImage] ?? gallery[0]}
                   alt={product.title}
                   fill
-                  quality={85}
+                  quality={90}
                   sizes="(max-width: 1024px) 100vw, 540px"
                   className="object-contain p-10"
                   priority
@@ -131,7 +131,7 @@ export function D10Product() {
                       src={url}
                       alt={`${product.title} ${index + 1}`}
                       fill
-                      quality={55}
+                      quality={60}
                       sizes="64px"
                       className="object-contain p-1.5"
                     />
@@ -349,7 +349,7 @@ export function D10Product() {
                       }
                       alt={item.title}
                       fill
-                      quality={70}
+                      quality={75}
                       sizes="(max-width: 1024px) 50vw, 220px"
                       className="object-contain p-5"
                     />
