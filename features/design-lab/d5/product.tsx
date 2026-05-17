@@ -1,62 +1,65 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Check,
   ChevronRight,
-  Layers,
   Minus,
   Package,
   Plus,
-  Ruler,
   ShieldCheck,
   Truck,
   Wrench
 } from "lucide-react";
 import { Btn, D5, Dot, H, Kbd, Panel, Shell, Tag, mono } from "./kit";
-import { PRODUCTS, fmt } from "./data";
+import { featuredProduct, fmt, getRelatedProducts, swatchFor } from "./data";
+import { useCartStore } from "@/lib/cart-store";
 
-const SPECS: [string, string][] = [
-  ["Material", "ASTM A500 Grade B"],
-  ["Profile", 'Square HSS · 2.000" OD'],
-  ["Wall", '0.083" (14 ga)'],
-  ["Stock length", "24 ft"],
-  ["Weight", "1.43 lb/ft · 34.3 lb/stick"],
-  ["Finish", "Hot-roll black, mill scale"],
-  ["Yield", "46 ksi min"],
-  ["Tolerance", "±0.020in OD · ±10% wall"]
-];
-
-const TIERS = [
-  { label: "List", qty: "1–9", price: 44.1, on: false },
-  { label: "Contractor", qty: "10–39", price: 41.0, on: false },
-  { label: "PRO", qty: "40–119", price: 38.4, on: true },
-  { label: "Bulk", qty: "120+", price: 35.6, on: false }
-];
-
-const CUT = ["No cut (full 24 ft)", "Half (2 × 12 ft)", "Custom — cut sheet"];
+const CUT = ["No cut (full length)", "Half length", "Custom — cut sheet"];
 
 export default function D5Product() {
-  const p = PRODUCTS[0];
-  const [qty, setQty] = useState(40);
+  const p = featuredProduct;
+  const addItem = useCartStore((state) => state.addItem);
+
+  const [variantId, setVariantId] = useState(
+    (p.variants.find((v) => v.inventory === "in_stock") || p.variants[0])?.id ?? ""
+  );
+  const [qty, setQty] = useState(1);
   const [cut, setCut] = useState(0);
   const [added, setAdded] = useState(false);
   const [tab, setTab] = useState<"specs" | "ship" | "docs">("specs");
 
-  const tier =
-    qty >= 120 ? TIERS[3] : qty >= 40 ? TIERS[2] : qty >= 10 ? TIERS[1] : TIERS[0];
-  const line = tier.price * qty;
+  const variant = useMemo(
+    () => p.variants.find((v) => v.id === variantId) || p.variants[0],
+    [p.variants, variantId]
+  );
+
+  const related = useMemo(() => getRelatedProducts(p, 4), [p]);
+  const specs = useMemo(() => Object.entries(p.specifications), [p]);
+  const line = (variant?.price ?? 0) * qty;
+  const inStock = variant?.inventory === "in_stock";
+  const heroImage = variant?.image || p.images[0]?.url || "/assets/logo.svg";
 
   function add() {
+    if (!variant) return;
+    addItem({
+      productId: p.id,
+      variantId: variant.id,
+      title: p.title,
+      sku: variant.sku,
+      image: variant.image,
+      price: variant.price,
+      quantity: qty,
+      options: variant.options
+    });
     setAdded(true);
     window.setTimeout(() => setAdded(false), 1300);
   }
 
-  const related = PRODUCTS.slice(2, 6);
-
   return (
-    <Shell crumb="catalog / steel-tube / STL-SQT-2014">
+    <Shell crumb={`catalog / ${p.category.slug} / ${variant?.sku ?? p.id}`}>
       <div
         className="mb-3 flex items-center gap-1 text-[10px]"
         style={{ color: D5.faint }}
@@ -66,109 +69,130 @@ export default function D5Product() {
         </Link>
         <ChevronRight size={10} />
         <Link href="/design-lab/d5/category" style={{ color: D5.dim }}>
-          Steel Tube
+          {p.category.name}
         </Link>
         <ChevronRight size={10} />
-        <span style={{ color: D5.ink }}>{p.sku}</span>
+        <span style={{ color: D5.ink }}>{variant?.sku ?? p.id}</span>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[300px_1fr_280px]">
-        {/* image / swatch column */}
+        {/* image column */}
         <div className="flex flex-col gap-2">
           <div
             className="relative aspect-square overflow-hidden rounded-md border"
-            style={{ borderColor: D5.line, background: p.swatch }}
+            style={{ borderColor: D5.line, background: D5.panelHi }}
           >
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage:
-                  "repeating-linear-gradient(135deg, rgba(255,255,255,0.05) 0 12px, transparent 12px 24px)"
-              }}
+            <Image
+              src={heroImage}
+              alt={p.title}
+              fill
+              quality={75}
+              sizes="300px"
+              className="object-contain p-3"
             />
             <span className="absolute left-2 top-2">
-              <Tag tone="accent">
-                <Check size={10} /> in stock · {p.stock}
+              <Tag tone={inStock ? "accent" : "red"}>
+                {inStock ? (
+                  <>
+                    <Check size={10} /> in stock · {variant?.inventoryQuantity ?? 0}
+                  </>
+                ) : (
+                  "out of stock"
+                )}
               </Tag>
             </span>
-            <span
-              className="absolute bottom-2 right-2 text-[10px]"
-              style={{ color: "rgba(255,255,255,0.5)", fontFamily: mono }}
-            >
-              cross-section preview
-            </span>
           </div>
-          <div className="grid grid-cols-4 gap-2">
-            {["#6b7180", "#5a606d", "#7a808d", "#4d5360"].map((c, i) => (
-              <div
-                key={i}
-                className="aspect-square rounded border"
-                style={{
-                  background: c,
-                  borderColor: i === 0 ? D5.accent : D5.line
-                }}
-              />
-            ))}
-          </div>
+          {p.images.length > 1 ? (
+            <div className="grid grid-cols-4 gap-2">
+              {p.images.slice(0, 4).map((img) => (
+                <div
+                  key={img.id}
+                  className="relative aspect-square overflow-hidden rounded border"
+                  style={{
+                    background: D5.panelHi,
+                    borderColor: img.url === heroImage ? D5.accent : D5.line
+                  }}
+                >
+                  <Image
+                    src={img.url}
+                    alt={img.alt}
+                    fill
+                    quality={75}
+                    sizes="72px"
+                    className="object-contain p-1"
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {/* core info */}
         <div className="flex flex-col gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <Tag tone="dim">{p.category}</Tag>
+              <Tag tone="dim">{p.category.name}</Tag>
               <span className="text-[10px]" style={{ color: D5.faint }}>
-                SKU {p.sku} · UPC 8842-0014
+                SKU {variant?.sku ?? p.id}
               </span>
             </div>
             <H>
-              <span className="text-[20px]">{p.name}</span>
+              <span className="text-[20px]">{p.title}</span>
             </H>
             <p className="mt-1 text-[12px]" style={{ color: D5.dim }}>
-              {p.spec}. Structural square HSS for gate frames, posts, and weldments.
-              Cut-to-length at the {p.hub} hub, same-day before 2pm.
+              {p.description}
             </p>
           </div>
 
-          {/* price tier matrix */}
-          <Panel title="Volume pricing" hint="// tier auto-applies at checkout">
-            <div className="grid grid-cols-4 divide-x" style={{ borderColor: D5.line }}>
-              {TIERS.map((t) => {
-                const on = tier.label === t.label;
-                return (
-                  <div
-                    key={t.label}
-                    className="px-2.5 py-2"
-                    style={{
-                      borderColor: D5.line,
-                      background: on ? D5.accentDim : "transparent"
-                    }}
-                  >
-                    <div
-                      className="text-[9px] uppercase tracking-[0.12em]"
-                      style={{ color: on ? D5.accent : D5.faint }}
+          {/* variant matrix */}
+          {p.variants.length > 1 ? (
+            <Panel title="Variants" hint="// select option">
+              <div
+                className="grid gap-px md:grid-cols-2"
+                style={{ background: D5.line }}
+              >
+                {p.variants.map((v) => {
+                  const on = v.id === variant?.id;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setVariantId(v.id)}
+                      className="flex items-center justify-between gap-2 px-3 py-2 text-left"
+                      style={{
+                        background: on ? D5.accentDim : D5.panel
+                      }}
                     >
-                      {t.label}
-                    </div>
-                    <div
-                      className="text-[15px] font-bold"
-                      style={{ color: on ? D5.accent : D5.ink }}
-                    >
-                      {fmt(t.price)}
-                    </div>
-                    <div className="text-[9px]" style={{ color: D5.faint }}>
-                      {t.qty} {p.uom}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Panel>
+                      <div className="min-w-0">
+                        <div
+                          className="truncate text-[11px] font-semibold"
+                          style={{ color: on ? D5.accent : D5.ink }}
+                        >
+                          {[v.options.length, v.options.finish]
+                            .filter((x) => x && x !== "Standard")
+                            .join(" · ") || v.sku}
+                        </div>
+                        <div className="text-[9px]" style={{ color: D5.faint }}>
+                          {v.sku}
+                        </div>
+                      </div>
+                      <span
+                        className="text-[12px] font-bold"
+                        style={{ color: on ? D5.accent : D5.ink }}
+                      >
+                        {fmt(v.price)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </Panel>
+          ) : null}
 
           {/* tabbed detail */}
           <Panel
             title={
-              tab === "specs" ? "Specifications" : tab === "ship" ? "Fulfillment" : "Documents"
+              tab === "specs" ? "Specifications" : tab === "ship" ? "Fulfillment" : "Details"
             }
             right={
               <div className="flex gap-0.5">
@@ -176,7 +200,7 @@ export default function D5Product() {
                   [
                     ["specs", "Specs"],
                     ["ship", "Ship"],
-                    ["docs", "Docs"]
+                    ["docs", "Details"]
                   ] as [typeof tab, string][]
                 ).map(([k, label]) => (
                   <button
@@ -197,7 +221,7 @@ export default function D5Product() {
           >
             {tab === "specs" ? (
               <div className="grid grid-cols-2 gap-px" style={{ background: D5.line }}>
-                {SPECS.map(([k, v]) => (
+                {specs.map(([k, v]) => (
                   <div
                     key={k}
                     className="flex items-baseline justify-between gap-3 px-3 py-1.5"
@@ -207,7 +231,7 @@ export default function D5Product() {
                       {k}
                     </span>
                     <span
-                      className="text-right text-[11px] font-semibold"
+                      className="truncate text-right text-[11px] font-semibold"
                       style={{ color: D5.ink }}
                     >
                       {v}
@@ -244,27 +268,22 @@ export default function D5Product() {
             ) : null}
             {tab === "docs" ? (
               <div className="space-y-px" style={{ background: D5.line }}>
-                {["Mill test report (MTR).pdf", "A500 spec sheet.pdf", "Safety data sheet.pdf"].map(
-                  (d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left"
-                      style={{ background: D5.panel }}
-                    >
-                      <ShieldCheck size={14} style={{ color: D5.blue }} />
-                      <span className="text-[11px]" style={{ color: D5.ink }}>
-                        {d}
-                      </span>
-                      <span
-                        className="ml-auto text-[10px] font-bold"
-                        style={{ color: D5.accent }}
-                      >
-                        ↓ GET
-                      </span>
-                    </button>
-                  )
-                )}
+                {p.details.map((d) => (
+                  <div
+                    key={d}
+                    className="flex w-full items-start gap-2.5 px-3 py-2 text-left"
+                    style={{ background: D5.panel }}
+                  >
+                    <ShieldCheck
+                      size={14}
+                      className="mt-0.5 shrink-0"
+                      style={{ color: D5.blue }}
+                    />
+                    <span className="text-[11px]" style={{ color: D5.ink }}>
+                      {d}
+                    </span>
+                  </div>
+                ))}
               </div>
             ) : null}
           </Panel>
@@ -276,10 +295,10 @@ export default function D5Product() {
             <div className="p-3">
               <div className="flex items-baseline gap-2">
                 <span className="text-[24px] font-bold" style={{ color: D5.ink }}>
-                  {fmt(tier.price)}
+                  {fmt(variant?.price ?? 0)}
                 </span>
                 <span className="text-[11px]" style={{ color: D5.faint }}>
-                  /{p.uom} · {tier.label} tier
+                  /ea
                 </span>
               </div>
 
@@ -287,7 +306,7 @@ export default function D5Product() {
                 className="mt-3 text-[9px] uppercase tracking-[0.14em]"
                 style={{ color: D5.faint }}
               >
-                Quantity ({p.uom})
+                Quantity
               </div>
               <div className="mt-1 flex items-stretch gap-1.5">
                 <div
@@ -318,7 +337,7 @@ export default function D5Product() {
                     <Plus size={13} />
                   </button>
                 </div>
-                {[10, 40, 120].map((q) => (
+                {[5, 10, 25].map((q) => (
                   <button
                     key={q}
                     type="button"
@@ -339,7 +358,7 @@ export default function D5Product() {
                 className="mt-3 flex items-center gap-1 text-[9px] uppercase tracking-[0.14em]"
                 style={{ color: D5.faint }}
               >
-                <Ruler size={10} /> cut option
+                <Wrench size={10} /> cut option
               </div>
               <div className="mt-1 flex flex-col gap-1">
                 {CUT.map((c, i) => (
@@ -380,7 +399,8 @@ export default function D5Product() {
               <button
                 type="button"
                 onClick={add}
-                className="mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded text-[12px] font-bold"
+                disabled={!inStock}
+                className="mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded text-[12px] font-bold disabled:opacity-40"
                 style={{
                   background: added ? D5.accentDim : D5.accent,
                   color: added ? D5.accent : D5.bg
@@ -413,34 +433,40 @@ export default function D5Product() {
             </div>
           </Panel>
 
-          <Panel title="Pairs with" hint="// frequently welded together">
+          <Panel title="Pairs with" hint="// related items">
             <div className="p-1.5">
-              {related.map((r) => (
-                <Link
-                  key={r.sku}
-                  href="/design-lab/d5/product"
-                  className="flex items-center gap-2 rounded px-1.5 py-1.5 hover:brightness-125"
-                >
-                  <span
-                    className="h-7 w-7 shrink-0 rounded"
-                    style={{ background: r.swatch }}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div
-                      className="truncate text-[11px] font-semibold"
-                      style={{ color: D5.ink }}
-                    >
-                      {r.name}
+              {related.length === 0 ? (
+                <p className="px-1.5 py-2 text-[10px]" style={{ color: D5.faint }}>
+                  No related items.
+                </p>
+              ) : (
+                related.map((r) => (
+                  <Link
+                    key={r.id}
+                    href="/design-lab/d5/product"
+                    className="flex items-center gap-2 rounded px-1.5 py-1.5 hover:brightness-125"
+                  >
+                    <span
+                      className="h-7 w-7 shrink-0 rounded"
+                      style={{ background: swatchFor(r.id) }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div
+                        className="truncate text-[11px] font-semibold"
+                        style={{ color: D5.ink }}
+                      >
+                        {r.title}
+                      </div>
+                      <div className="text-[9px]" style={{ color: D5.faint }}>
+                        {r.variants[0]?.sku ?? r.id}
+                      </div>
                     </div>
-                    <div className="text-[9px]" style={{ color: D5.faint }}>
-                      {r.sku}
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-bold" style={{ color: D5.accent }}>
-                    {fmt(r.price)}
-                  </span>
-                </Link>
-              ))}
+                    <span className="text-[11px] font-bold" style={{ color: D5.accent }}>
+                      {fmt(r.price)}
+                    </span>
+                  </Link>
+                ))
+              )}
             </div>
           </Panel>
         </div>

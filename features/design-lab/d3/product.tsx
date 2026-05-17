@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowUpRight,
   Check,
@@ -12,45 +13,61 @@ import {
   ShieldCheck,
   Truck
 } from "lucide-react";
+import {
+  featuredProduct,
+  getRelatedProducts
+} from "@/features/design-lab/live-data";
+import { useCartStore } from "@/lib/cart-store";
+import { formatCurrency } from "@/lib/utils";
 import { D3Shell, Eyebrow, MaterialBlock, d3, serif } from "./shared";
 
-/** DESIGN 3 — "Editorial Catalog" — Product detail. */
+/** DESIGN 3 — "Editorial Catalog" — Product detail. Real catalog product. */
 
-const gallery = [
-  { tone: "steel" as const, label: "Profile" },
-  { tone: "ink" as const, label: "Wall section" },
-  { tone: "rust" as const, label: "Cut end" },
-  { tone: "paper" as const, label: "In context" }
-];
+const product = featuredProduct;
+const relatedTones = ["steel", "ink", "brass", "rust"] as const;
+const relatedProducts = getRelatedProducts(product, 3);
 
-const lengths = [
-  { id: "20", label: "20 ft", price: 38.4 },
-  { id: "24", label: "24 ft", price: 45.9 },
-  { id: "cut", label: "Cut to spec", price: 41.0 }
-];
+// Gallery sources — real product images, falling back to variant images.
+const galleryImages = Array.from(
+  new Set([
+    ...product.images.map((image) => image.url),
+    ...product.variants.map((variant) => variant.image)
+  ])
+).filter(Boolean);
 
-const specs = [
-  ["Profile", '2" × 2" square'],
-  ["Wall gauge", "11 ga (0.120 in)"],
-  ["Material", "ASTM A500 Grade B"],
-  ["Finish", "Hot-rolled, pickled & oiled"],
-  ["Weight", "2.94 lb / ft"],
-  ["Origin", "Domestic mill, MTR available"]
-];
-
-const related = [
-  { name: "1½ × 1½ Square Tube", price: "$28.10", tone: "steel" as const },
-  { name: "2 × 2 Angle Iron — ¼″", price: "$33.75", tone: "ink" as const },
-  { name: "Bolt-On Gate Hinge", price: "$24.90", tone: "brass" as const }
-];
+const specEntries = Object.entries(product.specifications);
 
 export function D3Product() {
-  const [active, setActive] = useState(0);
-  const [length, setLength] = useState(lengths[0]);
-  const [qty, setQty] = useState(4);
+  const addItem = useCartStore((state) => state.addItem);
+
+  const [activeImage, setActiveImage] = useState(
+    product.variants[0]?.image || galleryImages[0]
+  );
+  const [variant, setVariant] = useState(product.variants[0]);
+  const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
 
-  const total = (length.price * qty).toFixed(2);
+  const total = useMemo(
+    () => formatCurrency((variant?.price ?? product.price) * qty),
+    [variant, qty]
+  );
+
+  function addToCart() {
+    if (!variant) return;
+    addItem({
+      productId: product.id,
+      variantId: variant.id,
+      title: product.title,
+      sku: variant.sku,
+      image: variant.image || product.images[0]?.url || "",
+      price: variant.price,
+      pricingMethod: variant.pricing_method,
+      quantity: qty,
+      options: variant.options
+    });
+    setAdded(true);
+    window.setTimeout(() => setAdded(false), 1800);
+  }
 
   return (
     <D3Shell active="Product">
@@ -62,9 +79,9 @@ export function D3Product() {
         >
           <Link href="/design-lab/d3/home">Catalog</Link>
           <ChevronRight className="h-3 w-3" />
-          <Link href="/design-lab/d3/category">Structural Steel</Link>
+          <Link href="/design-lab/d3/category">{product.category.name}</Link>
           <ChevronRight className="h-3 w-3" />
-          <span style={{ color: d3.ink }}>Square Tube</span>
+          <span style={{ color: d3.ink }}>{product.title}</span>
         </nav>
       </div>
 
@@ -73,54 +90,78 @@ export function D3Product() {
         <div className="grid gap-10 lg:grid-cols-[1.15fr_0.85fr]">
           {/* gallery */}
           <div>
-            <MaterialBlock
-              tone={gallery[active].tone}
-              label={`Plate ${active + 1} — ${gallery[active].label}`}
-              className="aspect-[5/4] w-full"
-            />
-            <div className="mt-4 grid grid-cols-4 gap-3">
-              {gallery.map((g, i) => (
-                <button
-                  key={g.label}
-                  type="button"
-                  onClick={() => setActive(i)}
-                  className="block"
-                  aria-label={g.label}
-                >
-                  <MaterialBlock
-                    tone={g.tone}
-                    className="aspect-square w-full transition-opacity"
-                  />
-                  <span
-                    className="mt-1.5 block text-[0.64rem] uppercase tracking-[0.16em]"
-                    style={{
-                      color: i === active ? d3.ink : d3.haze,
-                      borderTop: `2px solid ${i === active ? d3.brass : "transparent"}`,
-                      paddingTop: 4
-                    }}
-                  >
-                    {g.label}
-                  </span>
-                </button>
-              ))}
+            <div
+              className="relative aspect-[5/4] w-full overflow-hidden"
+              style={{ background: d3.card }}
+            >
+              {activeImage ? (
+                <Image
+                  src={activeImage}
+                  alt={product.title}
+                  fill
+                  priority
+                  quality={75}
+                  sizes="(max-width: 1024px) 100vw, 60vw"
+                  className="object-contain p-8"
+                />
+              ) : (
+                <MaterialBlock tone="steel" className="h-full w-full" />
+              )}
             </div>
+            {galleryImages.length > 1 ? (
+              <div className="mt-4 grid grid-cols-4 gap-3">
+                {galleryImages.slice(0, 4).map((image, i) => (
+                  <button
+                    key={image}
+                    type="button"
+                    onClick={() => setActiveImage(image)}
+                    className="block"
+                    aria-label={`View image ${i + 1}`}
+                  >
+                    <div
+                      className="relative aspect-square w-full overflow-hidden"
+                      style={{ background: d3.card }}
+                    >
+                      <Image
+                        src={image}
+                        alt={`${product.title} view ${i + 1}`}
+                        fill
+                        quality={60}
+                        sizes="160px"
+                        className="object-contain p-2"
+                      />
+                    </div>
+                    <span
+                      className="mt-1.5 block text-[0.64rem] uppercase tracking-[0.16em]"
+                      style={{
+                        color: image === activeImage ? d3.ink : d3.haze,
+                        borderTop: `2px solid ${
+                          image === activeImage ? d3.brass : "transparent"
+                        }`,
+                        paddingTop: 4
+                      }}
+                    >
+                      Plate {i + 1}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           {/* buy column */}
           <div className="lg:pt-2">
-            <Eyebrow>Structural Steel — No. 04</Eyebrow>
+            <Eyebrow>{product.category.name}</Eyebrow>
             <h1
               className={`${serif} mt-3 text-[2.3rem] font-semibold leading-[1.08] tracking-[-0.01em] sm:text-[2.9rem]`}
             >
-              2 × 2 Square Tube
+              {product.title}
             </h1>
             <p
               className="mt-4 max-w-md text-[0.95rem] leading-relaxed"
               style={{ color: d3.graphite }}
             >
-              The workhorse of gate frames and fabrication. Eleven-gauge wall,
-              domestic mill, clean welds — a profile we cut by the dozen every
-              morning.
+              {product.description}
             </p>
 
             <div
@@ -128,7 +169,7 @@ export function D3Product() {
               style={{ borderColor: d3.rule }}
             >
               <span className={`${serif} text-4xl font-semibold`}>
-                ${length.price.toFixed(2)}
+                {formatCurrency(variant?.price ?? product.price)}
               </span>
               <span
                 className="text-[0.74rem] uppercase tracking-[0.16em]"
@@ -138,32 +179,48 @@ export function D3Product() {
               </span>
             </div>
 
-            {/* length selector */}
-            <div className="mt-7">
-              <p className="text-[0.72rem] font-semibold uppercase tracking-[0.2em]" style={{ color: d3.graphite }}>
-                Length
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2.5">
-                {lengths.map((l) => {
-                  const sel = l.id === length.id;
-                  return (
-                    <button
-                      key={l.id}
-                      type="button"
-                      onClick={() => setLength(l)}
-                      className="rounded-full border px-5 py-2.5 text-[0.78rem] font-semibold transition-colors"
-                      style={{
-                        borderColor: sel ? d3.ink : d3.rule,
-                        background: sel ? d3.ink : "transparent",
-                        color: sel ? d3.paper : d3.ink
-                      }}
-                    >
-                      {l.label}
-                    </button>
-                  );
-                })}
+            {/* variant selector */}
+            {product.variants.length > 1 ? (
+              <div className="mt-7">
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.2em]" style={{ color: d3.graphite }}>
+                  Variant
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2.5">
+                  {product.variants.map((v) => {
+                    const sel = v.id === variant?.id;
+                    const label =
+                      [v.options.length, v.options.finish]
+                        .filter((opt) => opt && opt !== "Standard")
+                        .join(" · ") || v.sku;
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => {
+                          setVariant(v);
+                          if (v.image) setActiveImage(v.image);
+                        }}
+                        className="rounded-full border px-5 py-2.5 text-[0.78rem] font-semibold transition-colors"
+                        style={{
+                          borderColor: sel ? d3.ink : d3.rule,
+                          background: sel ? d3.ink : "transparent",
+                          color: sel ? d3.paper : d3.ink
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            ) : null}
+
+            <p
+              className="mt-4 text-[0.72rem] font-semibold uppercase tracking-[0.18em]"
+              style={{ color: d3.haze }}
+            >
+              SKU {variant?.sku ?? product.id}
+            </p>
 
             {/* quantity + add */}
             <div className="mt-7 flex flex-wrap items-center gap-4">
@@ -193,10 +250,7 @@ export function D3Product() {
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setAdded(true);
-                  window.setTimeout(() => setAdded(false), 1800);
-                }}
+                onClick={addToCart}
                 className="inline-flex flex-1 items-center justify-center gap-2 rounded-full px-7 py-4 text-[0.8rem] font-semibold uppercase tracking-[0.16em] text-white transition-transform hover:-translate-y-0.5"
                 style={{ background: added ? d3.brassDeep : d3.ink }}
               >
@@ -205,7 +259,7 @@ export function D3Product() {
                     <Check className="h-4 w-4" /> Added to cart
                   </>
                 ) : (
-                  <>Add to cart — ${total}</>
+                  <>Add to cart — {total}</>
                 )}
               </button>
             </div>
@@ -258,7 +312,7 @@ export function D3Product() {
             className="divide-y border-t"
             style={{ borderColor: d3.rule }}
           >
-            {specs.map(([k, v]) => (
+            {specEntries.map(([k, v]) => (
               <div
                 key={k}
                 className="flex items-baseline justify-between gap-6 py-4"
@@ -278,40 +332,63 @@ export function D3Product() {
       </section>
 
       {/* RELATED — pairs well with */}
-      <section className="mx-auto max-w-[1280px] px-5 pt-24 sm:px-8">
-        <div className="flex items-end justify-between gap-6">
-          <div>
-            <Eyebrow>Composed With</Eyebrow>
-            <h2 className={`${serif} mt-3 text-3xl font-semibold`}>
-              Pairs well on the same order
-            </h2>
-          </div>
-          <Link
-            href="/design-lab/d3/category"
-            className="hidden shrink-0 text-[0.78rem] font-semibold uppercase tracking-[0.16em] underline underline-offset-[6px] sm:inline"
-          >
-            Full department
-          </Link>
-        </div>
-        <div className="mt-8 grid gap-6 sm:grid-cols-3">
-          {related.map((r) => (
-            <Link key={r.name} href="/design-lab/d3/product" className="group block">
-              <MaterialBlock
-                tone={r.tone}
-                className="aspect-[4/3] w-full transition-transform duration-500 group-hover:scale-[1.04]"
-              />
-              <div className="mt-3 flex items-start justify-between gap-3">
-                <h3 className={`${serif} text-lg font-semibold`}>{r.name}</h3>
-                <ArrowUpRight
-                  className="mt-1 h-4 w-4 shrink-0"
-                  style={{ color: d3.brass }}
-                />
-              </div>
-              <p className="mt-1 text-sm font-semibold">{r.price}</p>
+      {relatedProducts.length ? (
+        <section className="mx-auto max-w-[1280px] px-5 pt-24 sm:px-8">
+          <div className="flex items-end justify-between gap-6">
+            <div>
+              <Eyebrow>Composed With</Eyebrow>
+              <h2 className={`${serif} mt-3 text-3xl font-semibold`}>
+                Pairs well on the same order
+              </h2>
+            </div>
+            <Link
+              href="/design-lab/d3/category"
+              className="hidden shrink-0 text-[0.78rem] font-semibold uppercase tracking-[0.16em] underline underline-offset-[6px] sm:inline"
+            >
+              Full department
             </Link>
-          ))}
-        </div>
-      </section>
+          </div>
+          <div className="mt-8 grid gap-6 sm:grid-cols-3">
+            {relatedProducts.map((r, i) => {
+              const image = r.images[0]?.url;
+              return (
+                <Link key={r.id} href="/design-lab/d3/product" className="group block">
+                  <div
+                    className="relative aspect-[4/3] w-full overflow-hidden"
+                    style={{ background: d3.card }}
+                  >
+                    {image ? (
+                      <Image
+                        src={image}
+                        alt={r.title}
+                        fill
+                        quality={75}
+                        sizes="(max-width: 640px) 100vw, 33vw"
+                        className="object-contain p-5 transition-transform duration-500 group-hover:scale-[1.04]"
+                      />
+                    ) : (
+                      <MaterialBlock
+                        tone={relatedTones[i % relatedTones.length]}
+                        className="h-full w-full"
+                      />
+                    )}
+                  </div>
+                  <div className="mt-3 flex items-start justify-between gap-3">
+                    <h3 className={`${serif} text-lg font-semibold`}>{r.title}</h3>
+                    <ArrowUpRight
+                      className="mt-1 h-4 w-4 shrink-0"
+                      style={{ color: d3.brass }}
+                    />
+                  </div>
+                  <p className="mt-1 text-sm font-semibold">
+                    {formatCurrency(r.price)}
+                  </p>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
     </D3Shell>
   );
 }

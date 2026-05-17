@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   Minus,
@@ -12,71 +13,43 @@ import {
   Truck
 } from "lucide-react";
 import { D1DesignBadge, D1Page, Eyebrow, formatUsd } from "./kit";
-
-type Line = {
-  id: string;
-  name: string;
-  sku: string;
-  variant: string;
-  price: number;
-  qty: number;
-  tone: string;
-};
-
-const INITIAL: Line[] = [
-  {
-    id: "l1",
-    name: "Heavy-Duty Cantilever Roller Kit",
-    sku: "GW-CR-2400",
-    variant: "24 ft span",
-    price: 289.0,
-    qty: 1,
-    tone: "#16150f"
-  },
-  {
-    id: "l2",
-    name: "Cantilever Track — 21 ft",
-    sku: "GW-CT-2100",
-    variant: "Galvanized",
-    price: 178.0,
-    qty: 2,
-    tone: "#6c685c"
-  },
-  {
-    id: "l3",
-    name: "Slide Gate Latch — Lockable",
-    sku: "GW-SL-440",
-    variant: "Black powder-coat",
-    price: 52.0,
-    qty: 1,
-    tone: "#2f6f4e"
-  }
-];
+import { useCartStore } from "@/lib/cart-store";
+import type { CartItem } from "@/lib/types";
 
 const TRADE_RATE = 0.08;
 const TAX_RATE = 0.0725;
 
+function variantSummary(item: CartItem): string {
+  const parts = [item.options.length, item.options.finish].filter(
+    (part) => part && part !== "Standard"
+  );
+  return parts.length ? parts.join(" · ") : "Standard";
+}
+
 export function D1Cart() {
-  const [lines, setLines] = useState<Line[]>(INITIAL);
+  const items = useCartStore((state) => state.items);
+  const updateQuantity = useCartStore((state) => state.updateQuantity);
+  const removeItem = useCartStore((state) => state.removeItem);
+
+  const [hydrated, setHydrated] = useState(false);
   const [promo, setPromo] = useState("");
   const [applied, setApplied] = useState(false);
 
-  function updateQty(id: string, delta: number) {
-    setLines((current) =>
-      current.map((line) =>
-        line.id === id
-          ? { ...line, qty: Math.max(1, line.qty + delta) }
-          : line
-      )
-    );
-  }
+  // Cart store uses skipHydration; rehydrate once on the client so SSR and
+  // first client render agree (empty) before live data arrives.
+  useEffect(() => {
+    void useCartStore.persist.rehydrate();
+    setHydrated(true);
+  }, []);
 
-  function removeLine(id: string) {
-    setLines((current) => current.filter((line) => line.id !== id));
+  const lines = hydrated ? items : [];
+
+  function updateQty(variantId: string, current: number, delta: number) {
+    updateQuantity(variantId, Math.max(1, current + delta));
   }
 
   const subtotal = useMemo(
-    () => lines.reduce((sum, line) => sum + line.price * line.qty, 0),
+    () => lines.reduce((sum, line) => sum + line.price * line.quantity, 0),
     [lines]
   );
   const tradeDiscount = subtotal * TRADE_RATE;
@@ -85,7 +58,7 @@ export function D1Cart() {
   const tax = taxable * TAX_RATE;
   const shipping = subtotal > 750 ? 0 : 49;
   const total = taxable + tax + shipping;
-  const itemCount = lines.reduce((sum, line) => sum + line.qty, 0);
+  const itemCount = lines.reduce((sum, line) => sum + line.quantity, 0);
 
   return (
     <D1Page>
@@ -129,20 +102,28 @@ export function D1Cart() {
             <div className="divide-y divide-d1-line border-b border-d1-line">
               {lines.map((line) => (
                 <div
-                  key={line.id}
+                  key={line.variantId}
                   className="grid grid-cols-12 items-center gap-4 py-5"
                 >
                   <div className="col-span-12 flex items-center gap-4 sm:col-span-6">
-                    <div
-                      className="grid h-20 w-20 shrink-0 place-items-center"
-                      style={{ backgroundColor: line.tone }}
-                    >
-                      <span
-                        className="text-xl font-black"
-                        style={{ color: "rgba(246,243,236,0.2)" }}
-                      >
-                        GW
-                      </span>
+                    <div className="grid h-20 w-20 shrink-0 place-items-center bg-white">
+                      {line.image ? (
+                        <Image
+                          alt={line.title}
+                          className="h-full w-full object-contain p-1.5"
+                          height={160}
+                          quality={75}
+                          src={line.image}
+                          width={160}
+                        />
+                      ) : (
+                        <span
+                          className="text-xl font-black"
+                          style={{ color: "rgba(22,21,15,0.18)" }}
+                        >
+                          GW
+                        </span>
+                      )}
                     </div>
                     <div className="min-w-0">
                       <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-d1-steel">
@@ -152,14 +133,14 @@ export function D1Cart() {
                         className="text-sm font-bold leading-snug text-d1-ink hover:text-d1-pine"
                         href="/design-lab/d1/product"
                       >
-                        {line.name}
+                        {line.title}
                       </Link>
                       <p className="text-xs font-semibold text-d1-steel">
-                        {line.variant} &middot; {formatUsd(line.price)} ea
+                        {variantSummary(line)} &middot; {formatUsd(line.price)} ea
                       </p>
                       <button
                         className="mt-1 flex items-center gap-1 text-[11px] font-bold uppercase tracking-[0.1em] text-d1-red transition hover:underline"
-                        onClick={() => removeLine(line.id)}
+                        onClick={() => removeItem(line.variantId)}
                         type="button"
                       >
                         <Trash2 className="h-3 w-3" /> Remove
@@ -171,18 +152,18 @@ export function D1Cart() {
                       <button
                         aria-label="Decrease"
                         className="grid h-10 w-10 place-items-center text-d1-ink transition hover:bg-d1-ink hover:text-d1-paper"
-                        onClick={() => updateQty(line.id, -1)}
+                        onClick={() => updateQty(line.variantId, line.quantity, -1)}
                         type="button"
                       >
                         <Minus className="h-3.5 w-3.5" />
                       </button>
                       <span className="grid h-10 w-12 place-items-center border-x border-d1-ink text-sm font-extrabold">
-                        {line.qty}
+                        {line.quantity}
                       </span>
                       <button
                         aria-label="Increase"
                         className="grid h-10 w-10 place-items-center text-d1-ink transition hover:bg-d1-ink hover:text-d1-paper"
-                        onClick={() => updateQty(line.id, 1)}
+                        onClick={() => updateQty(line.variantId, line.quantity, 1)}
                         type="button"
                       >
                         <Plus className="h-3.5 w-3.5" />
@@ -191,7 +172,7 @@ export function D1Cart() {
                   </div>
                   <div className="col-span-5 text-right sm:col-span-3">
                     <span className="text-lg font-extrabold text-d1-ink">
-                      {formatUsd(line.price * line.qty)}
+                      {formatUsd(line.price * line.quantity)}
                     </span>
                   </div>
                 </div>

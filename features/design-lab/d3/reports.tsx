@@ -1,44 +1,25 @@
-"use client";
-
-import { useState } from "react";
 import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
+import type { ReportData } from "@/features/admin/reports/reports-dashboard";
+import { formatCurrency } from "@/lib/utils";
 import { D3Shell, Eyebrow, MaterialBlock, d3, serif } from "./shared";
 
-/** DESIGN 3 — "Editorial Catalog" — Admin reports dashboard. */
+/** DESIGN 3 — "Editorial Catalog" — Admin reports. Real Supabase report data. */
 
-const ranges = ["7 days", "30 days", "Quarter"];
+const ranges = ["30 days"];
+const agingTones = ["steel", "rust", "ink"] as const;
 
-const revenueByDay = [
-  { d: "Mon", v: 4.2 },
-  { d: "Tue", v: 5.8 },
-  { d: "Wed", v: 5.1 },
-  { d: "Thu", v: 7.4 },
-  { d: "Fri", v: 8.9 },
-  { d: "Sat", v: 6.0 },
-  { d: "Sun", v: 2.7 }
-];
+function formatDate(value: string) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric"
+  }).format(new Date(value));
+}
 
-const headline = [
-  { k: "Revenue", v: "$40.1k", delta: 12.4, n: "vs. prior 7 days" },
-  { k: "Orders", v: "286", delta: 6.1, n: "Across all channels" },
-  { k: "Avg. order", v: "$140", delta: -2.3, n: "Trade mix steady" },
-  { k: "Quote → order", v: "63%", delta: 4.8, n: "Conversion rate" }
-];
-
-const departments = [
-  { name: "Structural Steel", share: 46, tone: "steel" as const, rev: "$18.4k" },
-  { name: "Gate Hardware", share: 27, tone: "brass" as const, rev: "$10.8k" },
-  { name: "Fasteners", share: 16, tone: "rust" as const, rev: "$6.4k" },
-  { name: "Jobsite Tools", share: 11, tone: "ink" as const, rev: "$4.5k" }
-];
-
-const topItems = [
-  { rank: "01", name: "2 × 2 Square Tube — 11ga", units: 412, rev: "$15.8k" },
-  { rank: "02", name: "Heavy Bolt-On Gate Hinge", units: 318, rev: "$7.9k" },
-  { rank: "03", name: "Self-Drilling Tek Screw", units: 264, rev: "$4.9k" },
-  { rank: "04", name: "C4 × 5.4 Steel Channel", units: 88, rev: "$6.3k" }
-];
+function titleCase(value: string) {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
 
 function Delta({ value }: { value: number }) {
   const flat = value === 0;
@@ -56,9 +37,20 @@ function Delta({ value }: { value: number }) {
   );
 }
 
-export function D3Reports() {
-  const [range, setRange] = useState(ranges[0]);
-  const peak = Math.max(...revenueByDay.map((r) => r.v));
+export function D3Reports({ data }: { data: ReportData }) {
+  const headline = [
+    { k: "Revenue", v: formatCurrency(data.revenue30), n: "Trailing 30 days" },
+    { k: "Orders", v: String(data.orders30), n: "Trailing 30 days" },
+    { k: "Avg. order", v: formatCurrency(data.avgOrderValue), n: "Across all channels" },
+    {
+      k: "Gross margin",
+      v: data.hasCostData ? `${data.grossMarginPct.toFixed(1)}%` : "No cost data",
+      n: data.hasCostData ? "From entered costs" : "Add product costs"
+    }
+  ];
+
+  const collectedShare = data.billed > 0 ? (data.collected / data.billed) * 100 : 0;
+  const paymentPeak = Math.max(1, ...data.paymentBreakdown.map((row) => row.total));
 
   return (
     <D3Shell active="Reports" variant="admin">
@@ -69,34 +61,47 @@ export function D3Reports() {
             <h1
               className={`${serif} mt-3 text-[2.6rem] font-semibold leading-none tracking-[-0.02em] sm:text-[3.4rem]`}
             >
-              The week in figures
+              The month in figures
             </h1>
             <p className="mt-3 max-w-md text-sm leading-relaxed" style={{ color: d3.graphite }}>
               A standing column on how the catalog is performing — revenue,
-              departments, and the items earning their cover spot.
+              receivables, and the orders earning their cover spot.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {ranges.map((r) => {
-              const sel = r === range;
-              return (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setRange(r)}
-                  className="rounded-full px-4 py-2 text-[0.74rem] font-semibold uppercase tracking-[0.12em] transition-colors"
-                  style={{
-                    background: sel ? d3.ink : "transparent",
-                    color: sel ? d3.paper : d3.graphite,
-                    border: `1px solid ${sel ? d3.ink : d3.rule}`
-                  }}
-                >
-                  {r}
-                </button>
-              );
-            })}
+            {ranges.map((r) => (
+              <span
+                key={r}
+                className="rounded-full px-4 py-2 text-[0.74rem] font-semibold uppercase tracking-[0.12em] text-white"
+                style={{ background: d3.ink }}
+              >
+                {r}
+              </span>
+            ))}
           </div>
         </div>
+
+        {!data.configured ? (
+          <div
+            className="mt-7 border p-6"
+            style={{ borderColor: d3.brass, background: d3.card }}
+          >
+            <span
+              className="text-[0.7rem] font-semibold uppercase tracking-[0.3em]"
+              style={{ color: d3.brass }}
+            >
+              Press note
+            </span>
+            <h2 className={`${serif} mt-2 text-2xl font-semibold`}>
+              This issue is awaiting figures.
+            </h2>
+            <p className="mt-2 max-w-xl text-sm leading-relaxed" style={{ color: d3.graphite }}>
+              Supabase is not configured, so live financial data is unavailable.
+              Add the Supabase keys to <code>.env.local</code> to populate this
+              report.
+            </p>
+          </div>
+        ) : null}
 
         {/* headline figures */}
         <div
@@ -110,7 +115,6 @@ export function D3Reports() {
               </p>
               <p className={`${serif} mt-2 text-4xl font-semibold`}>{h.v}</p>
               <div className="mt-2 flex items-center gap-2">
-                <Delta value={h.delta} />
                 <span className="text-[0.7rem]" style={{ color: d3.haze }}>
                   {h.n}
                 </span>
@@ -120,9 +124,10 @@ export function D3Reports() {
         </div>
       </section>
 
-      {/* revenue chart — editorial feature */}
+      {/* receivables + payment mix — editorial feature */}
       <section className="mx-auto max-w-[1280px] px-5 pt-10 sm:px-8">
         <div className="grid gap-8 lg:grid-cols-[1.5fr_1fr]">
+          {/* accounts receivable */}
           <div
             className="border p-7 sm:p-9"
             style={{ borderColor: d3.rule, background: d3.card }}
@@ -131,97 +136,166 @@ export function D3Reports() {
               <div>
                 <Eyebrow>Figure 1</Eyebrow>
                 <h2 className={`${serif} mt-2 text-2xl font-semibold`}>
-                  Revenue, by the day
+                  Accounts receivable
                 </h2>
               </div>
               <span className="text-[0.72rem] uppercase tracking-[0.14em]" style={{ color: d3.haze }}>
-                Thousands, USD
+                Billed vs. collected
               </span>
             </div>
 
-            <div className="mt-9 flex items-end gap-3 sm:gap-5" style={{ height: 220 }}>
-              {revenueByDay.map((r) => (
-                <div key={r.d} className="flex flex-1 flex-col items-center gap-3">
-                  <span className={`${serif} text-sm font-semibold`}>
-                    {r.v.toFixed(1)}
-                  </span>
-                  <div className="flex w-full flex-1 items-end">
-                    <div
-                      className="w-full transition-all"
-                      style={{
-                        height: `${(r.v / peak) * 100}%`,
-                        background:
-                          r.v === peak
-                            ? `linear-gradient(180deg,${d3.brass},${d3.brassDeep})`
-                            : "linear-gradient(180deg,#3a3631,#1a1814)"
-                      }}
-                    />
-                  </div>
-                  <span
-                    className="text-[0.7rem] font-semibold uppercase tracking-[0.12em]"
-                    style={{ color: d3.haze }}
+            <dl className="mt-8 grid gap-4 sm:grid-cols-3">
+              {[
+                ["Total billed", data.billed, d3.ink],
+                ["Collected", data.collected, d3.ink],
+                ["Outstanding", data.outstanding, "#b42318"]
+              ].map(([k, v, color]) => (
+                <div key={k as string}>
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em]" style={{ color: d3.haze }}>
+                    {k}
+                  </p>
+                  <p
+                    className={`${serif} mt-1 text-3xl font-semibold`}
+                    style={{ color: color as string }}
                   >
-                    {r.d}
-                  </span>
+                    {formatCurrency(v as number)}
+                  </p>
                 </div>
               ))}
+            </dl>
+
+            <div className="mt-7">
+              <div className="flex items-center justify-between text-[0.72rem] uppercase tracking-[0.14em]" style={{ color: d3.haze }}>
+                <span>Collected share</span>
+                <span>{collectedShare.toFixed(0)}%</span>
+              </div>
+              <div
+                className="mt-2 h-2.5 w-full overflow-hidden rounded-full"
+                style={{ background: d3.rule }}
+              >
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.min(100, collectedShare)}%`,
+                    background: `linear-gradient(90deg,${d3.brass},${d3.brassDeep})`
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* outstanding by age */}
+            <div className="mt-9 flex items-end gap-3 sm:gap-5" style={{ height: 180 }}>
+              {data.aging.map((bucket, i) => {
+                const peak = Math.max(1, ...data.aging.map((b) => b.total));
+                return (
+                  <div key={bucket.bucket} className="flex flex-1 flex-col items-center gap-3">
+                    <span className={`${serif} text-sm font-semibold`}>
+                      {formatCurrency(bucket.total)}
+                    </span>
+                    <div className="flex w-full flex-1 items-end">
+                      <div
+                        className="w-full"
+                        style={{ height: `${Math.max(2, (bucket.total / peak) * 100)}%` }}
+                      >
+                        <MaterialBlock
+                          tone={agingTones[i % agingTones.length]}
+                          className="h-full w-full"
+                        />
+                      </div>
+                    </div>
+                    <span
+                      className="text-[0.7rem] font-semibold uppercase tracking-[0.12em]"
+                      style={{ color: d3.haze }}
+                    >
+                      {bucket.bucket} days
+                    </span>
+                  </div>
+                );
+              })}
             </div>
             <p
               className="mt-7 border-t pt-5 text-sm leading-relaxed"
               style={{ borderColor: d3.rule, color: d3.graphite }}
             >
               <span className="font-semibold" style={{ color: d3.ink }}>
-                Friday set the pace
+                {formatCurrency(data.outstanding)} outstanding
               </span>{" "}
-              — an $8.9k day driven by two Trade B fabrication orders. Weekend
-              will-call held steady against a quiet Sunday.
+              across {data.recentOrders.length} recent orders — the aging
+              columns above show where collection effort should focus.
             </p>
           </div>
 
-          {/* department mix */}
+          {/* payment mix */}
           <div
             className="border p-7"
             style={{ borderColor: d3.rule, background: d3.card }}
           >
             <Eyebrow>Figure 2</Eyebrow>
             <h2 className={`${serif} mt-2 text-2xl font-semibold`}>
-              Department mix
+              Payment status
             </h2>
-            <ul className="mt-6 space-y-5">
-              {departments.map((dpt) => (
-                <li key={dpt.name}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <MaterialBlock tone={dpt.tone} className="h-7 w-7" />
-                      <span className="text-sm font-semibold">{dpt.name}</span>
+            {data.paymentBreakdown.length ? (
+              <ul className="mt-6 space-y-5">
+                {data.paymentBreakdown.map((row) => (
+                  <li key={row.status}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold">
+                          {titleCase(row.status)}
+                        </span>
+                        <span className="text-[0.7rem]" style={{ color: d3.haze }}>
+                          {row.count} {row.count === 1 ? "order" : "orders"}
+                        </span>
+                      </div>
+                      <span className={`${serif} text-base font-semibold`}>
+                        {formatCurrency(row.total)}
+                      </span>
                     </div>
-                    <span className={`${serif} text-base font-semibold`}>
-                      {dpt.rev}
-                    </span>
-                  </div>
-                  <div
-                    className="mt-2 h-2 w-full overflow-hidden rounded-full"
-                    style={{ background: d3.rule }}
-                  >
                     <div
-                      className="h-full rounded-full"
-                      style={{ width: `${dpt.share}%`, background: d3.ink }}
-                    />
-                  </div>
-                  <span
-                    className="mt-1 block text-[0.7rem] uppercase tracking-[0.12em]"
-                    style={{ color: d3.haze }}
-                  >
-                    {dpt.share}% of revenue
+                      className="mt-2 h-2 w-full overflow-hidden rounded-full"
+                      style={{ background: d3.rule }}
+                    >
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${(row.total / paymentPeak) * 100}%`,
+                          background: d3.ink
+                        }}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-6 text-sm" style={{ color: d3.haze }}>
+                No orders in range.
+              </p>
+            )}
+
+            <p
+              className="mt-7 border-t pt-5 text-[0.78rem] leading-relaxed"
+              style={{ borderColor: d3.rule, color: d3.graphite }}
+            >
+              {data.hasCostData ? (
+                <>
+                  Gross profit across recent orders:{" "}
+                  <span className="font-semibold" style={{ color: d3.ink }}>
+                    {formatCurrency(data.grossProfit)}
                   </span>
-                </li>
-              ))}
-            </ul>
+                  .
+                </>
+              ) : (
+                <>
+                  Gross margin stays hidden until product costs are entered in
+                  the catalog manager.
+                </>
+              )}
+            </p>
           </div>
         </div>
       </section>
 
-      {/* top items — editorial list */}
+      {/* recent orders — editorial list */}
       <section className="mx-auto max-w-[1280px] px-5 pt-10 sm:px-8">
         <div
           className="border p-7 sm:p-9"
@@ -231,37 +305,53 @@ export function D3Reports() {
             <div>
               <Eyebrow>Figure 3</Eyebrow>
               <h2 className={`${serif} mt-2 text-2xl font-semibold`}>
-                The bestsellers list
+                Recent orders
               </h2>
             </div>
             <Link
-              href="/design-lab/d3/category"
+              href="/design-lab/d3/orders"
               className="hidden text-[0.76rem] font-semibold uppercase tracking-[0.14em] underline underline-offset-[6px] sm:inline"
             >
-              Open catalog
+              Open orders desk
             </Link>
           </div>
 
-          <ul className="mt-6">
-            {topItems.map((t) => (
-              <li
-                key={t.rank}
-                className="grid grid-cols-[auto_1fr_auto] items-center gap-5 border-t py-5 sm:grid-cols-[auto_1fr_auto_auto]"
-                style={{ borderColor: d3.rule }}
-              >
-                <span className={`${serif} text-3xl`} style={{ color: d3.brass }}>
-                  {t.rank}
-                </span>
-                <span className={`${serif} text-lg font-semibold`}>{t.name}</span>
-                <span className="hidden text-right text-sm sm:block" style={{ color: d3.graphite }}>
-                  {t.units} units
-                </span>
-                <span className={`${serif} text-right text-xl font-semibold`}>
-                  {t.rev}
-                </span>
-              </li>
-            ))}
-          </ul>
+          {data.recentOrders.length ? (
+            <ul className="mt-6">
+              {data.recentOrders.map((order, i) => (
+                <li
+                  key={order.id}
+                  className="grid grid-cols-[auto_1fr_auto] items-center gap-5 border-t py-5 sm:grid-cols-[auto_1fr_auto_auto_auto]"
+                  style={{ borderColor: d3.rule }}
+                >
+                  <span className={`${serif} text-3xl`} style={{ color: d3.brass }}>
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span>
+                    <span className={`${serif} block text-lg font-semibold`}>
+                      {order.customerName}
+                    </span>
+                    <span className="text-[0.72rem] uppercase tracking-[0.12em]" style={{ color: d3.haze }}>
+                      {order.orderNumber} · {formatDate(order.createdAt)}
+                    </span>
+                  </span>
+                  <span className="hidden text-right text-sm sm:block" style={{ color: d3.graphite }}>
+                    {titleCase(order.paymentStatus)}
+                  </span>
+                  <span className="hidden text-right text-sm sm:block" style={{ color: d3.graphite }}>
+                    {order.margin === null ? "—" : formatCurrency(order.margin)}
+                  </span>
+                  <span className={`${serif} text-right text-xl font-semibold`}>
+                    {formatCurrency(order.total)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-6 text-sm" style={{ color: d3.haze }}>
+              Orders will appear here once they are placed.
+            </p>
+          )}
         </div>
       </section>
 
@@ -279,7 +369,9 @@ export function D3Reports() {
               Editor's note
             </span>
             <h2 className={`${serif} mt-3 text-3xl font-semibold leading-tight`}>
-              Steel carries the issue, but hardware is climbing the column.
+              {data.outstanding > 0
+                ? "Receivables carry the issue — chase the aging columns."
+                : "A clean ledger this month — every order collected."}
             </h2>
           </div>
           <Link

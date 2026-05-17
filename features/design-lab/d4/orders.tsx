@@ -6,37 +6,27 @@ import {
   ArrowUpRight,
   CheckCircle2,
   Clock,
+  Loader2,
   Package,
   PackageCheck,
   Search,
   Sparkles,
   Truck
 } from "lucide-react";
+import { useLiveOrders } from "@/features/design-lab/use-live-orders";
+import type { OrderRecord } from "@/lib/order-store";
 import { D4Shell, brandClasses } from "./shell";
 
 type Status = "New" | "Packing" | "Ready" | "Completed";
 
-type Order = {
-  id: string;
-  customer: string;
-  company: string;
-  items: number;
-  total: number;
-  status: Status;
-  channel: "Online" | "Counter" | "Phone";
-  placed: string;
-};
-
-const ORDERS: Order[] = [
-  { id: "GW-4821", customer: "Marcus Tate", company: "Tate Fence Co.", items: 7, total: 642.18, status: "New", channel: "Online", placed: "8 min ago" },
-  { id: "GW-4820", customer: "Dana Reyes", company: "Reyes Welding", items: 3, total: 218.5, status: "New", channel: "Phone", placed: "26 min ago" },
-  { id: "GW-4819", customer: "Priya Shah", company: "Shah General Contracting", items: 14, total: 1894.0, status: "Packing", channel: "Online", placed: "1 hr ago" },
-  { id: "GW-4818", customer: "Cody Lin", company: "Lin Ironworks", items: 5, total: 412.75, status: "Packing", channel: "Counter", placed: "2 hr ago" },
-  { id: "GW-4817", customer: "Erin Walsh", company: "Walsh & Sons", items: 9, total: 778.4, status: "Ready", channel: "Online", placed: "3 hr ago" },
-  { id: "GW-4816", customer: "Sam Doyle", company: "Doyle Gates LLC", items: 2, total: 96.0, status: "Ready", channel: "Online", placed: "4 hr ago" },
-  { id: "GW-4815", customer: "Nina Ortiz", company: "Ortiz Metal Design", items: 11, total: 1340.2, status: "Completed", channel: "Counter", placed: "Yesterday" },
-  { id: "GW-4814", customer: "Will Chen", company: "Chen Fabrication", items: 6, total: 503.6, status: "Completed", channel: "Phone", placed: "Yesterday" }
-];
+// Maps real OrderRecord statuses onto the design's 4-bucket model.
+function toDisplayStatus(status: OrderRecord["status"]): Status {
+  if (status === "completed") return "Completed";
+  if (status === "ready_for_pickup" || status === "out_for_delivery")
+    return "Ready";
+  if (status === "confirmed" || status === "picking") return "Packing";
+  return "New";
+}
 
 const STATUS_META: Record<
   Status,
@@ -50,32 +40,81 @@ const STATUS_META: Record<
 
 const TABS: ("All" | Status)[] = ["All", "New", "Packing", "Ready", "Completed"];
 
+function relativeTime(value: string) {
+  const created = new Date(value).getTime();
+  if (!Number.isFinite(created)) return "—";
+  const diffMs = Date.now() - created;
+  const minutes = Math.round(diffMs / 60000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  const days = Math.round(hours / 24);
+  if (days === 1) return "Yesterday";
+  return `${days} days ago`;
+}
+
+type Row = {
+  id: string;
+  orderNumber: string;
+  customer: string;
+  company: string;
+  itemCount: number;
+  total: number;
+  status: Status;
+  channel: string;
+  placed: string;
+};
+
 export function D4Orders() {
+  const { orders, isLoading } = useLiveOrders();
   const [tab, setTab] = useState<"All" | Status>("All");
   const [query, setQuery] = useState("");
 
+  const rows = useMemo<Row[]>(
+    () =>
+      orders.map((order) => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        customer: order.customerName || "Guest customer",
+        company: order.companyName || order.customerName || "—",
+        itemCount: order.items.reduce(
+          (sum, item) => sum + (item.quantity || 0),
+          0
+        ),
+        total: order.total,
+        status: toDisplayStatus(order.status),
+        channel: order.isQuoteRequest
+          ? "Quote"
+          : order.fulfillmentMethod === "pickup"
+            ? "Pickup"
+            : "Delivery",
+        placed: relativeTime(order.createdAt)
+      })),
+    [orders]
+  );
+
   const filtered = useMemo(
     () =>
-      ORDERS.filter(
+      rows.filter(
         (o) =>
           (tab === "All" || o.status === tab) &&
           (o.customer.toLowerCase().includes(query.toLowerCase()) ||
-            o.id.toLowerCase().includes(query.toLowerCase()) ||
+            o.orderNumber.toLowerCase().includes(query.toLowerCase()) ||
             o.company.toLowerCase().includes(query.toLowerCase()))
       ),
-    [tab, query]
+    [rows, tab, query]
   );
 
-  const counts = useMemo(
-    () => ({
-      open: ORDERS.filter((o) => o.status !== "Completed").length,
-      ready: ORDERS.filter((o) => o.status === "Ready").length,
-      revenue: ORDERS.reduce((s, o) => s + o.total, 0),
-      avg:
-        ORDERS.reduce((s, o) => s + o.total, 0) / ORDERS.length || 0
-    }),
-    []
-  );
+  const counts = useMemo(() => {
+    const revenue = rows.reduce((sum, o) => sum + o.total, 0);
+    return {
+      open: rows.filter((o) => o.status !== "Completed").length,
+      ready: rows.filter((o) => o.status === "Ready").length,
+      revenue,
+      avg: rows.length ? revenue / rows.length : 0
+    };
+  }, [rows]);
 
   return (
     <D4Shell active="orders">
@@ -88,8 +127,8 @@ export function D4Orders() {
             Orders dashboard
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Good morning — {counts.open} orders need attention today. Keep them
-            moving.
+            Good morning — {counts.open} order{counts.open === 1 ? "" : "s"}{" "}
+            need attention today. Keep them moving.
           </p>
         </div>
       </div>
@@ -98,9 +137,9 @@ export function D4Orders() {
         {/* Stat cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { label: "Open orders", value: String(counts.open), icon: Clock, trend: "+2 vs yesterday", tint: "bg-orange-100 text-orange-600" },
+            { label: "Open orders", value: String(counts.open), icon: Clock, trend: "Needs attention", tint: "bg-orange-100 text-orange-600" },
             { label: "Ready for pickup", value: String(counts.ready), icon: Truck, trend: "Notify customers", tint: "bg-violet-100 text-violet-600" },
-            { label: "Revenue today", value: `$${counts.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, icon: ArrowUpRight, trend: "+18% week-over-week", tint: "bg-emerald-100 text-emerald-600" },
+            { label: "Total revenue", value: `$${counts.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, icon: ArrowUpRight, trend: "Across all orders", tint: "bg-emerald-100 text-emerald-600" },
             { label: "Avg. order value", value: `$${counts.avg.toFixed(0)}`, icon: Package, trend: "Healthy", tint: "bg-sky-100 text-sky-600" }
           ].map((s) => (
             <div key={s.label} className={`${brandClasses.card} p-5`}>
@@ -126,8 +165,8 @@ export function D4Orders() {
             {TABS.map((t) => {
               const n =
                 t === "All"
-                  ? ORDERS.length
-                  : ORDERS.filter((o) => o.status === t).length;
+                  ? rows.length
+                  : rows.filter((o) => o.status === t).length;
               return (
                 <button
                   key={t}
@@ -164,7 +203,14 @@ export function D4Orders() {
 
         {/* Table */}
         <div className={`${brandClasses.card} mt-4 overflow-hidden`}>
-          {filtered.length === 0 ? (
+          {isLoading ? (
+            <div className="grid place-items-center py-20 text-center">
+              <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+              <p className="mt-4 text-sm font-semibold text-slate-500">
+                Loading live orders…
+              </p>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="grid place-items-center py-20 text-center">
               <div className="grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-500">
                 <CheckCircle2 className="h-7 w-7" />
@@ -199,7 +245,9 @@ export function D4Orders() {
                         className="border-b border-slate-50 transition last:border-0 hover:bg-orange-50/40"
                       >
                         <td className="px-5 py-3.5">
-                          <p className="font-bold text-slate-900">{o.id}</p>
+                          <p className="font-bold text-slate-900">
+                            {o.orderNumber}
+                          </p>
                           <p className="text-xs text-slate-400">{o.placed}</p>
                         </td>
                         <td className="px-5 py-3.5">
@@ -214,7 +262,7 @@ export function D4Orders() {
                           </span>
                         </td>
                         <td className="px-5 py-3.5 text-slate-600">
-                          {o.items}
+                          {o.itemCount}
                         </td>
                         <td className="px-5 py-3.5 font-bold text-slate-900">
                           ${o.total.toFixed(2)}
@@ -254,7 +302,7 @@ export function D4Orders() {
 
         <div className="mt-4 flex items-center justify-between">
           <p className="text-xs text-slate-400">
-            Showing {filtered.length} of {ORDERS.length} orders
+            Showing {filtered.length} of {rows.length} orders
           </p>
           <Link
             href="/design-lab/d4/reports"

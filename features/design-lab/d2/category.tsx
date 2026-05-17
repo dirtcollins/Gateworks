@@ -11,38 +11,46 @@ import {
   Search,
   SlidersHorizontal
 } from "lucide-react";
-import { AccentButton, D2, D2Shell, Panel, PanelHead, PartImage, Tag, mono } from "./kit";
+import { AccentButton, D2, D2Shell, Panel, PanelHead, PartPhoto, Tag, mono } from "./kit";
+import {
+  featuredCategoryProducts,
+  featuredProduct
+} from "@/features/design-lab/live-data";
+import type { Product } from "@/lib/types";
 
 type Item = {
   id: string;
+  sku: string;
   name: string;
   group: string;
   price: number;
   stock: number;
-  rating: number;
+  image?: string;
 };
 
-const ITEMS: Item[] = [
-  { id: "GW-7740", name: 'Bolt-On Gate Hinge 6" Weld-Free', group: "Hinges", price: 38.5, stock: 240, rating: 4.8 },
-  { id: "GW-2208", name: "Galvanized Drop Rod Latch", group: "Latches", price: 24.0, stock: 96, rating: 4.6 },
-  { id: "GW-4417", name: "Slide Gate V-Track Roller — Cast", group: "Rollers", price: 19.95, stock: 410, rating: 4.7 },
-  { id: "GW-9051", name: 'Steel Square Tube 2"x2"x11ga', group: "Steel", price: 61.75, stock: 18, rating: 4.9 },
-  { id: "GW-3390", name: "Gate Anti-Sag Truss Kit", group: "Hinges", price: 52.25, stock: 130, rating: 4.5 },
-  { id: "GW-1180", name: "Heavy Gravity Latch — Lockable", group: "Latches", price: 31.4, stock: 0, rating: 4.4 },
-  { id: "GW-6602", name: "Cantilever Gate Truck Assembly", group: "Rollers", price: 144.0, stock: 22, rating: 4.8 },
-  { id: "GW-2275", name: "Self-Closing Spring Hinge Pair", group: "Hinges", price: 47.8, stock: 188, rating: 4.6 },
-  { id: "GW-8810", name: 'Angle Iron 2"x2"x1/4" — 20ft', group: "Steel", price: 88.9, stock: 64, rating: 4.7 },
-  { id: "GW-5520", name: "Pad-Lockable Slide Bolt", group: "Latches", price: 16.25, stock: 305, rating: 4.3 },
-  { id: "GW-4490", name: "Internal Track Roller — Sealed", group: "Rollers", price: 27.6, stock: 90, rating: 4.6 },
-  { id: "GW-7012", name: 'Flat Bar Stock 1/4" x 2" — 20ft', group: "Steel", price: 54.0, stock: 41, rating: 4.5 }
-];
+// Real catalog products for the featured category, mapped to the d2 row shape.
+const ITEMS: Item[] = featuredCategoryProducts.map((product: Product) => {
+  const variant = product.variants[0];
+  return {
+    id: product.id,
+    sku: variant?.sku ?? product.id,
+    name: product.title,
+    group: variant?.options.material ?? product.category.name,
+    price: product.price,
+    stock: variant?.inventoryQuantity ?? 0,
+    image: product.images[0]?.url ?? variant?.image
+  };
+});
 
-const GROUPS = ["All", "Hinges", "Latches", "Rollers", "Steel"];
-const SORTS = ["Top rated", "Price ↑", "Price ↓", "Stock"];
+const CATEGORY_NAME = featuredProduct.category.name;
+
+// Facet groups derived from the real variant materials in this category.
+const GROUPS = ["All", ...Array.from(new Set(ITEMS.map((item) => item.group)))];
+const SORTS = ["Price ↑", "Price ↓", "Stock", "A–Z"];
 
 export function D2Category() {
   const [group, setGroup] = useState("All");
-  const [sort, setSort] = useState("Top rated");
+  const [sort, setSort] = useState("Stock");
   const [query, setQuery] = useState("");
   const [inStock, setInStock] = useState(false);
   const [grid, setGrid] = useState(true);
@@ -52,25 +60,27 @@ export function D2Category() {
     if (inStock) r = r.filter((i) => i.stock > 0);
     if (query.trim()) {
       const q = query.toLowerCase();
-      r = r.filter((i) => i.name.toLowerCase().includes(q) || i.id.toLowerCase().includes(q));
+      r = r.filter(
+        (i) => i.name.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q)
+      );
     }
     return [...r].sort((a, b) => {
       if (sort === "Price ↑") return a.price - b.price;
       if (sort === "Price ↓") return b.price - a.price;
-      if (sort === "Stock") return b.stock - a.stock;
-      return b.rating - a.rating;
+      if (sort === "A–Z") return a.name.localeCompare(b.name);
+      return b.stock - a.stock;
     });
   }, [group, sort, query, inStock]);
 
   return (
-    <D2Shell active="catalog" kicker="CATALOG // GATE HARDWARE">
+    <D2Shell active="catalog" kicker={`CATALOG // ${CATEGORY_NAME.toUpperCase()}`}>
       <div
         className={`${mono} mb-5 flex items-center gap-1.5 text-[11px] uppercase tracking-wider`}
         style={{ color: D2.muted }}
       >
         <Link href="/design-lab/d2/home">Storefront</Link>
         <ChevronRight className="h-3 w-3" />
-        <span style={{ color: D2.accent }}>Gate Hardware</span>
+        <span style={{ color: D2.accent }}>{CATEGORY_NAME}</span>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -97,7 +107,7 @@ export function D2Category() {
                   className={`${mono} mb-2 text-[10px] uppercase tracking-[0.16em]`}
                   style={{ color: D2.muted }}
                 >
-                  Subgroup
+                  Material
                 </div>
                 <div className="flex flex-col gap-1">
                   {GROUPS.map((g) => {
@@ -231,10 +241,15 @@ export function D2Category() {
                   className="flex items-center gap-4 p-3.5 transition hover:bg-white/[0.02]"
                   style={{ borderTop: i > 0 ? `1px solid ${D2.line}` : undefined }}
                 >
-                  <PartImage seed={p.id} className="h-14 w-14 shrink-0" />
+                  <PartPhoto
+                    src={p.image}
+                    alt={p.name}
+                    seed={p.id}
+                    className="h-14 w-14 shrink-0"
+                  />
                   <div className="min-w-0 flex-1">
                     <div className={`${mono} text-[10px]`} style={{ color: D2.muted }}>
-                      {p.id} · {p.group}
+                      {p.sku} · {p.group}
                     </div>
                     <div className="truncate text-[13px] font-medium">{p.name}</div>
                   </div>
@@ -266,7 +281,13 @@ function ProductCard({ p }: { p: Item }) {
       style={{ background: D2.panel, border: `1px solid ${D2.line}` }}
     >
       <div className="p-3 pb-0">
-        <PartImage seed={p.id} className="aspect-[4/3] w-full" label={p.id} />
+        <PartPhoto
+          src={p.image}
+          alt={p.name}
+          seed={p.id}
+          className="aspect-[4/3] w-full"
+          label={p.sku}
+        />
       </div>
       <div className="flex flex-1 flex-col gap-2 p-3.5">
         <div className="flex items-center justify-between">
@@ -279,7 +300,7 @@ function ProductCard({ p }: { p: Item }) {
         <div className="mt-auto flex items-end justify-between pt-1">
           <div>
             <div className={`${mono} text-[10px]`} style={{ color: D2.muted }}>
-              ★ {p.rating}
+              {p.sku}
             </div>
             <div className={`${mono} text-[18px] font-bold`} style={{ color: D2.accent }}>
               ${p.price.toFixed(2)}

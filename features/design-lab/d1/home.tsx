@@ -1,16 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   BadgeCheck,
-  Boxes,
   ClipboardCheck,
-  Flame,
-  Hammer,
   ShieldCheck,
-  Truck,
-  Wrench
+  Truck
 } from "lucide-react";
 import {
   D1DesignBadge,
@@ -19,44 +16,34 @@ import {
   SectionHeader,
   formatUsd
 } from "./kit";
+import {
+  getCategoryProducts,
+  newArrivals,
+  popularProducts,
+  topCategories
+} from "@/features/design-lab/live-data";
 
-const CATEGORIES = [
-  { name: "Gate Hardware", count: 184, icon: Wrench, slug: "gate-hardware" },
-  { name: "Structural Steel", count: 246, icon: Boxes, slug: "steel-tubing" },
-  { name: "Ornamental Iron", count: 132, icon: Hammer, slug: "ornamental-iron" },
-  { name: "Welding Supply", count: 97, icon: Flame, slug: "welding" }
-];
+/* Real catalog departments with live product counts. */
+const CATEGORIES = topCategories.map((category) => ({
+  name: category.name,
+  count: getCategoryProducts(category.slug).length,
+  slug: category.slug
+}));
 
-const FEATURED = [
-  {
-    name: "Heavy-Duty Cantilever Roller Kit",
-    sku: "GW-CR-2400",
-    price: 289.0,
-    tag: "Best seller",
-    tone: "#2f6f4e"
-  },
-  {
-    name: '2" x 2" x 11ga Square Steel Tube',
-    sku: "ST-SQ-2211",
-    price: 42.5,
-    tag: "Mill stock",
-    tone: "#6c685c"
-  },
-  {
-    name: "Forged Scroll Picket — 36 in",
-    sku: "OI-SCR-36",
-    price: 18.75,
-    tag: "New",
-    tone: "#d6a93f"
-  },
-  {
-    name: "Welded Box Hinge Set — Bolt-On",
-    sku: "GW-BH-880",
-    price: 64.0,
-    tag: "Crew pick",
-    tone: "#16150f"
-  }
-];
+/* Real featured stock — popular products fall back to new arrivals. */
+const FEATURED_TONES = ["#2f6f4e", "#6c685c", "#d6a93f", "#16150f"];
+const FEATURED_TAGS = ["Best seller", "Mill stock", "New", "Crew pick"];
+const FEATURED = (popularProducts.length ? popularProducts : newArrivals)
+  .slice(0, 4)
+  .map((product, index) => ({
+    name: product.title,
+    sku: product.variants[0]?.sku ?? product.id,
+    price: product.price,
+    tag: FEATURED_TAGS[index] ?? "In stock",
+    tone: FEATURED_TONES[index] ?? "#16150f",
+    image: product.images[0]?.url,
+    slug: product.slug
+  }));
 
 const TRUST = [
   { icon: Truck, head: "Same-day will-call", body: "Order by 11am, pick up at the counter today." },
@@ -188,8 +175,8 @@ export function D1Home() {
               href="/design-lab/d1/category"
             >
               <div className="flex items-start justify-between">
-                <span className="grid h-12 w-12 place-items-center border border-d1-ink text-d1-ink transition group-hover:bg-d1-pine group-hover:text-white group-hover:border-d1-pine">
-                  <cat.icon className="h-5 w-5" />
+                <span className="grid h-12 w-12 place-items-center border border-d1-ink text-base font-black text-d1-ink transition group-hover:bg-d1-pine group-hover:text-white group-hover:border-d1-pine">
+                  {cat.name.charAt(0)}
                 </span>
                 <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-d1-steel">
                   {cat.count} SKUs
@@ -233,14 +220,23 @@ export function D1Home() {
                 className="relative flex h-44 items-center justify-center"
                 style={{ backgroundColor: product.tone }}
               >
-                <span
-                  className="text-5xl font-black"
-                  style={{
-                    color: "rgba(246,243,236,0.18)"
-                  }}
-                >
-                  GW
-                </span>
+                {product.image ? (
+                  <Image
+                    alt={product.name}
+                    className="h-full w-full object-contain p-4"
+                    height={320}
+                    quality={75}
+                    src={product.image}
+                    width={320}
+                  />
+                ) : (
+                  <span
+                    className="text-5xl font-black"
+                    style={{ color: "rgba(246,243,236,0.18)" }}
+                  >
+                    GW
+                  </span>
+                )}
                 <span className="absolute left-3 top-3 bg-d1-paper px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-d1-ink">
                   {product.tag}
                 </span>

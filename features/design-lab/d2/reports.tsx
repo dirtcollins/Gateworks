@@ -5,57 +5,77 @@
 import { useState } from "react";
 import { ArrowUpRight, Download, TrendingUp } from "lucide-react";
 import { D2, D2Shell, Panel, PanelHead, StatCell, Tag, mono } from "./kit";
+import type { ReportData } from "@/features/admin/reports/reports-dashboard";
 
 const RANGES = ["7D", "30D", "QTR", "YTD"];
 
-const KPIS = [
-  { label: "Revenue (30d)", value: "$486k", delta: "12.4%", good: true },
-  { label: "Orders shipped", value: "1,204", delta: "8.1%", good: true },
-  { label: "Avg order value", value: "$403", delta: "3.6%", good: true },
-  { label: "Return rate", value: "1.2%", delta: "0.4%", good: false }
-];
+const PAYMENT_COLORS: Record<string, string> = {
+  paid: D2.accent,
+  partial: "#f5b53d",
+  unpaid: "#ff6b6b",
+  overpaid: "#3da0f5",
+  refunded: "#8a6bf5",
+  failed: "#ff6b6b"
+};
 
-const REVENUE = [
-  { d: "Mon", v: 58 },
-  { d: "Tue", v: 72 },
-  { d: "Wed", v: 64 },
-  { d: "Thu", v: 91 },
-  { d: "Fri", v: 100 },
-  { d: "Sat", v: 47 },
-  { d: "Sun", v: 33 }
-];
+function currency(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0
+  }).format(value);
+}
 
-const TOP_SKUS = [
-  { id: "GW-7740", name: "Bolt-On Gate Hinge 6\"", units: 1840, rev: 63756, share: 100 },
-  { id: "GW-9051", name: "Steel Square Tube 2x2", units: 612, rev: 37791, share: 59 },
-  { id: "GW-2208", name: "Drop Rod Latch Assembly", units: 1422, rev: 30715, share: 48 },
-  { id: "GW-4417", name: "V-Track Roller — Cast", units: 980, rev: 19551, share: 31 },
-  { id: "GW-6602", name: "Cantilever Truck Assembly", units: 188, rev: 27072, share: 42 }
-];
+function titleCase(value: string) {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
 
-const SEGMENTS = [
-  { name: "Fencing contractors", pct: 42, color: D2.accent },
-  { name: "Steel fabricators", pct: 28, color: "#3da0f5" },
-  { name: "General contractors", pct: 18, color: "#f5b53d" },
-  { name: "Walk-in / card", pct: 12, color: "#8a6bf5" }
-];
+function formatDate(value: string) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric"
+  }).format(new Date(value));
+}
 
-const REGIONS = [
-  { r: "Front Range", rev: 184, pct: 38 },
-  { r: "Western Slope", rev: 121, pct: 25 },
-  { r: "Northern CO", rev: 97, pct: 20 },
-  { r: "Out-of-state", rev: 84, pct: 17 }
-];
-
-const ALERTS = [
-  { msg: "GW-9051 — 18 units left, below 50 reorder point", tone: "warn" as const },
-  { msg: "Hartman Welding — invoice 14d past due", tone: "bad" as const },
-  { msg: "Q2 revenue tracking 9% ahead of target", tone: "accent" as const }
-];
-
-export function D2Reports() {
+export function D2Reports({ data }: { data: ReportData }) {
   const [range, setRange] = useState("30D");
-  const maxRev = Math.max(...REVENUE.map((r) => r.v));
+
+  const kpis = [
+    {
+      label: "Revenue (30d)",
+      value: currency(data.revenue30),
+      delta: "live",
+      good: true
+    },
+    {
+      label: "Orders (30d)",
+      value: String(data.orders30),
+      delta: "live",
+      good: true
+    },
+    {
+      label: "Avg order value",
+      value: currency(data.avgOrderValue),
+      delta: "live",
+      good: true
+    },
+    {
+      label: "Gross margin",
+      value: data.hasCostData ? `${data.grossMarginPct.toFixed(1)}%` : "No cost data",
+      delta: data.hasCostData ? "live" : "n/a",
+      good: data.hasCostData
+    }
+  ];
+
+  const collectedPct =
+    data.billed > 0 ? Math.min(100, (data.collected / data.billed) * 100) : 0;
+  const maxAging = Math.max(1, ...data.aging.map((bucket) => bucket.total));
+  const paymentTotal = data.paymentBreakdown.reduce((sum, row) => sum + row.total, 0);
+  const maxRecentTotal = Math.max(
+    1,
+    ...data.recentOrders.map((order) => order.total)
+  );
 
   return (
     <D2Shell active="reports" kicker="ADMIN // ANALYTICS">
@@ -91,131 +111,200 @@ export function D2Reports() {
         </div>
       </div>
 
+      {!data.configured ? (
+        <Panel className="mb-6 flex items-start gap-3 p-4">
+          <Tag tone="warn">OFFLINE</Tag>
+          <span className={`${mono} text-[12px] leading-relaxed`} style={{ color: D2.muted }}>
+            Supabase is not configured — live financial data is unavailable. Add the Supabase
+            keys to .env.local to populate this report.
+          </span>
+        </Panel>
+      ) : null}
+
       {/* KPIs */}
       <Panel className="mb-6">
         <div className="grid grid-cols-2 lg:grid-cols-4">
-          {KPIS.map((k) => (
+          {kpis.map((k) => (
             <StatCell key={k.label} {...k} />
           ))}
         </div>
       </Panel>
 
       <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
-        {/* revenue chart */}
+        {/* accounts receivable */}
         <Panel>
           <PanelHead
-            title="Revenue Trend"
-            meta={`${range} · $K / DAY`}
+            title="Accounts Receivable"
+            meta="BILLED vs COLLECTED"
             action={
               <span
                 className={`${mono} flex items-center gap-1 text-[11px]`}
                 style={{ color: D2.accent }}
               >
-                <TrendingUp className="h-3.5 w-3.5" /> +12.4%
+                <TrendingUp className="h-3.5 w-3.5" />{" "}
+                {collectedPct.toFixed(0)}% collected
               </span>
             }
           />
           <div className="p-5">
-            <div className="flex h-52 items-end gap-3">
-              {REVENUE.map((r) => (
-                <div key={r.d} className="flex flex-1 flex-col items-center gap-2">
-                  <span className={`${mono} text-[10px]`} style={{ color: D2.muted }}>
-                    ${r.v}k
-                  </span>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                ["Billed", data.billed, D2.text],
+                ["Collected", data.collected, D2.accent],
+                ["Outstanding", data.outstanding, "#ff6b6b"]
+              ].map(([label, value, color]) => (
+                <div
+                  key={String(label)}
+                  className="rounded-[3px] p-3"
+                  style={{ background: D2.panelHi, border: `1px solid ${D2.line}` }}
+                >
                   <div
-                    className="w-full rounded-t-[3px] transition-all"
-                    style={{
-                      height: `${(r.v / maxRev) * 150}px`,
-                      background:
-                        r.v === maxRev
-                          ? D2.accent
-                          : `linear-gradient(180deg, ${D2.accent}88, ${D2.accent}22)`,
-                      boxShadow: r.v === maxRev ? `0 0 18px ${D2.accent}66` : undefined
-                    }}
-                  />
-                  <span className={`${mono} text-[10px] uppercase`} style={{ color: D2.muted }}>
-                    {r.d}
-                  </span>
+                    className={`${mono} text-[10px] uppercase tracking-[0.16em]`}
+                    style={{ color: D2.muted }}
+                  >
+                    {label}
+                  </div>
+                  <div
+                    className={`${mono} mt-1 text-[20px] font-bold`}
+                    style={{ color: color as string }}
+                  >
+                    {currency(value as number)}
+                  </div>
                 </div>
               ))}
             </div>
+            <div
+              className="mt-4 h-2 overflow-hidden rounded-full"
+              style={{ background: D2.line }}
+            >
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${collectedPct}%`,
+                  background: D2.accent,
+                  boxShadow: `0 0 10px ${D2.accent}`
+                }}
+              />
+            </div>
           </div>
-          {/* regions */}
+          {/* aging */}
           <div className="border-t" style={{ borderColor: D2.line }}>
             <div
               className={`${mono} px-5 py-2.5 text-[10px] uppercase tracking-[0.16em]`}
               style={{ color: D2.muted }}
             >
-              Revenue by region
+              Outstanding by age
             </div>
-            {REGIONS.map((rg, i) => (
+            {data.aging.map((bucket, i) => (
               <div
-                key={rg.r}
+                key={bucket.bucket}
                 className="flex items-center gap-3 px-5 py-2.5"
                 style={{ borderTop: i > 0 ? `1px solid ${D2.line}` : undefined }}
               >
-                <span className="w-32 text-[12px]">{rg.r}</span>
+                <span className="w-32 text-[12px]">{bucket.bucket} days</span>
                 <div
                   className="h-2 flex-1 overflow-hidden rounded-full"
                   style={{ background: D2.line }}
                 >
                   <div
                     className="h-full rounded-full"
-                    style={{ width: `${rg.pct}%`, background: D2.accent }}
+                    style={{
+                      width: `${(bucket.total / maxAging) * 100}%`,
+                      background: D2.accent
+                    }}
                   />
                 </div>
-                <span className={`${mono} w-16 text-right text-[12px] font-bold`}>
-                  ${rg.rev}k
-                </span>
-                <span className={`${mono} w-10 text-right text-[11px]`} style={{ color: D2.muted }}>
-                  {rg.pct}%
+                <span className={`${mono} w-20 text-right text-[12px] font-bold`}>
+                  {currency(bucket.total)}
                 </span>
               </div>
             ))}
           </div>
         </Panel>
 
-        {/* segments + alerts */}
+        {/* payment mix + signals */}
         <div className="flex flex-col gap-6">
           <Panel>
-            <PanelHead title="Customer Mix" meta="BY REVENUE" />
+            <PanelHead title="Payment Status" meta="BY REVENUE" />
             <div className="p-5">
-              {/* stacked bar */}
-              <div
-                className="flex h-3 overflow-hidden rounded-full"
-                style={{ border: `1px solid ${D2.line}` }}
-              >
-                {SEGMENTS.map((s) => (
-                  <div key={s.name} style={{ width: `${s.pct}%`, background: s.color }} />
-                ))}
-              </div>
-              <ul className="mt-4 flex flex-col gap-2.5">
-                {SEGMENTS.map((s) => (
-                  <li key={s.name} className="flex items-center gap-2.5">
-                    <span
-                      className="h-2.5 w-2.5 rounded-[2px]"
-                      style={{ background: s.color }}
-                    />
-                    <span className="flex-1 text-[12px]">{s.name}</span>
-                    <span className={`${mono} text-[12px] font-bold`}>{s.pct}%</span>
-                  </li>
-                ))}
-              </ul>
+              {data.paymentBreakdown.length ? (
+                <>
+                  <div
+                    className="flex h-3 overflow-hidden rounded-full"
+                    style={{ border: `1px solid ${D2.line}` }}
+                  >
+                    {data.paymentBreakdown.map((row) => (
+                      <div
+                        key={row.status}
+                        style={{
+                          width: `${
+                            paymentTotal > 0 ? (row.total / paymentTotal) * 100 : 0
+                          }%`,
+                          background: PAYMENT_COLORS[row.status] ?? D2.muted
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <ul className="mt-4 flex flex-col gap-2.5">
+                    {data.paymentBreakdown.map((row) => (
+                      <li key={row.status} className="flex items-center gap-2.5">
+                        <span
+                          className="h-2.5 w-2.5 rounded-[2px]"
+                          style={{ background: PAYMENT_COLORS[row.status] ?? D2.muted }}
+                        />
+                        <span className="flex-1 text-[12px]">
+                          {titleCase(row.status)}{" "}
+                          <span style={{ color: D2.muted }}>· {row.count} orders</span>
+                        </span>
+                        <span className={`${mono} text-[12px] font-bold`}>
+                          {currency(row.total)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p className={`${mono} text-[12px]`} style={{ color: D2.muted }}>
+                  No orders in range.
+                </p>
+              )}
             </div>
           </Panel>
 
           <Panel>
-            <PanelHead title="Signals" meta="3 ITEMS" />
+            <PanelHead title="Signals" meta="MARGIN" />
             <ul>
-              {ALERTS.map((a, i) => (
+              {[
+                {
+                  tone: data.hasCostData ? ("accent" as const) : ("warn" as const),
+                  tag: data.hasCostData ? "GP" : "COST",
+                  msg: data.hasCostData
+                    ? `Gross profit across recent orders: ${currency(data.grossProfit)}`
+                    : "Gross margin hidden until product unit costs are entered in the catalog."
+                },
+                {
+                  tone:
+                    data.outstanding > 0 ? ("bad" as const) : ("accent" as const),
+                  tag: "A/R",
+                  msg:
+                    data.outstanding > 0
+                      ? `${currency(data.outstanding)} outstanding across receivable buckets.`
+                      : "All billed revenue has been collected."
+                },
+                {
+                  tone: "accent" as const,
+                  tag: "VOL",
+                  msg: `${data.orders30} orders in the last 30 days at ${currency(
+                    data.avgOrderValue
+                  )} average value.`
+                }
+              ].map((a, i) => (
                 <li
-                  key={a.msg}
+                  key={a.tag}
                   className="flex items-start gap-3 px-4 py-3"
                   style={{ borderTop: i > 0 ? `1px solid ${D2.line}` : undefined }}
                 >
-                  <Tag tone={a.tone}>
-                    {a.tone === "bad" ? "A/R" : a.tone === "warn" ? "STOCK" : "GOAL"}
-                  </Tag>
+                  <Tag tone={a.tone}>{a.tag}</Tag>
                   <span className="flex-1 text-[12px] leading-snug">{a.msg}</span>
                 </li>
               ))}
@@ -224,11 +313,11 @@ export function D2Reports() {
         </div>
       </div>
 
-      {/* top SKUs */}
+      {/* recent orders */}
       <Panel className="mt-6">
         <PanelHead
-          title="Top SKUs"
-          meta="BY REVENUE · 30D"
+          title="Recent Orders"
+          meta={`${data.recentOrders.length} · BY DATE`}
           action={
             <span
               className={`${mono} flex items-center gap-1 text-[11px] uppercase`}
@@ -242,54 +331,83 @@ export function D2Reports() {
           className={`${mono} grid grid-cols-[2fr_0.8fr_1fr_1.4fr] gap-2 px-4 py-2 text-[10px] uppercase tracking-wider`}
           style={{ color: D2.muted, borderBottom: `1px solid ${D2.line}` }}
         >
-          <span>SKU</span>
-          <span className="text-right">Units</span>
-          <span className="text-right">Revenue</span>
-          <span>Share</span>
+          <span>Order / Customer</span>
+          <span className="text-right">Date</span>
+          <span className="text-right">Total</span>
+          <span>Payment</span>
         </div>
-        {TOP_SKUS.map((s, i) => (
-          <div
-            key={s.id}
-            className="grid grid-cols-[2fr_0.8fr_1fr_1.4fr] items-center gap-2 px-4 py-3"
-            style={{ borderTop: i > 0 ? `1px solid ${D2.line}` : undefined }}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <span
-                className={`${mono} grid h-6 w-6 shrink-0 place-items-center rounded-[3px] text-[11px] font-bold`}
-                style={{
-                  background: i === 0 ? D2.accent : D2.panelHi,
-                  color: i === 0 ? D2.bg : D2.muted,
-                  border: `1px solid ${D2.line}`
-                }}
-              >
-                {i + 1}
-              </span>
-              <div className="min-w-0">
-                <div className={`${mono} text-[10px]`} style={{ color: D2.muted }}>
-                  {s.id}
+        {data.recentOrders.length ? (
+          data.recentOrders.map((order, i) => (
+            <div
+              key={order.id}
+              className="grid grid-cols-[2fr_0.8fr_1fr_1.4fr] items-center gap-2 px-4 py-3"
+              style={{ borderTop: i > 0 ? `1px solid ${D2.line}` : undefined }}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className={`${mono} grid h-6 w-6 shrink-0 place-items-center rounded-[3px] text-[11px] font-bold`}
+                  style={{
+                    background: i === 0 ? D2.accent : D2.panelHi,
+                    color: i === 0 ? D2.bg : D2.muted,
+                    border: `1px solid ${D2.line}`
+                  }}
+                >
+                  {i + 1}
+                </span>
+                <div className="min-w-0">
+                  <div className={`${mono} text-[10px]`} style={{ color: D2.muted }}>
+                    {order.orderNumber}
+                  </div>
+                  <div className="truncate text-[12px] font-medium">
+                    {order.customerName}
+                  </div>
                 </div>
-                <div className="truncate text-[12px] font-medium">{s.name}</div>
               </div>
-            </div>
-            <span className={`${mono} text-right text-[12px]`}>
-              {s.units.toLocaleString()}
-            </span>
-            <span className={`${mono} text-right text-[12px] font-bold`} style={{ color: D2.accent }}>
-              ${s.rev.toLocaleString()}
-            </span>
-            <div className="flex items-center gap-2">
-              <div
-                className="h-1.5 flex-1 overflow-hidden rounded-full"
-                style={{ background: D2.line }}
+              <span className={`${mono} text-right text-[12px]`} style={{ color: D2.muted }}>
+                {formatDate(order.createdAt)}
+              </span>
+              <span
+                className={`${mono} text-right text-[12px] font-bold`}
+                style={{ color: D2.accent }}
               >
+                {currency(order.total)}
+              </span>
+              <div className="flex items-center gap-2">
+                <Tag
+                  tone={
+                    order.paymentStatus === "paid"
+                      ? "accent"
+                      : order.paymentStatus === "partial"
+                      ? "warn"
+                      : "bad"
+                  }
+                >
+                  {titleCase(order.paymentStatus)}
+                </Tag>
                 <div
-                  className="h-full rounded-full"
-                  style={{ width: `${s.share}%`, background: D2.accent }}
-                />
+                  className="h-1.5 flex-1 overflow-hidden rounded-full"
+                  style={{ background: D2.line }}
+                >
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${(order.total / maxRecentTotal) * 100}%`,
+                      background: D2.accent
+                    }}
+                  />
+                </div>
               </div>
             </div>
+          ))
+        ) : (
+          <div className="grid place-items-center py-12">
+            <span className={`${mono} text-[12px]`} style={{ color: D2.muted }}>
+              {data.configured
+                ? "Orders will appear here once they are placed."
+                : "Connect Supabase to load recent orders."}
+            </span>
           </div>
-        ))}
+        )}
       </Panel>
     </D2Shell>
   );

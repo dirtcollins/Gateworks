@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
@@ -13,30 +14,43 @@ import {
   X
 } from "lucide-react";
 import { Btn, D5, Dot, H, Kbd, Panel, Shell, Tag, mono } from "./kit";
-import { CATEGORIES, PRODUCTS, fmt } from "./data";
+import {
+  fmt,
+  featuredCategoryProducts,
+  getCategoryProducts,
+  swatchFor,
+  toRow,
+  topCategories,
+  type Row
+} from "./data";
+import { useCartStore } from "@/lib/cart-store";
 
 type Sort = "sku" | "price" | "stock";
 
-function stockTone(stock: number) {
-  if (stock === 0) return { tone: "red" as const, label: "OUT" };
-  if (stock < 90) return { tone: "amber" as const, label: "LOW" };
+function stockTone(stock: number, inStock: boolean) {
+  if (!inStock || stock === 0) return { tone: "red" as const, label: "OUT" };
+  if (stock < 40) return { tone: "amber" as const, label: "LOW" };
   return { tone: "accent" as const, label: "IN" };
 }
 
 export default function D5Category() {
+  const addItem = useCartStore((state) => state.addItem);
   const [activeCat, setActiveCat] = useState<string | null>(null);
-  const [hub, setHub] = useState<string | null>(null);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [sort, setSort] = useState<Sort>("sku");
   const [view, setView] = useState<"rows" | "grid">("rows");
   const [qty, setQty] = useState<Record<string, number>>({});
   const [added, setAdded] = useState<Record<string, boolean>>({});
 
+  const baseRows = useMemo<Row[]>(
+    () => featuredCategoryProducts.map(toRow),
+    []
+  );
+
   const rows = useMemo(() => {
-    let r = PRODUCTS.filter((p) => {
-      if (activeCat && p.category !== activeCat) return false;
-      if (hub && p.hub !== hub) return false;
-      if (inStockOnly && p.stock === 0) return false;
+    let r = baseRows.filter((p) => {
+      if (activeCat && p.categorySlug !== activeCat) return false;
+      if (inStockOnly && !p.inStock) return false;
       return true;
     });
     r = [...r].sort((a, b) => {
@@ -45,25 +59,38 @@ export default function D5Category() {
       return a.sku.localeCompare(b.sku);
     });
     return r;
-  }, [activeCat, hub, inStockOnly, sort]);
+  }, [baseRows, activeCat, inStockOnly, sort]);
 
   const getQty = (sku: string) => qty[sku] ?? 1;
   const bump = (sku: string, d: number) =>
     setQty((p) => ({ ...p, [sku]: Math.max(1, getQty(sku) + d) }));
-  const add = (sku: string) => {
-    setAdded((p) => ({ ...p, [sku]: true }));
-    window.setTimeout(() => setAdded((p) => ({ ...p, [sku]: false })), 1100);
+  const add = (row: Row) => {
+    if (row.variant) {
+      addItem({
+        productId: row.product.id,
+        variantId: row.variant.id,
+        title: row.product.title,
+        sku: row.variant.sku,
+        image: row.variant.image,
+        price: row.variant.price,
+        quantity: getQty(row.sku),
+        options: row.variant.options
+      });
+    }
+    setAdded((p) => ({ ...p, [row.sku]: true }));
+    window.setTimeout(() => setAdded((p) => ({ ...p, [row.sku]: false })), 1100);
   };
 
-  const hubs = ["DEN-01", "COS-02"];
+  const activeCatName =
+    topCategories.find((c) => c.slug === activeCat)?.name ?? null;
 
   return (
     <Shell crumb="catalog">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <H>Catalog · {activeCat ?? "All departments"}</H>
+          <H>Catalog · {activeCatName ?? "All departments"}</H>
           <p className="mt-0.5 text-[11px]" style={{ color: D5.faint }}>
-            {rows.length} SKUs · prices reflect PRO tier · cut-to-length available
+            {rows.length} SKUs · live catalog pricing · cut-to-length available
           </p>
         </div>
         <div className="flex items-center gap-1.5">
@@ -99,7 +126,6 @@ export default function D5Category() {
                 type="button"
                 onClick={() => {
                   setActiveCat(null);
-                  setHub(null);
                   setInStockOnly(false);
                 }}
                 className="text-[10px] font-semibold"
@@ -116,13 +142,13 @@ export default function D5Category() {
               >
                 <SlidersHorizontal size={10} /> department
               </div>
-              {CATEGORIES.map((c) => {
-                const on = activeCat === c.name;
+              {topCategories.map((c) => {
+                const on = activeCat === c.slug;
                 return (
                   <button
-                    key={c.name}
+                    key={c.slug}
                     type="button"
-                    onClick={() => setActiveCat(on ? null : c.name)}
+                    onClick={() => setActiveCat(on ? null : c.slug)}
                     className="flex w-full items-center justify-between rounded px-1.5 py-1 text-left"
                     style={{ background: on ? D5.panelHi : "transparent" }}
                   >
@@ -132,7 +158,7 @@ export default function D5Category() {
                     >
                       <span
                         className="h-2.5 w-2.5 rounded-sm"
-                        style={{ background: c.swatch }}
+                        style={{ background: swatchFor(c.slug) }}
                       />
                       {c.name}
                     </span>
@@ -140,35 +166,11 @@ export default function D5Category() {
                       className="text-[9px]"
                       style={{ color: on ? D5.accent : D5.faint, fontFamily: mono }}
                     >
-                      {on ? "✓" : c.count}
+                      {on ? "✓" : getCategoryProducts(c.slug).length}
                     </span>
                   </button>
                 );
               })}
-
-              <div
-                className="mb-1 mt-3 text-[9px] uppercase tracking-[0.14em]"
-                style={{ color: D5.faint }}
-              >
-                hub
-              </div>
-              <div className="flex gap-1">
-                {hubs.map((h) => (
-                  <button
-                    key={h}
-                    type="button"
-                    onClick={() => setHub(hub === h ? null : h)}
-                    className="flex-1 rounded border py-1 text-[10px] font-bold"
-                    style={{
-                      borderColor: hub === h ? D5.accent : D5.line,
-                      background: hub === h ? D5.accentDim : D5.panelHi,
-                      color: hub === h ? D5.accent : D5.dim
-                    }}
-                  >
-                    {h}
-                  </button>
-                ))}
-              </div>
 
               <label
                 className="mt-3 flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-[11px] font-semibold"
@@ -231,7 +233,7 @@ export default function D5Category() {
             <span className="text-[10px]" style={{ color: D5.faint }}>
               active:
             </span>
-            {[activeCat, hub, inStockOnly ? "in-stock" : null]
+            {[activeCatName, inStockOnly ? "in-stock" : null]
               .filter(Boolean)
               .map((f) => (
                 <Tag key={f as string} tone="accent">
@@ -239,7 +241,7 @@ export default function D5Category() {
                   <X size={9} />
                 </Tag>
               ))}
-            {!activeCat && !hub && !inStockOnly ? (
+            {!activeCat && !inStockOnly ? (
               <span className="text-[10px]" style={{ color: D5.dim }}>
                 none — showing everything
               </span>
@@ -262,8 +264,8 @@ export default function D5Category() {
                 <span className="text-right">order</span>
               </div>
               {rows.map((p) => {
-                const st = stockTone(p.stock);
-                const out = p.stock === 0;
+                const st = stockTone(p.stock, p.inStock);
+                const out = !p.inStock;
                 return (
                   <div
                     key={p.sku}
@@ -292,12 +294,12 @@ export default function D5Category() {
                       className="hidden text-right text-[10px] md:block"
                       style={{ color: D5.dim }}
                     >
-                      {p.hub}
+                      DEN-01
                     </span>
                     <div className="text-right">
                       <Tag tone={st.tone}>{st.label}</Tag>
                       <div className="mt-0.5 text-[9px]" style={{ color: D5.faint }}>
-                        {p.stock} {p.uom}
+                        {p.stock} ea
                       </div>
                     </div>
                     <div className="text-right">
@@ -305,7 +307,7 @@ export default function D5Category() {
                         {fmt(p.price)}
                       </div>
                       <div className="text-[9px]" style={{ color: D5.faint }}>
-                        /{p.uom}
+                        /ea
                       </div>
                     </div>
                     <div className="flex items-center justify-end gap-1">
@@ -340,7 +342,7 @@ export default function D5Category() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => add(p.sku)}
+                        onClick={() => add(p)}
                         disabled={out}
                         className="grid h-6 w-6 place-items-center rounded disabled:opacity-30"
                         style={{
@@ -358,8 +360,8 @@ export default function D5Category() {
           ) : (
             <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
               {rows.map((p) => {
-                const st = stockTone(p.stock);
-                const out = p.stock === 0;
+                const st = stockTone(p.stock, p.inStock);
+                const out = !p.inStock;
                 return (
                   <div
                     key={p.sku}
@@ -368,9 +370,17 @@ export default function D5Category() {
                   >
                     <Link href="/design-lab/d5/product">
                       <div
-                        className="relative h-24 rounded-t-md"
-                        style={{ background: p.swatch }}
+                        className="relative h-24 overflow-hidden rounded-t-md"
+                        style={{ background: D5.panelHi }}
                       >
+                        <Image
+                          src={p.variant?.image || "/assets/logo.svg"}
+                          alt={p.name}
+                          fill
+                          quality={75}
+                          sizes="220px"
+                          className="object-contain p-2"
+                        />
                         <span className="absolute left-1.5 top-1.5">
                           <Tag tone={st.tone}>{st.label}</Tag>
                         </span>
@@ -395,7 +405,7 @@ export default function D5Category() {
                         </span>
                         <button
                           type="button"
-                          onClick={() => add(p.sku)}
+                          onClick={() => add(p)}
                           disabled={out}
                           className="flex h-6 items-center gap-1 rounded px-2 text-[10px] font-bold disabled:opacity-30"
                           style={{

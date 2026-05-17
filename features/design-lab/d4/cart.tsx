@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
@@ -14,80 +15,29 @@ import {
   Trash2,
   Truck
 } from "lucide-react";
+import { useCartStore } from "@/lib/cart-store";
 import { D4Shell, brandClasses } from "./shell";
 
-type Line = {
-  id: number;
-  name: string;
-  variant: string;
-  price: number;
-  qty: number;
-  stock: number;
-  tint: string;
-};
-
-const INITIAL: Line[] = [
-  {
-    id: 1,
-    name: "Heavy-Duty Cantilever Gate Roller Kit",
-    variant: "Powder-coat black",
-    price: 160,
-    qty: 1,
-    stock: 38,
-    tint: "from-amber-200 to-amber-50"
-  },
-  {
-    id: 2,
-    name: "Self-Closing Gravity Gate Hinge — Pair",
-    variant: "Galvanized",
-    price: 54.99,
-    qty: 2,
-    stock: 120,
-    tint: "from-emerald-200 to-emerald-50"
-  },
-  {
-    id: 3,
-    name: '1/2"-13 Hot-Dip Carriage Bolts — 50 ct',
-    variant: "Box of 50",
-    price: 22.75,
-    qty: 3,
-    stock: 480,
-    tint: "from-violet-200 to-violet-50"
-  }
-];
-
-const SUGGEST = [
-  { name: "Anti-Sag Gate Kit", price: 24, tint: "from-rose-200 to-rose-50" },
-  { name: "Gate Wheel Caster 6 in", price: 38.5, tint: "from-sky-200 to-sky-50" },
-  { name: "Threadlocker — Blue", price: 9.99, tint: "from-orange-200 to-orange-50" }
-];
+const TAX_RATE = 0.0825;
+const FREE_SHIP_AT = 250;
 
 export function D4Cart() {
-  const [lines, setLines] = useState<Line[]>(INITIAL);
+  const items = useCartStore((state) => state.items);
+  const updateQuantity = useCartStore((state) => state.updateQuantity);
+  const removeItem = useCartStore((state) => state.removeItem);
   const [promo, setPromo] = useState("");
   const [applied, setApplied] = useState(false);
 
-  const setQty = (id: number, delta: number) =>
-    setLines((prev) =>
-      prev.map((l) =>
-        l.id === id
-          ? { ...l, qty: Math.min(l.stock, Math.max(1, l.qty + delta)) }
-          : l
-      )
-    );
-  const remove = (id: number) =>
-    setLines((prev) => prev.filter((l) => l.id !== id));
-
   const subtotal = useMemo(
-    () => lines.reduce((s, l) => s + l.price * l.qty, 0),
-    [lines]
+    () => items.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    [items]
   );
   const discount = applied ? subtotal * 0.1 : 0;
-  const tax = (subtotal - discount) * 0.0825;
+  const tax = (subtotal - discount) * TAX_RATE;
   const total = subtotal - discount + tax;
-  const freeShipAt = 250;
-  const toFree = Math.max(0, freeShipAt - subtotal);
-  const progress = Math.min(100, (subtotal / freeShipAt) * 100);
+  const toFree = Math.max(0, FREE_SHIP_AT - subtotal);
+  const progress = Math.min(100, (subtotal / FREE_SHIP_AT) * 100);
+  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <D4Shell active="cart">
@@ -96,11 +46,11 @@ export function D4Cart() {
           Your cart
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          {lines.reduce((s, l) => s + l.qty, 0)} items · prices locked for 24
+          {itemCount} item{itemCount === 1 ? "" : "s"} · prices locked for 24
           hours
         </p>
 
-        {lines.length === 0 ? (
+        {items.length === 0 ? (
           <div className="mt-8 grid place-items-center rounded-2xl bg-slate-50 py-20 text-center ring-1 ring-slate-100">
             <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white text-orange-500 ring-1 ring-slate-100">
               <ShoppingBag className="h-7 w-7" />
@@ -146,105 +96,97 @@ export function D4Cart() {
                 </div>
               </div>
 
-              {lines.map((l) => (
-                <div
-                  key={l.id}
-                  className={`${brandClasses.card} flex gap-4 p-4`}
-                >
+              {items.map((item) => {
+                const variantLabel =
+                  [item.options?.length, item.options?.finish]
+                    .filter((part) => part && part !== "Standard")
+                    .join(" · ") || `SKU ${item.sku}`;
+                return (
                   <div
-                    className={`h-24 w-24 shrink-0 rounded-xl bg-gradient-to-br ${l.tint}`}
-                  />
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <Link
-                          href="/design-lab/d4/product"
-                          className="line-clamp-2 text-sm font-bold text-slate-900 hover:text-orange-600"
-                        >
-                          {l.name}
-                        </Link>
-                        <p className="mt-0.5 text-xs text-slate-400">
-                          {l.variant}
-                        </p>
-                        <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-emerald-600">
-                          <Check className="h-3.5 w-3.5" /> In stock · pickup
-                          today
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => remove(l.id)}
-                        aria-label="Remove item"
-                        className="grid h-8 w-8 place-items-center rounded-lg text-slate-300 hover:bg-rose-50 hover:text-rose-500"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                    key={item.variantId}
+                    className={`${brandClasses.card} flex gap-4 p-4`}
+                  >
+                    <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-slate-50">
+                      <Image
+                        alt={item.title}
+                        src={item.image || "/assets/logo.svg"}
+                        fill
+                        quality={60}
+                        sizes="96px"
+                        className="object-contain p-2"
+                      />
                     </div>
-                    <div className="mt-auto flex items-end justify-between pt-3">
-                      <div className="flex items-center rounded-xl ring-1 ring-slate-200">
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <Link
+                            href="/design-lab/d4/product"
+                            className="line-clamp-2 text-sm font-bold text-slate-900 hover:text-orange-600"
+                          >
+                            {item.title}
+                          </Link>
+                          <p className="mt-0.5 text-xs text-slate-400">
+                            {variantLabel}
+                          </p>
+                          <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                            <Check className="h-3.5 w-3.5" /> In stock · pickup
+                            today
+                          </p>
+                        </div>
                         <button
                           type="button"
-                          aria-label="Decrease"
-                          onClick={() => setQty(l.id, -1)}
-                          className="grid h-9 w-9 place-items-center text-slate-500 hover:text-orange-600"
+                          onClick={() => removeItem(item.variantId)}
+                          aria-label="Remove item"
+                          className="grid h-8 w-8 place-items-center rounded-lg text-slate-300 hover:bg-rose-50 hover:text-rose-500"
                         >
-                          <Minus className="h-4 w-4" />
-                        </button>
-                        <span className="w-9 text-center text-sm font-bold">
-                          {l.qty}
-                        </span>
-                        <button
-                          type="button"
-                          aria-label="Increase"
-                          onClick={() => setQty(l.id, 1)}
-                          className="grid h-9 w-9 place-items-center text-slate-500 hover:text-orange-600"
-                        >
-                          <Plus className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
-                      <div className="text-right">
-                        <p className="text-base font-extrabold text-slate-900">
-                          ${(l.price * l.qty).toFixed(2)}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          ${l.price.toFixed(2)} each
-                        </p>
+                      <div className="mt-auto flex items-end justify-between pt-3">
+                        <div className="flex items-center rounded-xl ring-1 ring-slate-200">
+                          <button
+                            type="button"
+                            aria-label="Decrease"
+                            onClick={() =>
+                              updateQuantity(
+                                item.variantId,
+                                item.quantity - 1
+                              )
+                            }
+                            className="grid h-9 w-9 place-items-center text-slate-500 hover:text-orange-600"
+                          >
+                            <Minus className="h-4 w-4" />
+                          </button>
+                          <span className="w-9 text-center text-sm font-bold">
+                            {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label="Increase"
+                            onClick={() =>
+                              updateQuantity(
+                                item.variantId,
+                                item.quantity + 1
+                              )
+                            }
+                            className="grid h-9 w-9 place-items-center text-slate-500 hover:text-orange-600"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-base font-extrabold text-slate-900">
+                            ${(item.price * item.quantity).toFixed(2)}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            ${item.price.toFixed(2)} each
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
-
-              {/* suggestions */}
-              <div className={`${brandClasses.card} p-4`}>
-                <p className="text-sm font-bold text-slate-900">
-                  Frequently added together
-                </p>
-                <div className="mt-3 grid grid-cols-3 gap-3">
-                  {SUGGEST.map((s) => (
-                    <div
-                      key={s.name}
-                      className="rounded-xl bg-slate-50 p-3 text-center"
-                    >
-                      <div
-                        className={`mx-auto h-14 w-14 rounded-lg bg-gradient-to-br ${s.tint}`}
-                      />
-                      <p className="mt-2 line-clamp-2 text-xs font-semibold text-slate-700">
-                        {s.name}
-                      </p>
-                      <p className="text-xs font-bold text-slate-900">
-                        ${s.price.toFixed(2)}
-                      </p>
-                      <button
-                        type="button"
-                        className="mt-1.5 text-xs font-bold text-orange-600 hover:text-orange-700"
-                      >
-                        + Add
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                );
+              })}
             </div>
 
             {/* Summary */}

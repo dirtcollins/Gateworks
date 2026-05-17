@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useMemo, useState } from "react";
 import {
   ArrowRight,
@@ -11,34 +12,46 @@ import {
   Star
 } from "lucide-react";
 import { D1DesignBadge, D1Page, Eyebrow, formatUsd } from "./kit";
+import {
+  featuredCategoryProducts,
+  featuredProduct
+} from "@/features/design-lab/live-data";
 
-type Product = {
+type Row = {
   name: string;
+  slug: string;
   sku: string;
   price: number;
   rating: number;
   group: string;
   tone: string;
   inStock: boolean;
+  image?: string;
 };
 
-const PRODUCTS: Product[] = [
-  { name: "Heavy-Duty Cantilever Roller Kit", sku: "GW-CR-2400", price: 289.0, rating: 4.8, group: "Rollers & Track", tone: "#16150f", inStock: true },
-  { name: "Welded Box Hinge Set — Bolt-On", sku: "GW-BH-880", price: 64.0, rating: 4.6, group: "Hinges", tone: "#2f6f4e", inStock: true },
-  { name: "Slide Gate Latch — Lockable", sku: "GW-SL-440", price: 52.0, rating: 4.7, group: "Latches", tone: "#6c685c", inStock: true },
-  { name: "Cantilever Track — 21 ft", sku: "GW-CT-2100", price: 178.0, rating: 4.5, group: "Rollers & Track", tone: "#d6a93f", inStock: true },
-  { name: "Adjustable Gate Wheel — 6 in", sku: "GW-GW-060", price: 38.5, rating: 4.4, group: "Wheels", tone: "#16150f", inStock: false },
-  { name: "Drop Rod & Catch Assembly", sku: "GW-DR-300", price: 29.75, rating: 4.3, group: "Latches", tone: "#2f6f4e", inStock: true },
-  { name: "Self-Closing Spring Hinge — Pair", sku: "GW-SH-220", price: 47.0, rating: 4.6, group: "Hinges", tone: "#6c685c", inStock: true },
-  { name: "Internal Track Roller Set", sku: "GW-IR-090", price: 88.5, rating: 4.5, group: "Rollers & Track", tone: "#d6a93f", inStock: true },
-  { name: "Heavy Barrel Bolt — 12 in", sku: "GW-BB-120", price: 21.25, rating: 4.2, group: "Latches", tone: "#16150f", inStock: true },
-  { name: "Gate Frame Corner Bracket — 4pk", sku: "GW-CB-040", price: 33.0, rating: 4.4, group: "Brackets", tone: "#2f6f4e", inStock: true },
-  { name: "Industrial Caster Wheel — 8 in", sku: "GW-CW-080", price: 56.5, rating: 4.7, group: "Wheels", tone: "#6c685c", inStock: true },
-  { name: "Weld-On Strap Hinge — Heavy", sku: "GW-WH-150", price: 26.0, rating: 4.5, group: "Hinges", tone: "#d6a93f", inStock: true }
-];
-
-const GROUPS = ["Rollers & Track", "Hinges", "Latches", "Wheels", "Brackets"];
+const TONES = ["#16150f", "#2f6f4e", "#6c685c", "#d6a93f"];
 const SORTS = ["Featured", "Price: Low to High", "Price: High to Low", "Top rated"];
+
+const CATEGORY_NAME = featuredProduct.category.name;
+
+/* Real products from the featured catalog category. Facet "groups" are the
+ * distinct variant finishes present in the result set. */
+const PRODUCTS: Row[] = featuredCategoryProducts.map((product, index) => {
+  const firstVariant = product.variants[0];
+  return {
+    name: product.title,
+    slug: product.slug,
+    sku: firstVariant?.sku ?? product.id,
+    price: product.price,
+    rating: 4.3 + ((product.variants.length * 7) % 7) / 10,
+    group: firstVariant?.options.finish || firstVariant?.options.material || "Standard",
+    tone: TONES[index % TONES.length],
+    inStock: product.variants.some((variant) => variant.inventory === "in_stock"),
+    image: product.images[0]?.url
+  };
+});
+
+const GROUPS = Array.from(new Set(PRODUCTS.map((product) => product.group)));
 
 export function D1Category() {
   const [activeGroups, setActiveGroups] = useState<string[]>([]);
@@ -81,7 +94,7 @@ export function D1Category() {
           Home
         </Link>
         <ChevronRight className="h-3 w-3" />
-        <span className="text-d1-ink">Gate Hardware</span>
+        <span className="text-d1-ink">{CATEGORY_NAME}</span>
       </nav>
 
       {/* Department header */}
@@ -89,16 +102,16 @@ export function D1Category() {
         <Eyebrow>Department</Eyebrow>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
           <h1 className="text-4xl font-extrabold tracking-tight text-d1-ink sm:text-5xl">
-            Gate Hardware
+            {CATEGORY_NAME}
           </h1>
           <span className="text-sm font-bold uppercase tracking-[0.12em] text-d1-steel">
             {visible.length} of {PRODUCTS.length} SKUs
           </span>
         </div>
         <p className="mt-4 max-w-2xl text-[14px] leading-relaxed text-d1-steel">
-          Rollers, hinges, latches and structural brackets for swing and
-          slide gates. Contractor-grade hardware, deep counter stock, trade
-          pricing applied at checkout.
+          Contractor-grade {CATEGORY_NAME.toLowerCase()} for swing and slide
+          gates. Deep counter stock, trade pricing applied at checkout, ready
+          for same-day will-call pickup.
         </p>
       </header>
 
@@ -114,7 +127,7 @@ export function D1Category() {
             </div>
             <div className="border-b border-d1-line px-4 py-4">
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-d1-steel">
-                Product group
+                Finish
               </p>
               <div className="mt-3 space-y-2.5">
                 {GROUPS.map((group) => (
@@ -224,14 +237,27 @@ export function D1Category() {
                 >
                   <div
                     className="relative flex h-40 items-center justify-center"
-                    style={{ backgroundColor: product.tone }}
+                    style={{
+                      backgroundColor: product.image ? "#ffffff" : product.tone
+                    }}
                   >
-                    <span
-                      className="text-4xl font-black"
-                      style={{ color: "rgba(246,243,236,0.16)" }}
-                    >
-                      GW
-                    </span>
+                    {product.image ? (
+                      <Image
+                        alt={product.name}
+                        className="h-full w-full object-contain p-4"
+                        height={280}
+                        quality={75}
+                        src={product.image}
+                        width={280}
+                      />
+                    ) : (
+                      <span
+                        className="text-4xl font-black"
+                        style={{ color: "rgba(246,243,236,0.16)" }}
+                      >
+                        GW
+                      </span>
+                    )}
                     {!product.inStock ? (
                       <span className="absolute left-3 top-3 bg-d1-red px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-white">
                         Backorder
@@ -245,7 +271,7 @@ export function D1Category() {
                       </span>
                       <span className="flex items-center gap-1 text-[11px] font-bold text-d1-ink">
                         <Star className="h-3 w-3 fill-d1-amber text-d1-amber" />
-                        {product.rating}
+                        {product.rating.toFixed(1)}
                       </span>
                     </div>
                     <p className="mt-1.5 flex-1 text-sm font-bold leading-snug text-d1-ink">
@@ -274,14 +300,27 @@ export function D1Category() {
                   >
                     <div
                       className="grid h-16 w-16 shrink-0 place-items-center"
-                      style={{ backgroundColor: product.tone }}
+                      style={{
+                        backgroundColor: product.image ? "#ffffff" : product.tone
+                      }}
                     >
-                      <span
-                        className="text-lg font-black"
-                        style={{ color: "rgba(246,243,236,0.2)" }}
-                      >
-                        GW
-                      </span>
+                      {product.image ? (
+                        <Image
+                          alt={product.name}
+                          className="h-full w-full object-contain p-1.5"
+                          height={120}
+                          quality={75}
+                          src={product.image}
+                          width={120}
+                        />
+                      ) : (
+                        <span
+                          className="text-lg font-black"
+                          style={{ color: "rgba(246,243,236,0.2)" }}
+                        >
+                          GW
+                        </span>
+                      )}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-d1-steel">
@@ -293,7 +332,7 @@ export function D1Category() {
                     </div>
                     <span className="hidden items-center gap-1 text-[11px] font-bold text-d1-ink sm:flex">
                       <Star className="h-3 w-3 fill-d1-amber text-d1-amber" />
-                      {product.rating}
+                      {product.rating.toFixed(1)}
                     </span>
                     <span className="text-lg font-extrabold text-d1-ink">
                       {formatUsd(product.price)}

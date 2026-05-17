@@ -1,46 +1,42 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowUpRight, Compass, PackageCheck, Ruler } from "lucide-react";
+import {
+  getCategoryProducts,
+  popularProducts,
+  topCategories
+} from "@/features/design-lab/live-data";
+import { formatCurrency } from "@/lib/utils";
 import { D3Shell, Eyebrow, MaterialBlock, d3, serif } from "./shared";
 
 /** DESIGN 3 — "Editorial Catalog" — Home / storefront landing. */
 
-const collections = [
-  {
-    tag: "01",
-    tone: "steel" as const,
-    name: "Structural Steel",
-    note: "Tube, angle, channel & plate — cut to your spec.",
-    span: "md:col-span-7"
-  },
-  {
-    tag: "02",
-    tone: "brass" as const,
-    name: "Gate Hardware",
-    note: "Hinges, latches & rollers built to outlast the gate.",
-    span: "md:col-span-5"
-  },
-  {
-    tag: "03",
-    tone: "rust" as const,
-    name: "Fasteners",
-    note: "Galvanized, stainless & structural — by the box.",
-    span: "md:col-span-5"
-  },
-  {
-    tag: "04",
-    tone: "ink" as const,
-    name: "Jobsite Tools",
-    note: "Grinders, drivers & layout kit, field-tested.",
-    span: "md:col-span-7"
-  }
+// Departments — real catalog categories that have stocked products.
+const departmentTones = ["steel", "brass", "rust", "ink"] as const;
+const departmentSpans = [
+  "md:col-span-7",
+  "md:col-span-5",
+  "md:col-span-5",
+  "md:col-span-7"
 ];
+const collections = topCategories.slice(0, 4).map((category, index) => ({
+  tag: String(index + 1).padStart(2, "0"),
+  tone: departmentTones[index % departmentTones.length],
+  name: category.name,
+  slug: category.slug,
+  count: getCategoryProducts(category.slug).length,
+  span: departmentSpans[index % departmentSpans.length]
+}));
 
-const featured = [
-  { name: "2×2 Square Tube — 11ga", price: "$38.40", unit: "/ 20 ft", tone: "steel" as const },
-  { name: "Heavy Bolt-On Gate Hinge", price: "$24.90", unit: "/ pair", tone: "brass" as const },
-  { name: "Self-Drilling Tek Screw", price: "$18.75", unit: "/ box 250", tone: "rust" as const },
-  { name: '4½" Angle Grinder', price: "$112.00", unit: "/ each", tone: "ink" as const }
-];
+// "On the cover" picks — real catalog products, image-forward.
+const featured = popularProducts.slice(0, 4).map((product) => ({
+  slug: product.slug,
+  name: product.title,
+  sku: product.variants[0]?.sku ?? product.id,
+  price: formatCurrency(product.price),
+  unit: product.variants.length > 1 ? "/ from" : "/ each",
+  image: product.images[0]?.url
+}));
 
 export function D3Home() {
   return (
@@ -129,7 +125,7 @@ export function D3Home() {
           <div>
             <Eyebrow>Departments</Eyebrow>
             <h2 className={`${serif} mt-3 text-3xl font-semibold sm:text-[2.6rem]`}>
-              Four shelves, fully stocked
+              Shelves, fully stocked
             </h2>
           </div>
           <Link
@@ -143,7 +139,7 @@ export function D3Home() {
         <div className="mt-8 grid gap-5 md:grid-cols-12">
           {collections.map((c) => (
             <Link
-              key={c.tag}
+              key={c.slug}
               href="/design-lab/d3/category"
               className={`group relative block overflow-hidden ${c.span}`}
             >
@@ -158,7 +154,9 @@ export function D3Home() {
                   <h3 className={`${serif} text-2xl font-semibold text-white`}>
                     {c.name}
                   </h3>
-                  <p className="mt-1 max-w-xs text-sm text-white/75">{c.note}</p>
+                  <p className="mt-1 max-w-xs text-sm text-white/75">
+                    {c.count} {c.count === 1 ? "item" : "items"} stocked & specified.
+                  </p>
                   <span className="mt-3 inline-flex items-center gap-1.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-white">
                     Explore <ArrowUpRight className="h-3.5 w-3.5" />
                   </span>
@@ -241,15 +239,23 @@ export function D3Home() {
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {featured.map((p, i) => (
             <Link
-              key={p.name}
+              key={p.slug}
               href="/design-lab/d3/product"
               className="group block"
             >
-              <div className="relative overflow-hidden">
-                <MaterialBlock
-                  tone={p.tone}
-                  className="aspect-[4/5] w-full transition-transform duration-500 group-hover:scale-[1.04]"
-                />
+              <div className="relative aspect-[4/5] w-full overflow-hidden" style={{ background: d3.card }}>
+                {p.image ? (
+                  <Image
+                    src={p.image}
+                    alt={p.name}
+                    fill
+                    quality={75}
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    className="object-contain p-6 transition-transform duration-500 group-hover:scale-[1.04]"
+                  />
+                ) : (
+                  <MaterialBlock tone="steel" className="h-full w-full" />
+                )}
                 <span
                   className="absolute left-3 top-3 bg-white px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.2em]"
                   style={{ color: d3.ink }}
@@ -266,7 +272,13 @@ export function D3Home() {
                   style={{ color: d3.brass }}
                 />
               </div>
-              <p className="mt-1.5 text-sm" style={{ color: d3.graphite }}>
+              <p
+                className="mt-1 text-[0.66rem] font-semibold uppercase tracking-[0.18em]"
+                style={{ color: d3.haze }}
+              >
+                SKU {p.sku}
+              </p>
+              <p className="mt-1 text-sm" style={{ color: d3.graphite }}>
                 <span className="font-semibold" style={{ color: d3.ink }}>
                   {p.price}
                 </span>{" "}

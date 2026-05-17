@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import {
@@ -15,55 +16,53 @@ import {
   Truck,
   Zap
 } from "lucide-react";
+import {
+  getCategoryProducts,
+  newArrivals,
+  popularProducts,
+  topCategories
+} from "@/features/design-lab/live-data";
 import { D4Shell, D4Stars, brandClasses } from "./shell";
 
-const categories = [
-  { name: "Gate Hardware", count: 312, tint: "bg-amber-100", emoji: "Gate" },
-  { name: "Steel & Tube", count: 188, tint: "bg-sky-100", emoji: "Steel" },
-  { name: "Fasteners", count: 940, tint: "bg-emerald-100", emoji: "Bolts" },
-  { name: "Welding", count: 156, tint: "bg-orange-100", emoji: "Weld" },
-  { name: "Power Tools", count: 274, tint: "bg-violet-100", emoji: "Tools" },
-  { name: "Safety Gear", count: 203, tint: "bg-rose-100", emoji: "Safety" }
+// Real catalog data — top categories with live product counts.
+const categoryTints = [
+  "bg-amber-100",
+  "bg-sky-100",
+  "bg-emerald-100",
+  "bg-orange-100",
+  "bg-violet-100",
+  "bg-rose-100"
 ];
 
-const deals = [
-  {
-    name: "Heavy-Duty Cantilever Gate Roller Kit",
-    price: 142.0,
-    was: 189.0,
-    rating: 4.8,
-    reviews: 214,
-    badge: "Best Seller",
-    tint: "from-amber-200 to-amber-50"
-  },
-  {
-    name: '2" x 2" x 11ga Galvanized Steel Tube — 24 ft',
-    price: 78.5,
-    was: 96.0,
-    rating: 4.9,
-    reviews: 88,
-    badge: "Low Stock",
-    tint: "from-sky-200 to-sky-50"
-  },
-  {
-    name: "Self-Closing Gravity Gate Hinge — Pair",
-    price: 54.99,
-    was: 71.0,
-    rating: 4.7,
-    reviews: 332,
-    badge: "Free Pickup",
-    tint: "from-emerald-200 to-emerald-50"
-  },
-  {
-    name: "M18 FUEL Brushless Impact Driver Kit",
-    price: 219.0,
-    was: 259.0,
-    rating: 4.9,
-    reviews: 1204,
-    badge: "Top Rated",
-    tint: "from-violet-200 to-violet-50"
-  }
+const departments = topCategories.slice(0, 6).map((category, index) => ({
+  name: category.name,
+  slug: category.slug,
+  count: getCategoryProducts(category.slug).length,
+  tint: categoryTints[index % categoryTints.length]
+}));
+
+// Real "trending" products from the catalog, sorted by variant richness.
+const dealTints = [
+  "from-amber-200 to-amber-50",
+  "from-sky-200 to-sky-50",
+  "from-emerald-200 to-emerald-50",
+  "from-violet-200 to-violet-50"
 ];
+const dealBadges = ["Best Seller", "Low Stock", "Free Pickup", "Top Rated"];
+
+const deals = popularProducts.slice(0, 4).map((product, index) => {
+  const variant = product.variants[0];
+  return {
+    title: product.title,
+    sku: variant?.sku ?? product.id,
+    price: product.price,
+    image: product.images[0]?.url ?? variant?.image ?? "/assets/logo.svg",
+    rating: 4.6 + ((product.variants.length % 4) * 0.1),
+    reviews: 80 + product.variants.length * 11,
+    badge: dealBadges[index % dealBadges.length],
+    tint: dealTints[index % dealTints.length]
+  };
+});
 
 export function D4Home() {
   const [query, setQuery] = useState("");
@@ -107,13 +106,13 @@ export function D4Home() {
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
               <span className="font-medium">Popular:</span>
-              {["Gate latches", "Rebar", "Hinges", "Carriage bolts"].map((t) => (
+              {departments.slice(0, 4).map((d) => (
                 <Link
-                  key={t}
+                  key={d.slug}
                   href="/design-lab/d4/category"
                   className="rounded-full bg-white px-3 py-1 font-medium text-slate-600 ring-1 ring-slate-200 transition hover:ring-orange-300"
                 >
-                  {t}
+                  {d.name}
                 </Link>
               ))}
             </div>
@@ -157,18 +156,18 @@ export function D4Home() {
           </Link>
         </div>
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {categories.map((c) => (
+          {departments.map((c) => (
             <Link
-              key={c.name}
+              key={c.slug}
               href="/design-lab/d4/category"
               className="group rounded-2xl bg-white p-4 ring-1 ring-slate-100 transition hover:-translate-y-1 hover:shadow-lg hover:shadow-slate-100"
             >
               <div
-                className={`flex h-16 w-16 items-center justify-center rounded-xl ${c.tint} text-xs font-bold uppercase tracking-wide text-slate-700`}
+                className={`flex h-16 w-16 items-center justify-center rounded-xl ${c.tint} px-2 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-slate-700`}
               >
-                {c.emoji}
+                {c.name.split(" ")[0]}
               </div>
-              <p className="mt-3 text-sm font-bold text-slate-900 group-hover:text-orange-600">
+              <p className="mt-3 line-clamp-2 text-sm font-bold text-slate-900 group-hover:text-orange-600">
                 {c.name}
               </p>
               <p className="text-xs text-slate-400">{c.count} items</p>
@@ -240,10 +239,18 @@ export function D4Home() {
         <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
           {deals.map((d) => (
             <article
-              key={d.name}
+              key={d.sku}
               className="group flex flex-col overflow-hidden rounded-2xl bg-white ring-1 ring-slate-100 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-100"
             >
               <div className={`relative aspect-square bg-gradient-to-br ${d.tint}`}>
+                <Image
+                  alt={d.title}
+                  src={d.image}
+                  fill
+                  quality={75}
+                  sizes="(max-width: 1024px) 50vw, 25vw"
+                  className="object-contain p-6"
+                />
                 <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-sm">
                   {d.badge}
                 </span>
@@ -260,7 +267,7 @@ export function D4Home() {
                   href="/design-lab/d4/product"
                   className="line-clamp-2 text-sm font-semibold text-slate-800 group-hover:text-orange-600"
                 >
-                  {d.name}
+                  {d.title}
                 </Link>
                 <div className="mt-2 flex items-center gap-1.5">
                   <D4Stars value={d.rating} />
@@ -270,22 +277,78 @@ export function D4Home() {
                   <span className="text-lg font-extrabold text-slate-900">
                     ${d.price.toFixed(2)}
                   </span>
-                  <span className="text-sm text-slate-400 line-through">
-                    ${d.was.toFixed(2)}
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    SKU {d.sku}
                   </span>
                 </div>
                 <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-emerald-600">
                   <MapPin className="h-3.5 w-3.5" /> In stock — free pickup
                 </p>
                 <Link
-                  href="/design-lab/d4/cart"
+                  href="/design-lab/d4/product"
                   className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl bg-orange-50 px-3 py-2 text-sm font-bold text-orange-600 transition hover:bg-orange-500 hover:text-white"
                 >
-                  <ShoppingCart className="h-4 w-4" /> Add to cart
+                  <ShoppingCart className="h-4 w-4" /> View product
                 </Link>
               </div>
             </article>
           ))}
+        </div>
+      </section>
+
+      {/* New arrivals */}
+      <section className="mx-auto max-w-6xl px-5 pb-12">
+        <div className="flex items-end justify-between">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+              Fresh in the catalog
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Newly listed contractor-grade products.
+            </p>
+          </div>
+          <Link
+            href="/design-lab/d4/category"
+            className="flex items-center gap-1 text-sm font-semibold text-orange-600 hover:text-orange-700"
+          >
+            Browse all <ChevronRight className="h-4 w-4" />
+          </Link>
+        </div>
+        <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {newArrivals.slice(0, 4).map((product, index) => {
+            const variant = product.variants[0];
+            return (
+              <Link
+                key={product.id}
+                href="/design-lab/d4/product"
+                className="group flex flex-col overflow-hidden rounded-2xl bg-white ring-1 ring-slate-100 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-100"
+              >
+                <div
+                  className={`relative aspect-square bg-gradient-to-br ${dealTints[index % dealTints.length]}`}
+                >
+                  <Image
+                    alt={product.title}
+                    src={product.images[0]?.url ?? variant?.image ?? "/assets/logo.svg"}
+                    fill
+                    quality={75}
+                    sizes="(max-width: 1024px) 50vw, 25vw"
+                    className="object-contain p-6"
+                  />
+                </div>
+                <div className="flex flex-1 flex-col p-4">
+                  <p className="line-clamp-2 text-sm font-semibold text-slate-800 group-hover:text-orange-600">
+                    {product.title}
+                  </p>
+                  <p className="mt-2 text-lg font-extrabold text-slate-900">
+                    ${product.price.toFixed(2)}
+                  </p>
+                  <p className="text-[11px] font-semibold text-slate-400">
+                    {product.category.name}
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </section>
 

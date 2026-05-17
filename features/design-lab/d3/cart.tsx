@@ -1,70 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowUpRight, Minus, Plus, Tag, Trash2, Truck } from "lucide-react";
+import { useCartStore } from "@/lib/cart-store";
+import { formatCurrency } from "@/lib/utils";
 import { D3Shell, Eyebrow, MaterialBlock, d3, serif } from "./shared";
 
-/** DESIGN 3 — "Editorial Catalog" — Cart. */
+/** DESIGN 3 — "Editorial Catalog" — Cart. Wired to the real cart store. */
 
-type Tone = "steel" | "brass" | "ink" | "rust";
-
-type Line = {
-  id: string;
-  name: string;
-  variant: string;
-  group: string;
-  price: number;
-  qty: number;
-  tone: Tone;
-};
-
-const initialLines: Line[] = [
-  {
-    id: "l1",
-    name: "2 × 2 Square Tube",
-    variant: "11ga · 20 ft length",
-    group: "Structural Steel",
-    price: 38.4,
-    qty: 6,
-    tone: "steel"
-  },
-  {
-    id: "l2",
-    name: "Heavy Bolt-On Gate Hinge",
-    variant: 'Black · 5/8" pin · pair',
-    group: "Gate Hardware",
-    price: 24.9,
-    qty: 2,
-    tone: "brass"
-  },
-  {
-    id: "l3",
-    name: "Self-Drilling Tek Screw",
-    variant: "#12 × 1″ · box of 250",
-    group: "Fasteners",
-    price: 18.75,
-    qty: 3,
-    tone: "rust"
-  }
-];
+const TRADE_RATE = 0.08;
+const TAX_RATE = 0.0825;
 
 export function D3Cart() {
-  const [lines, setLines] = useState(initialLines);
+  const items = useCartStore((state) => state.items);
+  const updateQuantity = useCartStore((state) => state.updateQuantity);
+  const removeItem = useCartStore((state) => state.removeItem);
+  const [hydrated, setHydrated] = useState(false);
 
-  const setQty = (id: string, delta: number) =>
-    setLines((prev) =>
-      prev.map((l) =>
-        l.id === id ? { ...l, qty: Math.max(1, l.qty + delta) } : l
-      )
-    );
-  const remove = (id: string) =>
-    setLines((prev) => prev.filter((l) => l.id !== id));
+  // The cart store skips automatic hydration, so trigger it on mount.
+  useEffect(() => {
+    void useCartStore.persist.rehydrate();
+    setHydrated(true);
+  }, []);
 
-  const subtotal = lines.reduce((s, l) => s + l.price * l.qty, 0);
-  const tradeDiscount = subtotal * 0.08;
-  const delivery = subtotal > 250 ? 0 : 45;
-  const tax = (subtotal - tradeDiscount) * 0.0825;
+  const lines = hydrated ? items : [];
+
+  const subtotal = lines.reduce((sum, line) => sum + line.price * line.quantity, 0);
+  const tradeDiscount = subtotal * TRADE_RATE;
+  const delivery = subtotal > 250 || subtotal === 0 ? 0 : 45;
+  const tax = (subtotal - tradeDiscount) * TAX_RATE;
   const total = subtotal - tradeDiscount + delivery + tax;
 
   return (
@@ -115,81 +81,107 @@ export function D3Cart() {
               </div>
 
               <ul>
-                {lines.map((l) => (
-                  <li
-                    key={l.id}
-                    className="grid grid-cols-1 gap-5 border-b py-6 sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-6"
-                    style={{ borderColor: d3.rule }}
-                  >
-                    <div className="flex gap-4">
-                      <MaterialBlock
-                        tone={l.tone}
-                        className="h-24 w-24 shrink-0"
-                      />
-                      <div className="min-w-0">
-                        <p
-                          className="text-[0.66rem] font-semibold uppercase tracking-[0.2em]"
-                          style={{ color: d3.brass }}
-                        >
-                          {l.group}
-                        </p>
-                        <h3 className={`${serif} mt-1 text-xl font-semibold leading-snug`}>
-                          {l.name}
-                        </h3>
-                        <p className="mt-0.5 text-sm" style={{ color: d3.graphite }}>
-                          {l.variant}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => remove(l.id)}
-                          className="mt-2 inline-flex items-center gap-1.5 text-[0.72rem] font-semibold uppercase tracking-[0.14em]"
-                          style={{ color: d3.haze }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" /> Remove
-                        </button>
-                      </div>
-                    </div>
+                {lines.map((line) => {
+                  const variantLabel =
+                    [line.options?.length, line.options?.finish, line.options?.color]
+                      .filter((opt) => opt && opt !== "Standard")
+                      .join(" · ") || `SKU ${line.sku}`;
 
-                    <div className="flex items-center justify-between sm:justify-center">
-                      <span className="text-[0.7rem] uppercase tracking-[0.14em] sm:hidden" style={{ color: d3.haze }}>
-                        Qty
-                      </span>
-                      <div
-                        className="flex items-center gap-3 rounded-full border px-2.5 py-1.5"
-                        style={{ borderColor: d3.rule }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setQty(l.id, -1)}
-                          className="grid h-7 w-7 place-items-center rounded-full"
-                          style={{ background: d3.paper }}
-                          aria-label="Decrease"
+                  return (
+                    <li
+                      key={line.variantId}
+                      className="grid grid-cols-1 gap-5 border-b py-6 sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-6"
+                      style={{ borderColor: d3.rule }}
+                    >
+                      <div className="flex gap-4">
+                        <div
+                          className="relative h-24 w-24 shrink-0 overflow-hidden"
+                          style={{ background: d3.card }}
                         >
-                          <Minus className="h-3 w-3" />
-                        </button>
-                        <span className={`${serif} w-6 text-center text-lg`}>{l.qty}</span>
-                        <button
-                          type="button"
-                          onClick={() => setQty(l.id, 1)}
-                          className="grid h-7 w-7 place-items-center rounded-full"
-                          style={{ background: d3.paper }}
-                          aria-label="Increase"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
+                          {line.image ? (
+                            <Image
+                              src={line.image}
+                              alt={line.title}
+                              fill
+                              quality={60}
+                              sizes="96px"
+                              className="object-contain p-2"
+                            />
+                          ) : (
+                            <MaterialBlock tone="steel" className="h-full w-full" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p
+                            className="text-[0.66rem] font-semibold uppercase tracking-[0.2em]"
+                            style={{ color: d3.brass }}
+                          >
+                            {line.options?.material || "Catalog item"}
+                          </p>
+                          <h3 className={`${serif} mt-1 text-xl font-semibold leading-snug`}>
+                            {line.title}
+                          </h3>
+                          <p className="mt-0.5 text-sm" style={{ color: d3.graphite }}>
+                            {variantLabel}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => removeItem(line.variantId)}
+                            className="mt-2 inline-flex items-center gap-1.5 text-[0.72rem] font-semibold uppercase tracking-[0.14em]"
+                            style={{ color: d3.haze }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Remove
+                          </button>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-baseline justify-between gap-2 sm:block sm:text-right">
-                      <span className="text-[0.7rem] uppercase tracking-[0.14em] sm:hidden" style={{ color: d3.haze }}>
-                        Total
-                      </span>
-                      <span className={`${serif} text-2xl font-semibold`}>
-                        ${(l.price * l.qty).toFixed(2)}
-                      </span>
-                    </div>
-                  </li>
-                ))}
+                      <div className="flex items-center justify-between sm:justify-center">
+                        <span className="text-[0.7rem] uppercase tracking-[0.14em] sm:hidden" style={{ color: d3.haze }}>
+                          Qty
+                        </span>
+                        <div
+                          className="flex items-center gap-3 rounded-full border px-2.5 py-1.5"
+                          style={{ borderColor: d3.rule }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateQuantity(line.variantId, line.quantity - 1)
+                            }
+                            className="grid h-7 w-7 place-items-center rounded-full"
+                            style={{ background: d3.paper }}
+                            aria-label="Decrease"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <span className={`${serif} w-6 text-center text-lg`}>
+                            {line.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateQuantity(line.variantId, line.quantity + 1)
+                            }
+                            className="grid h-7 w-7 place-items-center rounded-full"
+                            style={{ background: d3.paper }}
+                            aria-label="Increase"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-baseline justify-between gap-2 sm:block sm:text-right">
+                        <span className="text-[0.7rem] uppercase tracking-[0.14em] sm:hidden" style={{ color: d3.haze }}>
+                          Total
+                        </span>
+                        <span className={`${serif} text-2xl font-semibold`}>
+                          {formatCurrency(line.price * line.quantity)}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
 
               <Link
@@ -210,14 +202,14 @@ export function D3Cart() {
 
                 <dl className="mt-5 space-y-3 text-[0.92rem]">
                   {[
-                    ["Subtotal", `$${subtotal.toFixed(2)}`, false],
-                    ["Trade tier B (-8%)", `-$${tradeDiscount.toFixed(2)}`, true],
+                    ["Subtotal", formatCurrency(subtotal), false],
+                    ["Trade tier B (-8%)", `-${formatCurrency(tradeDiscount)}`, true],
                     [
                       "Delivery",
-                      delivery === 0 ? "Free" : `$${delivery.toFixed(2)}`,
+                      delivery === 0 ? "Free" : formatCurrency(delivery),
                       delivery === 0
                     ],
-                    ["Estimated tax", `$${tax.toFixed(2)}`, false]
+                    ["Estimated tax", formatCurrency(tax), false]
                   ].map(([k, v, accent]) => (
                     <div key={k as string} className="flex justify-between">
                       <dt style={{ color: d3.graphite }}>{k}</dt>
@@ -239,7 +231,7 @@ export function D3Cart() {
                     Total
                   </span>
                   <span className={`${serif} text-3xl font-semibold`}>
-                    ${total.toFixed(2)}
+                    {formatCurrency(total)}
                   </span>
                 </div>
 

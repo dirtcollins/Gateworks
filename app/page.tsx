@@ -80,6 +80,14 @@ export default async function Home({ searchParams }: HomePageProps) {
       eyebrow="Gateworks Supply"
       title="Everything your crew needs to frame, hang, and finish the job."
     >
+      <Link
+        className="mb-4 flex items-center justify-between gap-3 rounded-md border border-dashed border-industrial-ink/30 bg-industrial-paper px-4 py-2.5 text-xs font-bold uppercase tracking-[0.08em] text-industrial-ink transition hover:border-industrial-ink"
+        href="/design-lab"
+      >
+        <span>Design Lab — preview 5 new site designs and compare them side by side</span>
+        <span aria-hidden="true">→</span>
+      </Link>
+
       <div className="mb-5 flex flex-col gap-2.5 sm:flex-row sm:items-center">
         <Link
           className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-industrial-ink bg-industrial-ink px-5 text-sm font-black uppercase tracking-[0.08em] text-white transition hover:bg-industrial-pine active:translate-y-px"

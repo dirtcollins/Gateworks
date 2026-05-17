@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
@@ -9,75 +10,63 @@ import {
   MapPin,
   Search,
   ShoppingCart,
-  SlidersHorizontal,
-  Star
+  SlidersHorizontal
 } from "lucide-react";
+import {
+  featuredCategoryProducts,
+  topCategories
+} from "@/features/design-lab/live-data";
+import type { Product } from "@/lib/types";
 import { D4Shell, D4Stars, brandClasses } from "./shell";
 
-type Product = {
-  id: number;
-  name: string;
-  brand: string;
-  price: number;
-  was?: number;
-  rating: number;
-  reviews: number;
-  stock: number;
-  cat: string;
-  badge?: string;
-  tint: string;
-};
-
-const PRODUCTS: Product[] = [
-  { id: 1, name: "Heavy-Duty Cantilever Gate Roller Kit", brand: "ForgeLine", price: 142, was: 189, rating: 4.8, reviews: 214, stock: 38, cat: "Gate Hardware", badge: "Best Seller", tint: "from-amber-200 to-amber-50" },
-  { id: 2, name: "Self-Closing Gravity Gate Hinge — Pair", brand: "ForgeLine", price: 54.99, was: 71, rating: 4.7, reviews: 332, stock: 120, cat: "Gate Hardware", tint: "from-emerald-200 to-emerald-50" },
-  { id: 3, name: "Lockable Drop-Rod Gate Latch", brand: "BoltCraft", price: 31.5, rating: 4.6, reviews: 96, stock: 60, cat: "Gate Hardware", tint: "from-sky-200 to-sky-50" },
-  { id: 4, name: '2" x 2" x 11ga Galvanized Steel Tube — 24 ft', brand: "MillStock", price: 78.5, was: 96, rating: 4.9, reviews: 88, stock: 9, cat: "Steel & Tube", badge: "Low Stock", tint: "from-slate-200 to-slate-50" },
-  { id: 5, name: "#4 Grade-60 Rebar — 20 ft Bundle", brand: "MillStock", price: 64, rating: 4.8, reviews: 51, stock: 200, cat: "Steel & Tube", tint: "from-orange-200 to-orange-50" },
-  { id: 6, name: '1/2"-13 Hot-Dip Carriage Bolts — 50 ct', brand: "BoltCraft", price: 22.75, rating: 4.5, reviews: 410, stock: 480, cat: "Fasteners", tint: "from-violet-200 to-violet-50" },
-  { id: 7, name: "Structural Hex Bolt Assortment — 240 pc", brand: "BoltCraft", price: 89, was: 110, rating: 4.7, reviews: 162, stock: 33, cat: "Fasteners", badge: "Deal", tint: "from-rose-200 to-rose-50" },
-  { id: 8, name: "MIG Welding Wire ER70S-6 — 33 lb Spool", brand: "ArcMaster", price: 96.5, rating: 4.9, reviews: 77, stock: 18, cat: "Welding", tint: "from-amber-200 to-orange-50" },
-  { id: 9, name: "Auto-Darkening Welding Helmet", brand: "ArcMaster", price: 134, was: 169, rating: 4.8, reviews: 245, stock: 0, cat: "Welding", badge: "Sold Out", tint: "from-slate-300 to-slate-100" },
-  { id: 10, name: "M18 FUEL Brushless Impact Driver Kit", brand: "RedPoint", price: 219, was: 259, rating: 4.9, reviews: 1204, stock: 25, cat: "Power Tools", badge: "Top Rated", tint: "from-emerald-200 to-sky-50" },
-  { id: 11, name: "7-1/4 in Circular Saw — Corded", brand: "RedPoint", price: 128, rating: 4.6, reviews: 318, stock: 14, cat: "Power Tools", tint: "from-sky-200 to-violet-50" },
-  { id: 12, name: "Cut-Resistant Work Gloves — 6 Pack", brand: "SiteSafe", price: 27.99, rating: 4.7, reviews: 540, stock: 300, cat: "Safety Gear", tint: "from-orange-200 to-rose-50" }
-];
-
-const CATEGORIES = [
-  "Gate Hardware",
-  "Steel & Tube",
-  "Fasteners",
-  "Welding",
-  "Power Tools",
-  "Safety Gear"
-];
-
+// Real catalog products for the featured category.
+const PRODUCTS: Product[] = featuredCategoryProducts;
+const CATEGORIES = topCategories;
 const SORTS = ["Most popular", "Price: low to high", "Price: high to low", "Top rated"];
+const tints = [
+  "from-amber-200 to-amber-50",
+  "from-sky-200 to-sky-50",
+  "from-emerald-200 to-emerald-50",
+  "from-violet-200 to-violet-50",
+  "from-orange-200 to-orange-50",
+  "from-rose-200 to-rose-50",
+  "from-slate-200 to-slate-50"
+];
+
+const maxCatalogPrice = Math.max(
+  100,
+  Math.ceil(PRODUCTS.reduce((max, p) => Math.max(max, p.price), 0))
+);
 
 export function D4Category() {
-  const [cats, setCats] = useState<string[]>([]);
-  const [maxPrice, setMaxPrice] = useState(260);
+  const [maxPrice, setMaxPrice] = useState(maxCatalogPrice);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [sort, setSort] = useState(SORTS[0]);
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
-    let list = PRODUCTS.filter(
-      (p) =>
-        (cats.length === 0 || cats.includes(p.cat)) &&
-        p.price <= maxPrice &&
-        (!inStockOnly || p.stock > 0) &&
-        p.name.toLowerCase().includes(query.toLowerCase())
-    );
-    if (sort === "Price: low to high") list = [...list].sort((a, b) => a.price - b.price);
-    if (sort === "Price: high to low") list = [...list].sort((a, b) => b.price - a.price);
-    if (sort === "Top rated") list = [...list].sort((a, b) => b.rating - a.rating);
-    if (sort === "Most popular") list = [...list].sort((a, b) => b.reviews - a.reviews);
+    let list = PRODUCTS.filter((p) => {
+      const matchesPrice = p.price <= maxPrice;
+      const hasStock = p.variants.some(
+        (variant) => variant.inventory === "in_stock"
+      );
+      const matchesQuery =
+        p.title.toLowerCase().includes(query.toLowerCase()) ||
+        p.variants.some((variant) =>
+          variant.sku.toLowerCase().includes(query.toLowerCase())
+        );
+      return matchesPrice && (!inStockOnly || hasStock) && matchesQuery;
+    });
+    if (sort === "Price: low to high")
+      list = [...list].sort((a, b) => a.price - b.price);
+    if (sort === "Price: high to low")
+      list = [...list].sort((a, b) => b.price - a.price);
+    if (sort === "Top rated")
+      list = [...list].sort((a, b) => b.variants.length - a.variants.length);
+    if (sort === "Most popular")
+      list = [...list].sort((a, b) => b.variants.length - a.variants.length);
     return list;
-  }, [cats, maxPrice, inStockOnly, sort, query]);
-
-  const toggleCat = (c: string) =>
-    setCats((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
+  }, [maxPrice, inStockOnly, sort, query]);
 
   return (
     <D4Shell active="category">
@@ -89,10 +78,12 @@ export function D4Category() {
               Home
             </Link>
             <ChevronRight className="h-3 w-3" />
-            <span className="font-semibold text-slate-600">All products</span>
+            <span className="font-semibold text-slate-600">
+              {PRODUCTS[0]?.category.name ?? "All products"}
+            </span>
           </nav>
           <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-            Shop all products
+            {PRODUCTS[0]?.category.name ?? "Shop all products"}
           </h1>
           <p className="mt-1 text-sm text-slate-600">
             {PRODUCTS.length} contractor-grade items · honest stock counts ·
@@ -122,21 +113,17 @@ export function D4Category() {
             </p>
             <div className="mt-3 space-y-1">
               {CATEGORIES.map((c) => {
-                const n = PRODUCTS.filter((p) => p.cat === c).length;
+                const isCurrent = c.slug === PRODUCTS[0]?.category.slug;
                 return (
-                  <label
-                    key={c}
-                    className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50"
+                  <Link
+                    key={c.slug}
+                    href="/design-lab/d4/category"
+                    className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition hover:bg-slate-50 ${
+                      isCurrent ? "bg-orange-50 font-semibold text-orange-600" : ""
+                    }`}
                   >
-                    <input
-                      type="checkbox"
-                      checked={cats.includes(c)}
-                      onChange={() => toggleCat(c)}
-                      className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-400"
-                    />
-                    <span className="flex-1 text-slate-700">{c}</span>
-                    <span className="text-xs text-slate-400">{n}</span>
-                  </label>
+                    <span className="flex-1 text-slate-700">{c.name}</span>
+                  </Link>
                 );
               })}
             </div>
@@ -146,8 +133,8 @@ export function D4Category() {
             <p className="text-sm font-bold text-slate-900">Max price</p>
             <input
               type="range"
-              min={20}
-              max={260}
+              min={0}
+              max={maxCatalogPrice}
               value={maxPrice}
               onChange={(e) => setMaxPrice(Number(e.target.value))}
               className="mt-3 w-full accent-orange-500"
@@ -219,8 +206,7 @@ export function D4Category() {
               <button
                 type="button"
                 onClick={() => {
-                  setCats([]);
-                  setMaxPrice(260);
+                  setMaxPrice(maxCatalogPrice);
                   setInStockOnly(false);
                   setQuery("");
                 }}
@@ -231,25 +217,26 @@ export function D4Category() {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-              {filtered.map((p) => {
-                const out = p.stock === 0;
+              {filtered.map((p, index) => {
+                const variant = p.variants[0];
+                const out =
+                  !p.variants.some((v) => v.inventory === "in_stock");
                 return (
                   <article
                     key={p.id}
                     className="group flex flex-col overflow-hidden rounded-2xl bg-white ring-1 ring-slate-100 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-100"
                   >
-                    <div className={`relative aspect-square bg-gradient-to-br ${p.tint}`}>
-                      {p.badge ? (
-                        <span
-                          className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-bold shadow-sm ${
-                            out
-                              ? "bg-slate-700 text-white"
-                              : "bg-white/90 text-slate-700"
-                          }`}
-                        >
-                          {p.badge}
-                        </span>
-                      ) : null}
+                    <div
+                      className={`relative aspect-square bg-gradient-to-br ${tints[index % tints.length]}`}
+                    >
+                      <Image
+                        alt={p.title}
+                        src={p.images[0]?.url ?? variant?.image ?? "/assets/logo.svg"}
+                        fill
+                        quality={75}
+                        sizes="(max-width: 640px) 50vw, 33vw"
+                        className="object-contain p-6"
+                      />
                       <button
                         type="button"
                         aria-label="Save item"
@@ -260,29 +247,25 @@ export function D4Category() {
                     </div>
                     <div className="flex flex-1 flex-col p-4">
                       <p className="text-[11px] font-bold uppercase tracking-wide text-orange-500">
-                        {p.brand}
+                        {p.specifications.Brand ?? p.category.name}
                       </p>
                       <Link
                         href="/design-lab/d4/product"
                         className="mt-0.5 line-clamp-2 text-sm font-semibold text-slate-800 group-hover:text-orange-600"
                       >
-                        {p.name}
+                        {p.title}
                       </Link>
                       <div className="mt-1.5 flex items-center gap-1.5">
-                        <D4Stars value={p.rating} />
+                        <D4Stars value={4.7} />
                         <span className="text-xs text-slate-400">
-                          ({p.reviews})
+                          ({p.variants.length} variant
+                          {p.variants.length === 1 ? "" : "s"})
                         </span>
                       </div>
                       <div className="mt-2 flex items-end gap-2">
                         <span className="text-lg font-extrabold text-slate-900">
                           ${p.price.toFixed(2)}
                         </span>
-                        {p.was ? (
-                          <span className="text-sm text-slate-400 line-through">
-                            ${p.was.toFixed(2)}
-                          </span>
-                        ) : null}
                       </div>
                       {out ? (
                         <p className="mt-1 text-xs font-semibold text-slate-400">
@@ -295,23 +278,10 @@ export function D4Category() {
                       )}
                       <div className="mt-auto pt-3">
                         <Link
-                          href={out ? "#" : "/design-lab/d4/cart"}
-                          aria-disabled={out}
-                          className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition ${
-                            out
-                              ? "cursor-not-allowed bg-slate-100 text-slate-400"
-                              : "bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white"
-                          }`}
+                          href="/design-lab/d4/product"
+                          className="flex items-center justify-center gap-2 rounded-xl bg-orange-50 px-3 py-2 text-sm font-bold text-orange-600 transition hover:bg-orange-500 hover:text-white"
                         >
-                          {out ? (
-                            <>
-                              <Star className="h-4 w-4" /> Notify me
-                            </>
-                          ) : (
-                            <>
-                              <ShoppingCart className="h-4 w-4" /> Add to cart
-                            </>
-                          )}
+                          <ShoppingCart className="h-4 w-4" /> View product
                         </Link>
                       </div>
                     </div>

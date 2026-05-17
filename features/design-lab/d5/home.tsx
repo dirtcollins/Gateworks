@@ -14,7 +14,16 @@ import {
   Zap
 } from "lucide-react";
 import { Btn, D5, Dot, H, Kbd, Panel, Shell, Tag, mono } from "./kit";
-import { CATEGORIES, PRODUCTS, fmt } from "./data";
+import {
+  fmt,
+  getCategoryProducts,
+  newArrivals,
+  popularProducts,
+  swatchFor,
+  toRow,
+  topCategories
+} from "./data";
+import { useCartStore } from "@/lib/cart-store";
 
 const STATS = [
   { label: "Open orders", value: "37", delta: "+5 today", tone: D5.accent },
@@ -23,20 +32,27 @@ const STATS = [
   { label: "Spend MTD", value: "$48.2k", delta: "+12.4%", tone: D5.accent }
 ];
 
-const RECENT = [
-  { sku: "STL-SQT-2014", qty: 40, when: "2d ago" },
-  { sku: "GAT-HNG-BRL4", qty: 12, when: "2d ago" },
-  { sku: "WLD-ER70-035", qty: 4, when: "6d ago" },
-  { sku: "STL-PLT-3163", qty: 8, when: "11d ago" }
-];
-
 export default function D5Home() {
   const [added, setAdded] = useState<Record<string, boolean>>({});
-  const quick = useMemo(() => PRODUCTS.slice(0, 6), []);
+  const addItem = useCartStore((state) => state.addItem);
+  const quick = useMemo(() => popularProducts.slice(0, 6).map(toRow), []);
+  const recent = useMemo(() => newArrivals.slice(0, 4).map(toRow), []);
 
-  function add(sku: string) {
-    setAdded((p) => ({ ...p, [sku]: true }));
-    window.setTimeout(() => setAdded((p) => ({ ...p, [sku]: false })), 1100);
+  function add(row: ReturnType<typeof toRow>) {
+    if (row.variant) {
+      addItem({
+        productId: row.product.id,
+        variantId: row.variant.id,
+        title: row.product.title,
+        sku: row.variant.sku,
+        image: row.variant.image,
+        price: row.variant.price,
+        quantity: 1,
+        options: row.variant.options
+      });
+    }
+    setAdded((p) => ({ ...p, [row.sku]: true }));
+    window.setTimeout(() => setAdded((p) => ({ ...p, [row.sku]: false })), 1100);
   }
 
   return (
@@ -196,12 +212,12 @@ export default function D5Home() {
                   {fmt(p.price)}
                 </div>
                 <div className="text-[9px]" style={{ color: D5.faint }}>
-                  /{p.uom}
+                  /ea
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => add(p.sku)}
+                onClick={() => add(p)}
                 className="flex h-7 w-16 items-center justify-center gap-1 rounded text-[10px] font-bold transition-colors"
                 style={{
                   background: added[p.sku] ? D5.accentDim : D5.accent,
@@ -224,11 +240,11 @@ export default function D5Home() {
 
         <div className="flex flex-col gap-3">
           {/* categories */}
-          <Panel title="Departments" hint="6">
+          <Panel title="Departments" hint={String(topCategories.length)}>
             <div className="p-1.5">
-              {CATEGORIES.map((c) => (
+              {topCategories.map((c) => (
                 <Link
-                  key={c.name}
+                  key={c.slug}
                   href="/design-lab/d5/category"
                   className="flex items-center justify-between rounded px-2 py-1.5 transition-colors hover:brightness-125"
                   style={{ color: D5.ink }}
@@ -236,7 +252,7 @@ export default function D5Home() {
                   <span className="flex items-center gap-2 text-[11px] font-semibold">
                     <span
                       className="h-3.5 w-3.5 rounded-sm"
-                      style={{ background: c.swatch }}
+                      style={{ background: swatchFor(c.slug) }}
                     />
                     {c.name}
                   </span>
@@ -244,7 +260,7 @@ export default function D5Home() {
                     className="text-[10px]"
                     style={{ color: D5.faint, fontFamily: mono }}
                   >
-                    {c.count}
+                    {getCategoryProducts(c.slug).length}
                   </span>
                 </Link>
               ))}
@@ -258,22 +274,25 @@ export default function D5Home() {
             right={<Flame size={12} style={{ color: D5.amber }} />}
           >
             <div className="p-1.5">
-              {RECENT.map((r) => (
+              {recent.map((r) => (
                 <div
                   key={r.sku}
                   className="flex items-center justify-between rounded px-2 py-1.5"
                 >
-                  <div>
-                    <div className="text-[11px] font-semibold" style={{ color: D5.ink }}>
+                  <div className="min-w-0">
+                    <div
+                      className="truncate text-[11px] font-semibold"
+                      style={{ color: D5.ink }}
+                    >
                       {r.sku}
                     </div>
-                    <div className="text-[9px]" style={{ color: D5.faint }}>
-                      {r.qty} units · {r.when}
+                    <div className="truncate text-[9px]" style={{ color: D5.faint }}>
+                      {r.name}
                     </div>
                   </div>
                   <button
                     type="button"
-                    onClick={() => add(r.sku)}
+                    onClick={() => add(r)}
                     className="flex h-6 items-center gap-1 rounded border px-2 text-[10px] font-bold"
                     style={{
                       borderColor: D5.line,

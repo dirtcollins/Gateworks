@@ -1,7 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bookmark,
   Building2,
@@ -14,31 +15,41 @@ import {
   Zap
 } from "lucide-react";
 import { Btn, D5, Dot, H, Kbd, Panel, Shell, Tag, mono } from "./kit";
-import { CART_SEED, type CartLine, fmt } from "./data";
+import { fmt } from "./data";
+import { useCartStore } from "@/lib/cart-store";
 
 export default function D5Cart() {
-  const [lines, setLines] = useState<CartLine[]>(CART_SEED);
+  const items = useCartStore((state) => state.items);
+  const updateQuantity = useCartStore((state) => state.updateQuantity);
+  const removeItem = useCartStore((state) => state.removeItem);
+  const clearCart = useCartStore((state) => state.clearCart);
+
   const [fulfill, setFulfill] = useState<"willcall" | "delivery">("delivery");
   const [po, setPo] = useState("");
   const [placed, setPlaced] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
-  const bump = (sku: string, d: number) =>
-    setLines((ls) =>
-      ls.map((l) => (l.sku === sku ? { ...l, qty: Math.max(1, l.qty + d) } : l))
-    );
-  const setQ = (sku: string, q: number) =>
-    setLines((ls) => ls.map((l) => (l.sku === sku ? { ...l, qty: Math.max(1, q) } : l)));
-  const remove = (sku: string) => setLines((ls) => ls.filter((l) => l.sku !== sku));
+  // Cart store uses skipHydration; rehydrate on mount for live persisted data.
+  useEffect(() => {
+    void useCartStore.persist.rehydrate();
+    setHydrated(true);
+  }, []);
+
+  const bump = (variantId: string, current: number, d: number) =>
+    updateQuantity(variantId, Math.max(1, current + d));
+  const setQ = (variantId: string, q: number) =>
+    updateQuantity(variantId, Math.max(1, q));
+  const remove = (variantId: string) => removeItem(variantId);
 
   const subtotal = useMemo(
-    () => lines.reduce((s, l) => s + l.price * l.qty, 0),
-    [lines]
+    () => items.reduce((s, l) => s + l.price * l.quantity, 0),
+    [items]
   );
   const proSavings = subtotal * 0.085;
   const freight = fulfill === "delivery" ? (subtotal > 750 ? 0 : 65) : 0;
   const tax = (subtotal - proSavings) * 0.081;
   const total = subtotal - proSavings + freight + tax;
-  const units = lines.reduce((s, l) => s + l.qty, 0);
+  const units = items.reduce((s, l) => s + l.quantity, 0);
 
   return (
     <Shell crumb="cart">
@@ -46,7 +57,7 @@ export default function D5Cart() {
         <div>
           <H>Cart · order builder</H>
           <p className="mt-0.5 text-[11px]" style={{ color: D5.faint }}>
-            {lines.length} SKUs · {units} units · prices at PRO tier
+            {items.length} SKUs · {units} units · live catalog pricing
           </p>
         </div>
         <div className="flex gap-1.5">
@@ -64,16 +75,18 @@ export default function D5Cart() {
           {/* line items */}
           <Panel
             title="Line items"
-            hint={`// ${lines.length} rows`}
+            hint={`// ${items.length} rows`}
             right={
-              <button
-                type="button"
-                onClick={() => setLines(CART_SEED)}
-                className="text-[10px] font-semibold"
-                style={{ color: D5.faint }}
-              >
-                reset
-              </button>
+              items.length ? (
+                <button
+                  type="button"
+                  onClick={() => clearCart()}
+                  className="text-[10px] font-semibold"
+                  style={{ color: D5.faint }}
+                >
+                  clear
+                </button>
+              ) : null
             }
           >
             <div
@@ -86,7 +99,7 @@ export default function D5Cart() {
               <span className="text-right">ext</span>
               <span />
             </div>
-            {lines.length === 0 ? (
+            {hydrated && items.length === 0 ? (
               <div className="px-3 py-8 text-center">
                 <p className="text-[12px]" style={{ color: D5.dim }}>
                   Cart empty.
@@ -98,27 +111,39 @@ export default function D5Cart() {
                 </div>
               </div>
             ) : (
-              lines.map((l) => (
+              items.map((l) => (
                 <div
-                  key={l.sku}
+                  key={l.variantId}
                   className="grid grid-cols-[1fr_96px_96px_30px] items-center gap-x-2 border-b px-3 py-2 last:border-0 md:grid-cols-[1fr_84px_100px_100px_30px]"
                   style={{ borderColor: D5.line }}
                 >
                   <div className="flex items-center gap-2.5 overflow-hidden">
                     <span
-                      className="h-9 w-9 shrink-0 rounded"
-                      style={{ background: l.swatch }}
-                    />
+                      className="relative h-9 w-9 shrink-0 overflow-hidden rounded"
+                      style={{ background: D5.panelHi }}
+                    >
+                      <Image
+                        src={l.image || "/assets/logo.svg"}
+                        alt={l.title}
+                        fill
+                        quality={75}
+                        sizes="36px"
+                        className="object-contain p-0.5"
+                      />
+                    </span>
                     <div className="overflow-hidden">
                       <Link
                         href="/design-lab/d5/product"
                         className="block truncate text-[12px] font-semibold hover:underline"
                         style={{ color: D5.ink }}
                       >
-                        {l.name}
+                        {l.title}
                       </Link>
                       <div className="truncate text-[10px]" style={{ color: D5.faint }}>
-                        <span style={{ color: D5.dim }}>{l.sku}</span> · {l.spec}
+                        <span style={{ color: D5.dim }}>{l.sku}</span> ·{" "}
+                        {[l.options.length, l.options.finish]
+                          .filter((x) => x && x !== "Standard")
+                          .join(" · ") || "Standard"}
                       </div>
                     </div>
                   </div>
@@ -135,21 +160,21 @@ export default function D5Cart() {
                     >
                       <button
                         type="button"
-                        onClick={() => bump(l.sku, -1)}
+                        onClick={() => bump(l.variantId, l.quantity, -1)}
                         className="grid h-7 w-6 place-items-center"
                         style={{ color: D5.dim }}
                       >
                         <Minus size={11} />
                       </button>
                       <input
-                        value={l.qty}
-                        onChange={(e) => setQ(l.sku, Number(e.target.value) || 1)}
+                        value={l.quantity}
+                        onChange={(e) => setQ(l.variantId, Number(e.target.value) || 1)}
                         className="w-9 bg-transparent text-center text-[12px] font-bold outline-none"
                         style={{ color: D5.ink }}
                       />
                       <button
                         type="button"
-                        onClick={() => bump(l.sku, 1)}
+                        onClick={() => bump(l.variantId, l.quantity, 1)}
                         className="grid h-7 w-6 place-items-center"
                         style={{ color: D5.dim }}
                       >
@@ -159,15 +184,15 @@ export default function D5Cart() {
                   </div>
                   <div className="text-right">
                     <div className="text-[12px] font-bold" style={{ color: D5.ink }}>
-                      {fmt(l.price * l.qty)}
+                      {fmt(l.price * l.quantity)}
                     </div>
                     <div className="text-[9px]" style={{ color: D5.faint }}>
-                      {l.lead}
+                      ships today
                     </div>
                   </div>
                   <button
                     type="button"
-                    onClick={() => remove(l.sku)}
+                    onClick={() => remove(l.variantId)}
                     className="grid h-7 w-7 place-items-center rounded"
                     style={{ color: D5.faint }}
                   >
@@ -307,7 +332,7 @@ export default function D5Cart() {
                   setPlaced(true);
                   window.setTimeout(() => setPlaced(false), 2200);
                 }}
-                disabled={lines.length === 0}
+                disabled={items.length === 0}
                 className="mt-3 flex h-10 w-full items-center justify-center gap-1.5 rounded text-[12px] font-bold disabled:opacity-30"
                 style={{
                   background: placed ? D5.accentDim : D5.accent,

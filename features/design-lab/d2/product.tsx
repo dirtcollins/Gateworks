@@ -20,60 +20,72 @@ import {
   D2Shell,
   Panel,
   PanelHead,
-  PartImage,
+  PartPhoto,
   Tag,
   mono
 } from "./kit";
+import { featuredProduct, getRelatedProducts } from "@/features/design-lab/live-data";
+import { useCartStore } from "@/lib/cart-store";
 
-const PRODUCT = {
-  id: "GW-7740",
-  name: 'Heavy-Duty Bolt-On Gate Hinge — 6" Weld-Free',
-  category: "Gate Hardware",
-  basePrice: 38.5,
-  rating: 4.8,
-  reviews: 214,
-  blurb:
-    "Forged-body bolt-on hinge engineered for swing gates up to 14ft / 600lb. Self-lubricating bronze bushing, zinc-plated against yard corrosion. Installs with no welding — square-tube clamp pattern fits 2\" to 4\" frames.",
-  views: [
-    { code: "FRONT", seed: "GW-7740-A" },
-    { code: "PROFILE", seed: "GW-7740-B" },
-    { code: "HARDWARE", seed: "GW-7740-C" },
-    { code: "INSTALLED", seed: "GW-7740-D" }
-  ],
-  specs: [
-    ["Load rating", "600 lb / leaf"],
-    ["Body material", "Forged carbon steel"],
-    ["Finish", "Hot-dip zinc, RoHS"],
-    ["Pin diameter", '0.625 in (5/8")'],
-    ["Frame fit", '2.0" – 4.0" square tube'],
-    ["Pack weight", "3.4 lb"],
-    ["Origin", "Lot mill-certified · US"],
-    ["SKU lifecycle", "Active · stocked"]
-  ]
-};
+const PRODUCT = featuredProduct;
+const RELATED = getRelatedProducts(PRODUCT, 3);
 
-const TIERS = [
-  { qty: "1 – 23", price: 38.5, label: "List" },
-  { qty: "24 – 99", price: 34.65, label: "Crew −10%" },
-  { qty: "100 – 499", price: 30.8, label: "Contractor −20%" },
-  { qty: "500+", price: 26.95, label: "Yard −30%" }
-];
+// Real catalog images for the gallery (deduplicated, capped at four views).
+const VIEWS = (() => {
+  const urls = Array.from(
+    new Set([
+      ...PRODUCT.images.map((image) => image.url),
+      ...PRODUCT.variants.map((variant) => variant.image)
+    ])
+  ).filter((url): url is string => Boolean(url));
+  const labels = ["FRONT", "PROFILE", "HARDWARE", "INSTALLED"];
+  return urls.slice(0, 4).map((url, index) => ({
+    code: labels[index] ?? `VIEW ${index + 1}`,
+    url
+  }));
+})();
 
-function unitPriceFor(qty: number) {
-  if (qty >= 500) return 26.95;
-  if (qty >= 100) return 30.8;
-  if (qty >= 24) return 34.65;
-  return 38.5;
-}
+// Real spec rows from the catalog product, formatted for the d2 spec grid.
+const SPECS: Array<[string, string]> = Object.entries(PRODUCT.specifications)
+  .filter(([, value]) => Boolean(value) && !value.startsWith("http"))
+  .slice(0, 8);
 
 export function D2Product() {
-  const [qty, setQty] = useState(24);
+  const addItem = useCartStore((state) => state.addItem);
+  const firstAvailable =
+    PRODUCT.variants.find((variant) => variant.inventory === "in_stock") ??
+    PRODUCT.variants[0];
+
+  const [qty, setQty] = useState(1);
   const [view, setView] = useState(0);
+  const [variantId, setVariantId] = useState(firstAvailable?.id ?? "");
   const [added, setAdded] = useState(false);
 
-  const unit = useMemo(() => unitPriceFor(qty), [qty]);
+  const selectedVariant = useMemo(
+    () => PRODUCT.variants.find((variant) => variant.id === variantId) ?? firstAvailable,
+    [variantId, firstAvailable]
+  );
+
+  const unit = selectedVariant?.price ?? PRODUCT.price;
   const subtotal = unit * qty;
-  const savings = (PRODUCT.basePrice - unit) * qty;
+
+  function handleAddToCart() {
+    if (!selectedVariant) return;
+    addItem({
+      productId: PRODUCT.id,
+      variantId: selectedVariant.id,
+      title: PRODUCT.title,
+      sku: selectedVariant.sku,
+      image: selectedVariant.image || PRODUCT.images[0]?.url || "/assets/logo.svg",
+      price: selectedVariant.price,
+      quantity: qty,
+      options: selectedVariant.options
+    });
+    setAdded(true);
+    window.setTimeout(() => setAdded(false), 1600);
+  }
+
+  const activeView = VIEWS[view] ?? VIEWS[0];
 
   return (
     <D2Shell active="product" kicker="PRODUCT // SPEC SHEET">
@@ -84,43 +96,53 @@ export function D2Product() {
       >
         <Link href="/design-lab/d2/home">Storefront</Link>
         <ChevronRight className="h-3 w-3" />
-        <Link href="/design-lab/d2/category">{PRODUCT.category}</Link>
+        <Link href="/design-lab/d2/category">{PRODUCT.category.name}</Link>
         <ChevronRight className="h-3 w-3" />
-        <span style={{ color: D2.accent }}>{PRODUCT.id}</span>
+        <span style={{ color: D2.accent }}>{firstAvailable?.sku ?? PRODUCT.id}</span>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
         {/* gallery */}
         <Panel>
-          <PanelHead title="Visual" meta={PRODUCT.views[view].code} />
+          <PanelHead title="Visual" meta={activeView?.code} />
           <div className="p-4">
-            <PartImage
-              seed={PRODUCT.views[view].seed}
+            <PartPhoto
+              src={activeView?.url}
+              alt={PRODUCT.title}
+              seed={`${PRODUCT.id}-${view}`}
               className="aspect-[4/3] w-full"
-              label={`${PRODUCT.id} · ${PRODUCT.views[view].code}`}
+              label={`${firstAvailable?.sku ?? PRODUCT.id} · ${activeView?.code ?? ""}`}
+              quality={90}
             />
-            <div className="mt-3 grid grid-cols-4 gap-3">
-              {PRODUCT.views.map((v, i) => (
-                <button
-                  key={v.code}
-                  type="button"
-                  onClick={() => setView(i)}
-                  className="rounded-[4px] p-1 transition"
-                  style={{
-                    border: `1px solid ${i === view ? D2.accent : D2.line}`,
-                    boxShadow: i === view ? `0 0 14px ${D2.accent}33` : undefined
-                  }}
-                >
-                  <PartImage seed={v.seed} className="aspect-square w-full" />
-                  <span
-                    className={`${mono} mt-1 block text-center text-[9px] uppercase`}
-                    style={{ color: i === view ? D2.accent : D2.muted }}
+            {VIEWS.length > 1 ? (
+              <div className="mt-3 grid grid-cols-4 gap-3">
+                {VIEWS.map((v, i) => (
+                  <button
+                    key={v.url}
+                    type="button"
+                    onClick={() => setView(i)}
+                    className="rounded-[4px] p-1 transition"
+                    style={{
+                      border: `1px solid ${i === view ? D2.accent : D2.line}`,
+                      boxShadow: i === view ? `0 0 14px ${D2.accent}33` : undefined
+                    }}
                   >
-                    {v.code}
-                  </span>
-                </button>
-              ))}
-            </div>
+                    <PartPhoto
+                      src={v.url}
+                      alt={`${PRODUCT.title} ${v.code}`}
+                      seed={v.url}
+                      className="aspect-square w-full"
+                    />
+                    <span
+                      className={`${mono} mt-1 block text-center text-[9px] uppercase`}
+                      style={{ color: i === view ? D2.accent : D2.muted }}
+                    >
+                      {v.code}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         </Panel>
 
@@ -128,12 +150,12 @@ export function D2Product() {
         <div className="flex flex-col gap-6">
           <Panel className="p-5">
             <div className="flex items-center gap-2">
-              <Tag tone="accent">{PRODUCT.id}</Tag>
-              <Tag tone="muted">★ {PRODUCT.rating} · {PRODUCT.reviews}</Tag>
+              <Tag tone="accent">{firstAvailable?.sku ?? PRODUCT.id}</Tag>
+              <Tag tone="muted">{PRODUCT.category.name}</Tag>
             </div>
-            <h1 className="mt-3 text-[24px] font-bold leading-tight">{PRODUCT.name}</h1>
+            <h1 className="mt-3 text-[24px] font-bold leading-tight">{PRODUCT.title}</h1>
             <p className="mt-3 text-[13px] leading-relaxed" style={{ color: D2.muted }}>
-              {PRODUCT.blurb}
+              {PRODUCT.description}
             </p>
 
             {/* price + qty */}
@@ -147,7 +169,7 @@ export function D2Product() {
                     className={`${mono} text-[10px] uppercase tracking-[0.16em]`}
                     style={{ color: D2.muted }}
                   >
-                    Unit price @ {qty}
+                    Unit price
                   </div>
                   <div className={`${mono} text-[34px] font-bold leading-none`}>
                     <span style={{ color: D2.accent }}>${unit.toFixed(2)}</span>
@@ -194,13 +216,7 @@ export function D2Product() {
                     <Plus className="h-4 w-4" />
                   </button>
                 </div>
-                <AccentButton
-                  className="flex-1"
-                  onClick={() => {
-                    setAdded(true);
-                    window.setTimeout(() => setAdded(false), 1600);
-                  }}
-                >
+                <AccentButton className="flex-1" onClick={handleAddToCart}>
                   {added ? (
                     <>
                       <CheckCircle2 className="h-4 w-4" /> Added to cart
@@ -212,15 +228,6 @@ export function D2Product() {
                   )}
                 </AccentButton>
               </div>
-
-              {savings > 0 ? (
-                <div
-                  className={`${mono} mt-3 text-[11px]`}
-                  style={{ color: D2.accent }}
-                >
-                  ✓ Volume tier active — saving ${savings.toFixed(2)} vs list
-                </div>
-              ) : null}
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-3">
@@ -245,16 +252,27 @@ export function D2Product() {
             </div>
           </Panel>
 
-          {/* volume tiers */}
+          {/* variant picker (real variants) */}
           <Panel>
-            <PanelHead title="Volume Pricing" meta="QTY BREAKS" />
+            <PanelHead
+              title={PRODUCT.variants.length > 1 ? "Select Variant" : "Stock Item"}
+              meta={`${PRODUCT.variants.length} SKU${PRODUCT.variants.length === 1 ? "" : "S"}`}
+            />
             <div>
-              {TIERS.map((t, i) => {
-                const on = unit === t.price;
+              {PRODUCT.variants.map((variant, i) => {
+                const on = variant.id === selectedVariant?.id;
+                const optionLabel = [
+                  variant.options.length,
+                  variant.options.finish
+                ]
+                  .filter((value) => value && value !== "Standard")
+                  .join(" · ");
                 return (
-                  <div
-                    key={t.qty}
-                    className="flex items-center justify-between px-4 py-3"
+                  <button
+                    key={variant.id}
+                    type="button"
+                    onClick={() => setVariantId(variant.id)}
+                    className="flex w-full items-center justify-between px-4 py-3 text-left transition"
                     style={{
                       borderTop: i > 0 ? `1px solid ${D2.line}` : undefined,
                       background: on ? `${D2.accent}10` : undefined
@@ -265,16 +283,18 @@ export function D2Product() {
                         className="h-2 w-2 rounded-full"
                         style={{ background: on ? D2.accent : D2.line }}
                       />
-                      <span className={`${mono} text-[12px]`}>{t.qty}</span>
-                      <Tag tone={on ? "accent" : "muted"}>{t.label}</Tag>
+                      <span className={`${mono} text-[12px]`}>{variant.sku}</span>
+                      {optionLabel ? (
+                        <Tag tone={on ? "accent" : "muted"}>{optionLabel}</Tag>
+                      ) : null}
                     </div>
                     <span
                       className={`${mono} text-[14px] font-bold`}
                       style={{ color: on ? D2.accent : D2.text }}
                     >
-                      ${t.price.toFixed(2)}
+                      ${variant.price.toFixed(2)}
                     </span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -286,7 +306,7 @@ export function D2Product() {
       <Panel className="mt-6">
         <PanelHead
           title="Spec Sheet"
-          meta="DATASHEET GW-7740"
+          meta={`DATASHEET ${firstAvailable?.sku ?? PRODUCT.id}`}
           action={
             <span
               className={`${mono} flex items-center gap-1.5 text-[11px] uppercase`}
@@ -297,7 +317,7 @@ export function D2Product() {
           }
         />
         <div className="grid sm:grid-cols-2">
-          {PRODUCT.specs.map(([k, v], i) => (
+          {SPECS.map(([k, v], i) => (
             <div
               key={k}
               className="flex items-center justify-between px-4 py-3"
@@ -313,37 +333,57 @@ export function D2Product() {
             </div>
           ))}
         </div>
+        {PRODUCT.details.length ? (
+          <ul
+            className="border-t px-4 py-3"
+            style={{ borderColor: D2.line }}
+          >
+            {PRODUCT.details.map((detail) => (
+              <li
+                key={detail}
+                className="flex gap-2 py-1 text-[12px]"
+                style={{ color: D2.muted }}
+              >
+                <span style={{ color: D2.accent }}>•</span>
+                <span>{detail}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </Panel>
 
       {/* related */}
-      <Panel className="mt-6">
-        <PanelHead title="Pairs With" meta="3 ITEMS" />
-        <div className="grid grid-cols-1 sm:grid-cols-3">
-          {[
-            { id: "GW-2208", name: "Drop Rod Latch Assembly", price: 24.0 },
-            { id: "GW-4417", name: "V-Track Roller — Cast", price: 19.95 },
-            { id: "GW-3390", name: "Gate Anti-Sag Truss Kit", price: 52.25 }
-          ].map((r, i) => (
-            <Link
-              key={r.id}
-              href="/design-lab/d2/product"
-              className="flex items-center gap-3 p-4 transition hover:bg-white/[0.02]"
-              style={{ borderLeft: i > 0 ? `1px solid ${D2.line}` : undefined }}
-            >
-              <PartImage seed={r.id} className="h-16 w-16 shrink-0" />
-              <div className="min-w-0">
-                <div className={`${mono} text-[10px]`} style={{ color: D2.muted }}>
-                  {r.id}
+      {RELATED.length ? (
+        <Panel className="mt-6">
+          <PanelHead title="Pairs With" meta={`${RELATED.length} ITEMS`} />
+          <div className="grid grid-cols-1 sm:grid-cols-3">
+            {RELATED.map((r, i) => (
+              <Link
+                key={r.id}
+                href="/design-lab/d2/product"
+                className="flex items-center gap-3 p-4 transition hover:bg-white/[0.02]"
+                style={{ borderLeft: i > 0 ? `1px solid ${D2.line}` : undefined }}
+              >
+                <PartPhoto
+                  src={r.images[0]?.url ?? r.variants[0]?.image}
+                  alt={r.title}
+                  seed={r.id}
+                  className="h-16 w-16 shrink-0"
+                />
+                <div className="min-w-0">
+                  <div className={`${mono} text-[10px]`} style={{ color: D2.muted }}>
+                    {r.variants[0]?.sku ?? r.id}
+                  </div>
+                  <div className="truncate text-[13px] font-medium">{r.title}</div>
+                  <div className={`${mono} text-[13px] font-bold`} style={{ color: D2.accent }}>
+                    ${r.price.toFixed(2)}
+                  </div>
                 </div>
-                <div className="truncate text-[13px] font-medium">{r.name}</div>
-                <div className={`${mono} text-[13px] font-bold`} style={{ color: D2.accent }}>
-                  ${r.price.toFixed(2)}
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </Panel>
+              </Link>
+            ))}
+          </div>
+        </Panel>
+      ) : null}
     </D2Shell>
   );
 }

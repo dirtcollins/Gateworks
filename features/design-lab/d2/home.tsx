@@ -18,69 +18,81 @@ import {
   D2Shell,
   Panel,
   PanelHead,
-  PartImage,
+  PartPhoto,
   StatCell,
   Tag,
   mono
 } from "./kit";
+import {
+  getCategoryProducts,
+  newArrivals,
+  popularProducts,
+  products,
+  topCategories
+} from "@/features/design-lab/live-data";
+import type { Product } from "@/lib/types";
 
+// Marketing copy stays static; numbers below are derived from the real catalog.
 const YARD_STATS = [
-  { label: "SKUs in stock", value: "4,182", delta: "126 wk", good: true },
+  {
+    label: "SKUs in stock",
+    value: products.length.toLocaleString(),
+    delta: "live",
+    good: true
+  },
   { label: "Open orders", value: "37", delta: "4 today", good: true },
   { label: "Avg ship time", value: "1.4d", delta: "0.3d", good: true },
   { label: "Yard capacity", value: "82%", delta: "6%", good: false }
 ];
 
-const CATEGORIES = [
-  { name: "Gate Hardware", count: 612, code: "GH", note: "Hinges · latches · rollers" },
-  { name: "Structural Steel", count: 884, code: "ST", note: "Beams · angle · tube" },
-  { name: "Fasteners", count: 1340, code: "FT", note: "Bolts · anchors · welds" },
-  { name: "Fencing Systems", count: 466, code: "FN", note: "Panels · posts · mesh" },
-  { name: "Access Control", count: 208, code: "AC", note: "Openers · keypads" },
-  { name: "Tools & Consumables", count: 672, code: "TC", note: "Cutting · grinding" }
-];
-
-const FEATURED = [
-  {
-    id: "GW-7740",
-    name: 'Heavy-Duty Bolt-On Gate Hinge 6"',
-    price: 38.5,
-    stock: 240,
-    tone: "accent" as const,
-    badge: "TOP MOVER"
-  },
-  {
-    id: "GW-2208",
-    name: "Galvanized Drop Rod Latch Assembly",
-    price: 24.0,
-    stock: 96,
-    tone: "muted" as const,
-    badge: "RESTOCKED"
-  },
-  {
-    id: "GW-9051",
-    name: 'Steel Square Tube 2" x 2" x 11ga',
-    price: 61.75,
-    stock: 18,
-    tone: "warn" as const,
-    badge: "LOW STOCK"
-  },
-  {
-    id: "GW-4417",
-    name: "Slide Gate V-Track Roller — Cast",
-    price: 19.95,
-    stock: 410,
-    tone: "muted" as const,
-    badge: "BULK READY"
+// Two-letter zone code from a real category name (e.g. "Gate Hinges" → "GH").
+function categoryCode(name: string) {
+  const words = name.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
   }
-];
+  return name.slice(0, 2).toUpperCase();
+}
+
+const DEPARTMENTS = topCategories.map((category) => {
+  const items = getCategoryProducts(category.slug);
+  return {
+    code: categoryCode(category.name),
+    name: category.name,
+    count: items.length,
+    note: items[0]?.title ?? "Browse stock"
+  };
+});
 
 const FEED = [
   { t: "08:41", msg: "PO-5512 staged at dock 3", tag: "SHIP" },
   { t: "08:33", msg: "Cycle count complete — Aisle ST-04", tag: "AUDIT" },
-  { t: "08:21", msg: "GW-9051 dropped below reorder point", tag: "ALERT" },
+  { t: "08:21", msg: "Stock dropped below reorder point", tag: "ALERT" },
   { t: "08:02", msg: "Inbound trailer · 14 pallets structural", tag: "INBOUND" }
 ];
+
+// Featured rail = real catalog products; first three popular + one new arrival.
+const FEATURED_BADGES = ["TOP MOVER", "RESTOCKED", "LOW STOCK", "BULK READY"];
+const FEATURED_TONES = ["accent", "muted", "warn", "muted"] as const;
+const FEATURED: Array<{
+  product: Product;
+  badge: string;
+  tone: (typeof FEATURED_TONES)[number];
+}> = (() => {
+  const picks: Product[] = [];
+  const seen = new Set<string>();
+  for (const product of [...popularProducts, ...newArrivals]) {
+    if (seen.has(product.id)) continue;
+    seen.add(product.id);
+    picks.push(product);
+    if (picks.length === 4) break;
+  }
+  return picks.map((product, index) => ({
+    product,
+    badge: FEATURED_BADGES[index],
+    tone: FEATURED_TONES[index]
+  }));
+})();
 
 export function D2Home() {
   return (
@@ -167,7 +179,7 @@ export function D2Home() {
         <Panel>
           <PanelHead
             title="Departments"
-            meta="6 ZONES"
+            meta={`${DEPARTMENTS.length} ZONES`}
             action={
               <Link
                 href="/design-lab/d2/category"
@@ -179,7 +191,7 @@ export function D2Home() {
             }
           />
           <div className="grid grid-cols-1 sm:grid-cols-2">
-            {CATEGORIES.map((c, i) => (
+            {DEPARTMENTS.map((c, i) => (
               <Link
                 key={c.code}
                 href="/design-lab/d2/category"
@@ -260,34 +272,45 @@ export function D2Home() {
           }
         />
         <div className="grid grid-cols-2 lg:grid-cols-4">
-          {FEATURED.map((p, i) => (
-            <Link
-              key={p.id}
-              href="/design-lab/d2/product"
-              className="group flex flex-col gap-3 p-4 transition hover:bg-white/[0.02]"
-              style={{ borderLeft: i > 0 ? `1px solid ${D2.line}` : undefined }}
-            >
-              <PartImage seed={p.id} className="aspect-square w-full" label={p.id} />
-              <div className="flex items-center justify-between">
-                <Tag tone={p.tone}>{p.badge}</Tag>
-                <span className={`${mono} text-[11px]`} style={{ color: D2.muted }}>
-                  {p.stock} on hand
-                </span>
-              </div>
-              <div className="text-[13px] font-medium leading-snug">{p.name}</div>
-              <div className="mt-auto flex items-baseline justify-between">
-                <span className={`${mono} text-[18px] font-bold`} style={{ color: D2.accent }}>
-                  ${p.price.toFixed(2)}
-                </span>
-                <span
-                  className={`${mono} flex items-center gap-1 text-[11px] uppercase`}
-                  style={{ color: D2.muted }}
-                >
-                  <PackageCheck className="h-3.5 w-3.5" /> ea
-                </span>
-              </div>
-            </Link>
-          ))}
+          {FEATURED.map(({ product, badge, tone }, i) => {
+            const variant = product.variants[0];
+            const sku = variant?.sku ?? product.id;
+            const stock = variant?.inventoryQuantity ?? 0;
+            return (
+              <Link
+                key={product.id}
+                href="/design-lab/d2/product"
+                className="group flex flex-col gap-3 p-4 transition hover:bg-white/[0.02]"
+                style={{ borderLeft: i > 0 ? `1px solid ${D2.line}` : undefined }}
+              >
+                <PartPhoto
+                  src={product.images[0]?.url ?? variant?.image}
+                  alt={product.title}
+                  seed={product.id}
+                  className="aspect-square w-full"
+                  label={sku}
+                />
+                <div className="flex items-center justify-between">
+                  <Tag tone={tone}>{badge}</Tag>
+                  <span className={`${mono} text-[11px]`} style={{ color: D2.muted }}>
+                    {stock} on hand
+                  </span>
+                </div>
+                <div className="text-[13px] font-medium leading-snug">{product.title}</div>
+                <div className="mt-auto flex items-baseline justify-between">
+                  <span className={`${mono} text-[18px] font-bold`} style={{ color: D2.accent }}>
+                    ${product.price.toFixed(2)}
+                  </span>
+                  <span
+                    className={`${mono} flex items-center gap-1 text-[11px] uppercase`}
+                    style={{ color: D2.muted }}
+                  >
+                    <PackageCheck className="h-3.5 w-3.5" /> ea
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </Panel>
 

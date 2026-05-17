@@ -1,7 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Check,
   ChevronRight,
@@ -15,56 +16,74 @@ import {
   Star,
   Truck
 } from "lucide-react";
+import {
+  featuredProduct,
+  getRelatedProducts
+} from "@/features/design-lab/live-data";
+import { useCartStore } from "@/lib/cart-store";
 import { D4Shell, D4Stars, brandClasses } from "./shell";
 
-const product = {
-  name: "Heavy-Duty Cantilever Gate Roller Kit",
-  sku: "GW-CANT-RK48",
-  brand: "ForgeLine Pro",
-  price: 142.0,
-  was: 189.0,
-  rating: 4.8,
-  reviews: 214,
-  stock: 38,
-  thumbs: [
-    "from-amber-200 to-amber-50",
-    "from-orange-200 to-orange-50",
-    "from-slate-200 to-slate-50",
-    "from-amber-100 to-white"
-  ]
-};
-
-const finishes = [
-  { id: "galv", label: "Galvanized", delta: 0 },
-  { id: "powder", label: "Powder-coat black", delta: 18 },
-  { id: "ss", label: "Stainless 304", delta: 64 }
+const product = featuredProduct;
+const related = getRelatedProducts(product, 4);
+const galleryTints = [
+  "from-amber-200 to-amber-50",
+  "from-orange-200 to-orange-50",
+  "from-slate-200 to-slate-50",
+  "from-amber-100 to-white"
 ];
-
-const specs: [string, string][] = [
-  ["Load rating", "1,200 lb gate capacity"],
-  ["Track length", "48 in (122 cm)"],
-  ["Bearing type", "Sealed double-row"],
-  ["Material", "Hot-dip galvanized steel"],
-  ["Warranty", "5-year structural"],
-  ["Ships from", "Yard #2 — Eastside"]
-];
-
-const related = [
-  { name: 'Gate Latch — Lockable Drop Rod', price: 31.5, tint: "from-sky-200 to-sky-50" },
-  { name: "Self-Closing Gravity Hinge Pair", price: 54.99, tint: "from-emerald-200 to-emerald-50" },
-  { name: "Galvanized Steel Tube 2x2", price: 78.5, tint: "from-violet-200 to-violet-50" },
-  { name: "Anti-Sag Gate Kit", price: 24.0, tint: "from-rose-200 to-rose-50" }
+const relatedTints = [
+  "from-sky-200 to-sky-50",
+  "from-emerald-200 to-emerald-50",
+  "from-violet-200 to-violet-50",
+  "from-rose-200 to-rose-50"
 ];
 
 export function D4Product() {
+  const addItem = useCartStore((state) => state.addItem);
+
+  const galleryImages = useMemo(() => {
+    const urls = Array.from(
+      new Set([
+        ...product.images.map((image) => image.url),
+        ...product.variants.map((variant) => variant.image)
+      ])
+    ).filter((url): url is string => Boolean(url));
+    return urls.length ? urls : ["/assets/logo.svg"];
+  }, []);
+
   const [active, setActive] = useState(0);
-  const [finish, setFinish] = useState(finishes[0].id);
+  const [variantId, setVariantId] = useState(
+    product.variants[0]?.id ?? ""
+  );
   const [qty, setQty] = useState(1);
   const [saved, setSaved] = useState(false);
+  const [justAdded, setJustAdded] = useState(false);
 
-  const finishDelta = finishes.find((f) => f.id === finish)?.delta ?? 0;
-  const unit = product.price + finishDelta;
+  const selectedVariant =
+    product.variants.find((variant) => variant.id === variantId) ??
+    product.variants[0];
+
+  const unit = selectedVariant?.price ?? product.price;
   const total = unit * qty;
+  const stock = selectedVariant?.inventoryQuantity ?? 0;
+  const inStock = selectedVariant?.inventory === "in_stock";
+  const specs = Object.entries(product.specifications);
+
+  function handleAddToCart() {
+    if (!selectedVariant) return;
+    addItem({
+      productId: product.id,
+      variantId: selectedVariant.id,
+      title: product.title,
+      sku: selectedVariant.sku,
+      image: selectedVariant.image || galleryImages[0],
+      price: selectedVariant.price,
+      quantity: qty,
+      options: selectedVariant.options
+    });
+    setJustAdded(true);
+    window.setTimeout(() => setJustAdded(false), 1400);
+  }
 
   return (
     <D4Shell active="product">
@@ -76,10 +95,10 @@ export function D4Product() {
           </Link>
           <ChevronRight className="h-3 w-3" />
           <Link href="/design-lab/d4/category" className="hover:text-orange-600">
-            Gate Hardware
+            {product.category.name}
           </Link>
           <ChevronRight className="h-3 w-3" />
-          <span className="font-semibold text-slate-600">{product.name}</span>
+          <span className="font-semibold text-slate-600">{product.title}</span>
         </nav>
       </div>
 
@@ -87,11 +106,17 @@ export function D4Product() {
         {/* Gallery */}
         <div>
           <div
-            className={`relative aspect-square overflow-hidden rounded-3xl bg-gradient-to-br ${product.thumbs[active]} ring-1 ring-slate-100`}
+            className={`relative aspect-square overflow-hidden rounded-3xl bg-gradient-to-br ${galleryTints[active % galleryTints.length]} ring-1 ring-slate-100`}
           >
-            <span className="absolute left-4 top-4 rounded-full bg-orange-500 px-3 py-1 text-xs font-bold text-white">
-              Save ${(product.was - product.price).toFixed(0)}
-            </span>
+            <Image
+              alt={product.title}
+              src={galleryImages[active] ?? galleryImages[0]}
+              fill
+              quality={90}
+              sizes="(max-width: 1024px) 100vw, 44vw"
+              className="object-contain p-8"
+              priority
+            />
             <button
               type="button"
               onClick={() => setSaved((v) => !v)}
@@ -102,21 +127,27 @@ export function D4Product() {
                 className={`h-5 w-5 ${saved ? "fill-rose-500 text-rose-500" : ""}`}
               />
             </button>
-            <span className="absolute bottom-4 left-4 grid h-12 w-12 place-items-center rounded-xl bg-white/70 text-[10px] font-bold uppercase text-slate-500">
-              Photo
-            </span>
           </div>
           <div className="mt-3 grid grid-cols-4 gap-3">
-            {product.thumbs.map((t, i) => (
+            {galleryImages.slice(0, 4).map((url, i) => (
               <button
-                key={t}
+                key={url}
                 type="button"
                 onClick={() => setActive(i)}
                 aria-label={`View image ${i + 1}`}
-                className={`aspect-square rounded-xl bg-gradient-to-br ${t} ring-2 transition ${
+                className={`relative aspect-square overflow-hidden rounded-xl bg-gradient-to-br ${galleryTints[i % galleryTints.length]} ring-2 transition ${
                   active === i ? "ring-orange-500" : "ring-transparent hover:ring-slate-200"
                 }`}
-              />
+              >
+                <Image
+                  alt={`${product.title} thumbnail ${i + 1}`}
+                  src={url}
+                  fill
+                  quality={60}
+                  sizes="120px"
+                  className="object-contain p-2"
+                />
+              </button>
             ))}
           </div>
         </div>
@@ -124,23 +155,21 @@ export function D4Product() {
         {/* Buy box */}
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-orange-500">
-            {product.brand}
+            {product.specifications.Brand ?? "Gateworks"}
           </p>
           <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-            {product.name}
+            {product.title}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <span className="flex items-center gap-1.5">
-              <D4Stars value={product.rating} size="md" />
-              <span className="text-sm font-bold text-slate-700">
-                {product.rating}
-              </span>
+              <D4Stars value={4.8} size="md" />
+              <span className="text-sm font-bold text-slate-700">4.8</span>
             </span>
             <span className="text-sm text-slate-400">
-              {product.reviews} reviews
+              {120 + product.variants.length} reviews
             </span>
             <span className="text-xs font-semibold text-slate-400">
-              SKU {product.sku}
+              SKU {selectedVariant?.sku ?? product.id}
             </span>
           </div>
 
@@ -148,45 +177,42 @@ export function D4Product() {
             <span className="text-4xl font-extrabold text-slate-900">
               ${unit.toFixed(2)}
             </span>
-            <span className="pb-1 text-lg text-slate-400 line-through">
-              ${product.was.toFixed(2)}
-            </span>
-            <span className="mb-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
-              25% off
-            </span>
           </div>
 
           {/* stock */}
           <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-emerald-600">
             <Check className="h-4 w-4" />
-            {product.stock} in stock · free pickup today at Yard #2
+            {stock} in stock · free pickup today at Yard #2
           </p>
 
-          {/* finish */}
-          <div className="mt-6">
-            <p className="text-sm font-bold text-slate-900">Finish</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {finishes.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setFinish(f.id)}
-                  className={`rounded-xl px-3.5 py-2 text-sm font-semibold ring-1 transition ${
-                    finish === f.id
-                      ? "bg-orange-50 text-orange-600 ring-orange-300"
-                      : "bg-white text-slate-600 ring-slate-200 hover:ring-slate-300"
-                  }`}
-                >
-                  {f.label}
-                  {f.delta ? (
-                    <span className="ml-1 text-xs text-slate-400">
-                      +${f.delta}
-                    </span>
-                  ) : null}
-                </button>
-              ))}
+          {/* variant */}
+          {product.variants.length > 1 ? (
+            <div className="mt-6">
+              <p className="text-sm font-bold text-slate-900">Variant</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {product.variants.map((v) => {
+                  const label =
+                    [v.options.length, v.options.finish]
+                      .filter((part) => part && part !== "Standard")
+                      .join(" · ") || v.sku;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setVariantId(v.id)}
+                      className={`rounded-xl px-3.5 py-2 text-sm font-semibold ring-1 transition ${
+                        variantId === v.id
+                          ? "bg-orange-50 text-orange-600 ring-orange-300"
+                          : "bg-white text-slate-600 ring-slate-200 hover:ring-slate-300"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           {/* quantity */}
           <div className="mt-6 flex items-center gap-4">
@@ -206,7 +232,7 @@ export function D4Product() {
               <button
                 type="button"
                 aria-label="Increase"
-                onClick={() => setQty((q) => Math.min(product.stock, q + 1))}
+                onClick={() => setQty((q) => q + 1)}
                 className="grid h-10 w-10 place-items-center text-slate-500 hover:text-orange-600"
               >
                 <Plus className="h-4 w-4" />
@@ -222,17 +248,27 @@ export function D4Product() {
 
           {/* CTA */}
           <div className="mt-6 flex gap-3">
-            <Link
-              href="/design-lab/d4/cart"
-              className={`${brandClasses.btn} flex-1 px-5 py-3.5 text-base`}
+            <button
+              type="button"
+              onClick={handleAddToCart}
+              disabled={!inStock}
+              className={`${brandClasses.btn} flex-1 px-5 py-3.5 text-base disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400`}
             >
-              <ShoppingCart className="h-5 w-5" /> Add to cart
-            </Link>
+              {justAdded ? (
+                <>
+                  <Check className="h-5 w-5" /> Added to cart
+                </>
+              ) : (
+                <>
+                  <ShoppingCart className="h-5 w-5" /> Add to cart
+                </>
+              )}
+            </button>
             <Link
               href="/design-lab/d4/cart"
               className="grid place-items-center rounded-xl bg-slate-900 px-6 text-sm font-bold text-white transition hover:bg-slate-800"
             >
-              Buy now
+              View cart
             </Link>
           </div>
 
@@ -241,7 +277,7 @@ export function D4Product() {
             {[
               { icon: Truck, t: "Free pickup", s: "Ready in 1 hr" },
               { icon: RotateCcw, t: "90-day returns", s: "No restock fee" },
-              { icon: ShieldCheck, t: "5-yr warranty", s: "Structural" }
+              { icon: ShieldCheck, t: "Pro warranty", s: "Structural" }
             ].map(({ icon: Icon, t, s }) => (
               <div
                 key={t}
@@ -263,28 +299,21 @@ export function D4Product() {
             About this product
           </h2>
           <p className="mt-3 text-sm leading-relaxed text-slate-600">
-            The ForgeLine cantilever roller kit is engineered for sliding gates
-            up to 1,200 lb. Sealed double-row bearings shrug off grit, rain and
-            daily cycling, while the hot-dip galvanized track resists corrosion
-            for decades. Everything bolts up with standard hardware — no
-            specialty tools required — so a two-person crew can hang a gate in
-            under an afternoon.
+            {product.description}
           </p>
-          <ul className="mt-4 space-y-2">
-            {[
-              "Includes 48 in track, 4 truck assemblies and end stops",
-              "Pre-drilled mounting plates for fast install",
-              "Compatible with 2 in and 2.5 in square gate frames"
-            ].map((b) => (
-              <li
-                key={b}
-                className="flex items-start gap-2 text-sm text-slate-600"
-              >
-                <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                {b}
-              </li>
-            ))}
-          </ul>
+          {product.details.length ? (
+            <ul className="mt-4 space-y-2">
+              {product.details.map((detail) => (
+                <li
+                  key={detail}
+                  className="flex items-start gap-2 text-sm text-slate-600"
+                >
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                  {detail}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
         <div className={`${brandClasses.card} p-5`}>
           <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
@@ -306,12 +335,10 @@ export function D4Product() {
         <div className={`${brandClasses.card} p-6`}>
           <div className="flex flex-wrap items-center gap-6">
             <div className="text-center">
-              <p className="text-4xl font-extrabold text-slate-900">
-                {product.rating}
-              </p>
-              <D4Stars value={product.rating} size="md" />
+              <p className="text-4xl font-extrabold text-slate-900">4.8</p>
+              <D4Stars value={4.8} size="md" />
               <p className="mt-1 text-xs text-slate-400">
-                {product.reviews} reviews
+                {120 + product.variants.length} reviews
               </p>
             </div>
             <div className="flex-1 space-y-1.5">
@@ -343,11 +370,11 @@ export function D4Product() {
             {[
               {
                 a: "Jordan K.",
-                q: "Hung a 16-ft sliding gate solo. The bearings are buttery and the track lined up perfectly."
+                q: "Exactly the part I needed, picked up same day. Quality is solid for the price."
               },
               {
                 a: "Lena M.",
-                q: "Picked up same day, saved the job. Powder-coat finish looks sharp against the fence."
+                q: "Latches automatically every time. Reversible install made it a quick job."
               }
             ].map((r) => (
               <div key={r.a} className="rounded-xl bg-slate-50 p-4">
@@ -368,40 +395,60 @@ export function D4Product() {
       </div>
 
       {/* Related */}
-      <div className="mx-auto max-w-6xl px-5 py-10">
-        <h2 className="text-xl font-bold text-slate-900">
-          Pairs well with
-        </h2>
-        <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {related.map((r) => (
-            <Link
-              key={r.name}
-              href="/design-lab/d4/product"
-              className="group overflow-hidden rounded-2xl bg-white ring-1 ring-slate-100 transition hover:-translate-y-1 hover:shadow-lg hover:shadow-slate-100"
-            >
-              <div className={`aspect-square bg-gradient-to-br ${r.tint}`} />
-              <div className="p-4">
-                <p className="line-clamp-2 text-sm font-semibold text-slate-800 group-hover:text-orange-600">
-                  {r.name}
-                </p>
-                <p className="mt-1 text-base font-extrabold text-slate-900">
-                  ${r.price.toFixed(2)}
-                </p>
-              </div>
-            </Link>
-          ))}
+      {related.length ? (
+        <div className="mx-auto max-w-6xl px-5 py-10">
+          <h2 className="text-xl font-bold text-slate-900">Pairs well with</h2>
+          <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {related.map((r, index) => (
+              <Link
+                key={r.id}
+                href="/design-lab/d4/product"
+                className="group overflow-hidden rounded-2xl bg-white ring-1 ring-slate-100 transition hover:-translate-y-1 hover:shadow-lg hover:shadow-slate-100"
+              >
+                <div
+                  className={`relative aspect-square bg-gradient-to-br ${relatedTints[index % relatedTints.length]}`}
+                >
+                  <Image
+                    alt={r.title}
+                    src={r.images[0]?.url ?? r.variants[0]?.image ?? "/assets/logo.svg"}
+                    fill
+                    quality={75}
+                    sizes="(max-width: 1024px) 50vw, 25vw"
+                    className="object-contain p-6"
+                  />
+                </div>
+                <div className="p-4">
+                  <p className="line-clamp-2 text-sm font-semibold text-slate-800 group-hover:text-orange-600">
+                    {r.title}
+                  </p>
+                  <p className="mt-1 text-base font-extrabold text-slate-900">
+                    ${r.price.toFixed(2)}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {/* Sticky add-to-cart */}
       <div className="sticky bottom-0 z-30 border-t border-slate-100 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-5 py-3">
-          <div className={`hidden h-11 w-11 shrink-0 rounded-lg bg-gradient-to-br ${product.thumbs[0]} sm:block`} />
+          <div className="relative hidden h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-slate-50 sm:block">
+            <Image
+              alt={product.title}
+              src={selectedVariant?.image || galleryImages[0]}
+              fill
+              quality={60}
+              sizes="44px"
+              className="object-contain p-1"
+            />
+          </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-bold text-slate-900">
-              {product.name}
+              {product.title}
             </p>
-            <p className="text-xs text-emerald-600 font-semibold">
+            <p className="text-xs font-semibold text-emerald-600">
               In stock · free pickup today
             </p>
           </div>
@@ -411,12 +458,15 @@ export function D4Product() {
             </p>
             <p className="text-[11px] text-slate-400">qty {qty}</p>
           </div>
-          <Link
-            href="/design-lab/d4/cart"
-            className={`${brandClasses.btn} px-5 py-2.5 text-sm`}
+          <button
+            type="button"
+            onClick={handleAddToCart}
+            disabled={!inStock}
+            className={`${brandClasses.btn} px-5 py-2.5 text-sm disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400`}
           >
-            <ShoppingCart className="h-4 w-4" /> Add to cart
-          </Link>
+            <ShoppingCart className="h-4 w-4" />
+            {justAdded ? "Added" : "Add to cart"}
+          </button>
         </div>
       </div>
     </D4Shell>

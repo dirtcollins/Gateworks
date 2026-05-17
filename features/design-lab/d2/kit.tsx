@@ -3,9 +3,10 @@
 /**
  * DESIGN 2 — "WAREHOUSE DARK"
  * Shared design kit: dark industrial-control-room UI primitives.
- * Self-contained — no app store/API wiring. Inline sample data lives in each page.
+ * Wired to real catalog/cart/order/reports data — visual design unchanged.
  */
 
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
@@ -349,6 +350,56 @@ export function PartImage({
       {label ? (
         <span
           className={`${mono} absolute bottom-1.5 left-2 text-[9px] uppercase tracking-wider`}
+          style={{ color: D2.muted }}
+        >
+          {label}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Real-photo product image inside the same dark, scan-lined frame as
+ * PartImage. Falls back to the color block when no usable image url exists.
+ */
+export function PartPhoto({
+  src,
+  alt,
+  seed,
+  className = "",
+  label,
+  quality = 75
+}: {
+  src?: string;
+  alt: string;
+  seed: string;
+  className?: string;
+  label?: string;
+  quality?: number;
+}) {
+  const usable = src && src !== "/assets/logo.svg" && !src.includes("noimage");
+
+  if (!usable) {
+    return <PartImage seed={seed} className={className} label={label} />;
+  }
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-[4px] ${className}`}
+      style={{ background: D2.panelHi, border: `1px solid ${D2.line}` }}
+    >
+      <Image
+        alt={alt}
+        src={src}
+        fill
+        quality={quality}
+        sizes="(max-width: 768px) 50vw, 320px"
+        className="object-contain p-2"
+      />
+      {label ? (
+        <span
+          className={`${mono} absolute bottom-1.5 left-2 z-10 text-[9px] uppercase tracking-wider`}
           style={{ color: D2.muted }}
         >
           {label}

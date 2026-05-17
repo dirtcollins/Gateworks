@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import {
   ArrowRight,
@@ -15,49 +16,72 @@ import {
   Truck
 } from "lucide-react";
 import { D1DesignBadge, D1Page, Eyebrow, formatUsd } from "./kit";
+import { featuredProduct, getRelatedProducts } from "@/features/design-lab/live-data";
+import { useCartStore } from "@/lib/cart-store";
+import type { ProductVariant } from "@/lib/types";
+
+/* Live catalog product — the real "Adjust-O-Matic Latch". */
+const RELATED_TONES = ["#6c685c", "#2f6f4e", "#16150f", "#d6a93f"];
+
+function variantLabel(variant: ProductVariant): string {
+  const parts = [variant.options.length, variant.options.finish].filter(
+    (part) => part && part !== "Standard"
+  );
+  return parts.length ? parts.join(" · ") : variant.sku;
+}
 
 const PRODUCT = {
-  name: "Heavy-Duty Cantilever Roller Kit",
-  sku: "GW-CR-2400",
-  category: "Gate Hardware",
-  price: 289.0,
-  listPrice: 339.0,
+  name: featuredProduct.title,
+  category: featuredProduct.category.name,
+  listPrice: featuredProduct.price * 1.18,
   rating: 4.8,
   reviews: 64,
-  blurb:
-    "A complete bolt-on roller assembly for cantilever slide gates up to 24 ft. Sealed bearings, powder-coated steel carriage and adjustable truck assemblies — engineered for daily commercial cycling.",
-  specs: [
-    ["Gate span", "Up to 24 ft"],
-    ["Carriage", "Powder-coated steel"],
-    ["Bearings", "Sealed, greaseable"],
-    ["Track gauge", "2-3/8 in round"],
-    ["Finish", "Matte black RAL 9005"],
-    ["Weight", "31 lb / kit"]
-  ],
-  variants: [
-    { label: "16 ft span", sku: "GW-CR-1600", price: 239.0 },
-    { label: "20 ft span", sku: "GW-CR-2000", price: 264.0 },
-    { label: "24 ft span", sku: "GW-CR-2400", price: 289.0 },
-    { label: "30 ft span", sku: "GW-CR-3000", price: 348.0 }
-  ]
+  blurb: featuredProduct.description,
+  specs: Object.entries(featuredProduct.specifications),
+  variants: featuredProduct.variants
 };
 
-const THUMBS = ["#16150f", "#2f6f4e", "#6c685c", "#d6a93f"];
+const GALLERY = featuredProduct.images.length
+  ? featuredProduct.images.map((image) => image.url)
+  : featuredProduct.variants.map((variant) => variant.image);
 
-const RELATED = [
-  { name: "Cantilever Track — 21 ft", sku: "GW-CT-2100", price: 178.0, tone: "#6c685c" },
-  { name: "Slide Gate Latch — Lockable", sku: "GW-SL-440", price: 52.0, tone: "#2f6f4e" },
-  { name: "Internal Track Roller Set", sku: "GW-IR-090", price: 88.5, tone: "#16150f" },
-  { name: "Gate End Caps — Pair", sku: "GW-EC-020", price: 14.25, tone: "#d6a93f" }
-];
+const RELATED = getRelatedProducts(featuredProduct, 4).map((product, index) => ({
+  name: product.title,
+  sku: product.variants[0]?.sku ?? product.id,
+  price: product.price,
+  tone: RELATED_TONES[index] ?? "#16150f",
+  image: product.images[0]?.url
+}));
 
 export function D1Product() {
+  const addItem = useCartStore((state) => state.addItem);
   const [activeThumb, setActiveThumb] = useState(0);
-  const [variant, setVariant] = useState(2);
+  const [variant, setVariant] = useState(
+    PRODUCT.variants.length > 2 ? 2 : 0
+  );
   const [qty, setQty] = useState(1);
   const [saved, setSaved] = useState(false);
+  const [added, setAdded] = useState(false);
 
   const selected = PRODUCT.variants[variant];
+
+  function handleAddToCart() {
+    if (!selected) return;
+    addItem({
+      productId: featuredProduct.id,
+      variantId: selected.id,
+      title: PRODUCT.name,
+      sku: selected.sku,
+      image: selected.image,
+      price: selected.price,
+      weightLbs: selected.calculated_weight_lb,
+      cwtPrice: selected.steel_cwt_price,
+      pricingMethod: selected.pricing_method,
+      quantity: qty,
+      options: selected.options
+    });
+    setAdded(true);
+  }
 
   return (
     <D1Page>
@@ -81,36 +105,52 @@ export function D1Product() {
       <section className="grid gap-10 border-t border-d1-line py-8 lg:grid-cols-12">
         {/* Gallery */}
         <div className="lg:col-span-7">
-          <div
-            className="flex aspect-[4/3] items-center justify-center border-2 border-d1-ink"
-            style={{ backgroundColor: THUMBS[activeThumb] }}
-          >
-            <span
-              className="text-8xl font-black"
-              style={{ color: "rgba(246,243,236,0.16)" }}
-            >
-              GW
-            </span>
+          <div className="flex aspect-[4/3] items-center justify-center border-2 border-d1-ink bg-white">
+            {GALLERY[activeThumb] ? (
+              <Image
+                alt={PRODUCT.name}
+                className="h-full w-full object-contain p-8"
+                height={900}
+                priority
+                quality={75}
+                src={GALLERY[activeThumb]}
+                width={900}
+              />
+            ) : (
+              <span
+                className="text-8xl font-black"
+                style={{ color: "rgba(22,21,15,0.12)" }}
+              >
+                GW
+              </span>
+            )}
           </div>
           <div className="mt-3 grid grid-cols-4 gap-3">
-            {THUMBS.map((tone, index) => (
+            {GALLERY.slice(0, 4).map((image, index) => (
               <button
-                key={tone}
-                className={`flex aspect-square items-center justify-center border-2 transition ${
+                key={image || index}
+                className={`flex aspect-square items-center justify-center border-2 bg-white transition ${
                   activeThumb === index
                     ? "border-d1-pine"
                     : "border-d1-line hover:border-d1-ink"
                 }`}
                 onClick={() => setActiveThumb(index)}
-                style={{ backgroundColor: tone }}
                 type="button"
               >
-                <span
-                  className="text-xl font-black"
-                  style={{ color: "rgba(246,243,236,0.22)" }}
-                >
-                  {index + 1}
-                </span>
+                {image ? (
+                  <Image
+                    alt={`${PRODUCT.name} thumbnail ${index + 1}`}
+                    className="h-full w-full object-contain p-2"
+                    height={200}
+                    quality={75}
+                    src={image}
+                    width={200}
+                  />
+                ) : (
+                  <span className="text-xl font-black text-d1-line">
+                    {index + 1}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -142,7 +182,7 @@ export function D1Product() {
 
           <div className="mt-5 flex items-end gap-3 border-y border-d1-line py-4">
             <span className="text-4xl font-extrabold text-d1-ink">
-              {formatUsd(selected.price)}
+              {formatUsd(selected?.price ?? 0)}
             </span>
             <span className="pb-1 text-base font-semibold text-d1-steel line-through">
               {formatUsd(PRODUCT.listPrice)}
@@ -157,36 +197,41 @@ export function D1Product() {
           </p>
 
           {/* Variant select */}
-          <div className="mt-6">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-d1-ink">
-              Gate span &mdash; {selected.sku}
-            </p>
-            <div className="mt-2 grid grid-cols-2 gap-px border border-d1-line bg-d1-line">
-              {PRODUCT.variants.map((option, index) => (
-                <button
-                  key={option.sku}
-                  className={`px-3 py-3 text-left transition ${
-                    variant === index
-                      ? "bg-d1-ink text-d1-paper"
-                      : "bg-d1-card text-d1-ink hover:bg-white"
-                  }`}
-                  onClick={() => setVariant(index)}
-                  type="button"
-                >
-                  <span className="block text-sm font-bold">
-                    {option.label}
-                  </span>
-                  <span
-                    className={`text-xs font-semibold ${
-                      variant === index ? "text-d1-paper/70" : "text-d1-steel"
+          {PRODUCT.variants.length > 1 ? (
+            <div className="mt-6">
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-d1-ink">
+                Option &mdash; {selected?.sku}
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-px border border-d1-line bg-d1-line">
+                {PRODUCT.variants.map((option, index) => (
+                  <button
+                    key={option.id}
+                    className={`px-3 py-3 text-left transition ${
+                      variant === index
+                        ? "bg-d1-ink text-d1-paper"
+                        : "bg-d1-card text-d1-ink hover:bg-white"
                     }`}
+                    onClick={() => {
+                      setVariant(index);
+                      setAdded(false);
+                    }}
+                    type="button"
                   >
-                    {formatUsd(option.price)}
-                  </span>
-                </button>
-              ))}
+                    <span className="block text-sm font-bold">
+                      {variantLabel(option)}
+                    </span>
+                    <span
+                      className={`text-xs font-semibold ${
+                        variant === index ? "text-d1-paper/70" : "text-d1-steel"
+                      }`}
+                    >
+                      {formatUsd(option.price)}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           {/* Qty + add */}
           <div className="mt-6 flex gap-3">
@@ -211,12 +256,13 @@ export function D1Product() {
                 <Plus className="h-4 w-4" />
               </button>
             </div>
-            <Link
-              className="flex flex-1 items-center justify-center gap-2 bg-d1-ink px-5 text-sm font-bold uppercase tracking-[0.1em] text-d1-paper transition hover:bg-d1-pine"
-              href="/design-lab/d1/cart"
+            <button
+              className="flex flex-1 items-center justify-center gap-2 bg-d1-ink px-5 py-3.5 text-sm font-bold uppercase tracking-[0.1em] text-d1-paper transition hover:bg-d1-pine"
+              onClick={handleAddToCart}
+              type="button"
             >
-              Add to cart &mdash; {formatUsd(selected.price * qty)}
-            </Link>
+              Add to cart &mdash; {formatUsd((selected?.price ?? 0) * qty)}
+            </button>
             <button
               aria-label="Save item"
               className={`grid h-12 w-12 place-items-center border transition ${
@@ -231,9 +277,21 @@ export function D1Product() {
             </button>
           </div>
 
+          {added ? (
+            <Link
+              className="mt-3 flex items-center justify-center gap-2 border border-d1-pine bg-d1-pine/10 px-4 py-2.5 text-[12px] font-bold uppercase tracking-[0.1em] text-d1-pine transition hover:bg-d1-pine hover:text-white"
+              href="/design-lab/d1/cart"
+            >
+              Added to cart &mdash; view cart <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          ) : null}
+
           <div className="mt-5 grid gap-px border border-d1-line bg-d1-line text-[13px]">
             {[
-              { icon: Package, text: "In stock — 142 units at Will-Call" },
+              {
+                icon: Package,
+                text: `In stock — ${selected?.inventoryQuantity ?? 0} units at Will-Call`
+              },
               { icon: Truck, text: "Same-day pickup if ordered by 11am" },
               { icon: ShieldCheck, text: "5-year carriage warranty included" }
             ].map((row) => (
@@ -303,14 +361,25 @@ export function D1Product() {
             >
               <div
                 className="flex h-36 items-center justify-center"
-                style={{ backgroundColor: item.tone }}
+                style={{ backgroundColor: item.image ? "#ffffff" : item.tone }}
               >
-                <span
-                  className="text-4xl font-black"
-                  style={{ color: "rgba(246,243,236,0.16)" }}
-                >
-                  GW
-                </span>
+                {item.image ? (
+                  <Image
+                    alt={item.name}
+                    className="h-full w-full object-contain p-3"
+                    height={260}
+                    quality={75}
+                    src={item.image}
+                    width={260}
+                  />
+                ) : (
+                  <span
+                    className="text-4xl font-black"
+                    style={{ color: "rgba(246,243,236,0.16)" }}
+                  >
+                    GW
+                  </span>
+                )}
               </div>
               <div className="flex flex-1 flex-col p-4">
                 <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-d1-steel">
