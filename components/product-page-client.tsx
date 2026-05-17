@@ -1276,7 +1276,7 @@ export function ProductPageClient({
                 alt={product.title}
                 className="object-contain p-6"
                 fill
-                quality={95}
+                quality={90}
                 sizes="(max-width: 768px) 100vw, 768px"
                 src={selectedImageSource}
               />
