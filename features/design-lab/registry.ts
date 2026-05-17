@@ -19,7 +19,8 @@ export const designLabDesigns: DesignLabDesign[] = [
   { id: "d7", name: "Ledger", note: "B2B procurement portal — net terms, pricing tiers, spend tracking, fintech-calm." },
   { id: "d8", name: "Blueprint", note: "Project-led selling — shop by what you're building, technical-drafting aesthetic." },
   { id: "d9", name: "Showroom", note: "Immersive luxury showroom — large-format imagery, aspirational brand feel." },
-  { id: "d10", name: "Signal", note: "Fast & intelligent — command-driven search, keyboard-first, personalized." }
+  { id: "d10", name: "Signal", note: "Fast & intelligent — command-driven search, keyboard-first, personalized." },
+  { id: "d11", name: "Wayfinder", note: "Warehouse-wayfinding storefront — aisle maps, bay locations, will-call pickup, mono SKUs." }
 ];
 
 export const designLabPages: DesignLabPage[] = [
