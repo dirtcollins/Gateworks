@@ -11,6 +11,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { Ico, monoFont, sansFont, wf, wfFontVars } from "../kit";
+import { alertCountForHref, useAdminAlerts } from "@/lib/admin-alerts";
 
 type NavItem = {
   href: string;
@@ -100,6 +101,7 @@ function isActive(pathname: string, href: string) {
 export function WayfinderAdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "/wayfinder/admin";
   const [navOpen, setNavOpen] = useState(false);
+  const alerts = useAdminAlerts();
 
   const sidebar = (
     <aside
@@ -195,6 +197,13 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
               {group.items.map((item) => {
                 const active = isActive(pathname, item.href);
                 const Icon = item.icon;
+                // Wayfinder keeps customer POs inside the Quotes page, so its
+                // Quotes badge also carries the pending-PO count.
+                const navCount =
+                  alertCountForHref(item.href, alerts) +
+                  (item.href === "/wayfinder/admin/quotes"
+                    ? alerts.pendingPOs
+                    : 0);
                 return (
                   <Link
                     key={item.href}
@@ -212,6 +221,25 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
                   >
                     <Icon size={16} />
                     <span style={{ flex: 1, fontSize: 13, fontWeight: 700 }}>{item.label}</span>
+                    {navCount > 0 ? (
+                      <span
+                        title="Needs attention"
+                        style={{
+                          display: "inline-grid",
+                          placeItems: "center",
+                          minWidth: 16,
+                          height: 16,
+                          padding: "0 4px",
+                          background: wf.safety,
+                          color: wf.ink,
+                          fontSize: 9,
+                          fontWeight: 900,
+                          fontFamily: monoFont
+                        }}
+                      >
+                        {navCount}
+                      </span>
+                    ) : null}
                     <span
                       style={{
                         fontFamily: monoFont,

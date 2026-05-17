@@ -21,6 +21,11 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { LEDGER } from "@/features/sites/ledger/kit";
+import {
+  alertCountForHref,
+  useAdminAlerts,
+  type AdminAlerts
+} from "@/lib/admin-alerts";
 
 /* ------------------------------------------------------------------ *
  * LEDGER — admin / back-office shell
@@ -70,12 +75,14 @@ function NavSection({
   heading,
   items,
   pathname,
-  onNavigate
+  onNavigate,
+  alerts
 }: {
   heading: string;
   items: AdminNavItem[];
   pathname: string;
   onNavigate: () => void;
+  alerts: AdminAlerts;
 }) {
   return (
     <div className="mt-5 first:mt-0">
@@ -109,6 +116,14 @@ function NavSection({
                 >
                   Soon
                 </span>
+              ) : alertCountForHref(item.href, alerts) > 0 ? (
+                <span
+                  className="ml-auto grid h-[18px] min-w-[18px] place-items-center rounded-full px-1 text-[10px] font-bold text-white"
+                  style={{ backgroundColor: LEDGER.amber }}
+                  title="Needs attention"
+                >
+                  {alertCountForHref(item.href, alerts)}
+                </span>
               ) : null}
             </Link>
           );
@@ -121,6 +136,7 @@ function NavSection({
 export function LedgerAdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "/ledger/admin";
   const [mobileOpen, setMobileOpen] = useState(false);
+  const alerts = useAdminAlerts();
 
   const activeItem =
     [...PRIMARY_NAV, ...CATALOG_NAV, ...FULFILLMENT_NAV].find((item) =>
@@ -173,18 +189,21 @@ export function LedgerAdminShell({ children }: { children: ReactNode }) {
           items={PRIMARY_NAV}
           pathname={pathname}
           onNavigate={() => setMobileOpen(false)}
+          alerts={alerts}
         />
         <NavSection
           heading="Catalog & demand"
           items={CATALOG_NAV}
           pathname={pathname}
           onNavigate={() => setMobileOpen(false)}
+          alerts={alerts}
         />
         <NavSection
           heading="Fulfillment"
           items={FULFILLMENT_NAV}
           pathname={pathname}
           onNavigate={() => setMobileOpen(false)}
+          alerts={alerts}
         />
       </div>
 

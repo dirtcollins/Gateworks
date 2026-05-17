@@ -20,6 +20,7 @@ import {
   X
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { alertCountForHref, useAdminAlerts } from "@/lib/admin-alerts";
 
 /* ------------------------------------------------------------------ *
  * INDUSTRIAL PRO — Admin shell. Provides the back-office chrome
@@ -81,6 +82,7 @@ function flatNav() {
 export function IndustrialAdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "/industrial/admin";
   const [mobileOpen, setMobileOpen] = useState(false);
+  const alerts = useAdminAlerts();
 
   const activeItem = flatNav().find((item) => isActivePath(pathname, item.href));
 
@@ -163,6 +165,14 @@ export function IndustrialAdminShell({ children }: { children: ReactNode }) {
                     >
                       <Icon className="h-4 w-4" aria-hidden="true" />
                       {item.label}
+                      {alertCountForHref(item.href, alerts) > 0 ? (
+                        <span
+                          className="ml-auto grid h-[18px] min-w-[18px] place-items-center rounded-full bg-d1-amber px-1 text-[10px] font-black text-d1-ink"
+                          title="Needs attention"
+                        >
+                          {alertCountForHref(item.href, alerts)}
+                        </span>
+                      ) : null}
                     </Link>
                   );
                 })}
