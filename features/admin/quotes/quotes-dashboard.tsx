@@ -589,23 +589,27 @@ export function QuotesDashboard() {
     window.setTimeout(() => setActionMessage(""), 5000);
   }
 
-  function openEmailPreview(quote: OrderRecord) {
-    const subject = encodeURIComponent(
-      `${quote.orderNumber} quote for ${quote.companyName || quote.customerName}`
-    );
-    const body = encodeURIComponent(
-      [
-        `${quote.companyName || quote.customerName},`,
-        "",
-        `Quote ${quote.orderNumber} is ready for review.`,
-        `Project: ${quote.jobName || "Material quote"}`,
-        `Estimated total: ${formatCurrency(getQuotedTotal(quote))}`,
-        "",
-        staffNote
-      ].join("\n")
-    );
+  async function openEmailPreview(quote: OrderRecord) {
+    setActionMessage(`Sending quote ${quote.orderNumber}…`);
 
-    window.location.href = `mailto:${quote.email}?subject=${subject}&body=${body}`;
+    try {
+      const response = await fetch("/api/quotes/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quoteId: quote.id })
+      });
+      const result = (await response.json()) as { ok?: boolean; reason?: string };
+
+      setActionMessage(
+        response.ok && result.ok
+          ? `Quote ${quote.orderNumber} emailed to ${quote.email}.`
+          : result.reason || "Quote email could not be sent."
+      );
+    } catch {
+      setActionMessage("Quote email could not be sent. Try again.");
+    }
+
+    window.setTimeout(() => setActionMessage(""), 5000);
   }
 
   const quoteColumns: DataTableColumn<OrderRecord>[] = [
