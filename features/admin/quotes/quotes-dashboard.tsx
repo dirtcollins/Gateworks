@@ -701,7 +701,26 @@ export function QuotesDashboard() {
 
   return (
     <main className="px-3 py-4 md:px-6 md:py-6">
-      <div className="mx-auto grid max-w-[1280px] gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="mx-auto grid max-w-[1280px] gap-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { label: "Pipeline value", value: formatCurrency(summary.value), hint: "USD" },
+            { label: "Open", value: String(summary.open), hint: "quotes" },
+            { label: "Needs pricing", value: String(summary.needsPricing), hint: "quotes" },
+            { label: "Converted", value: String(summary.converted), hint: "orders" }
+          ].map((card) => (
+            <div
+              className="rounded-lg border border-black/10 bg-white/86 p-4 shadow-sm"
+              key={card.label}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-industrial-muted">
+                {card.label}
+              </p>
+              <p className="mt-2 text-2xl font-black text-industrial-ink">{card.value}</p>
+              <p className="mt-1 text-xs text-industrial-muted">{card.hint}</p>
+            </div>
+          ))}
+        </div>
         <section className="overflow-hidden rounded-lg border border-black/10 bg-white/86 shadow-sm backdrop-blur-xl">
           <div className="flex flex-col gap-3 border-b border-black/10 bg-[#fafaf8] p-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -793,46 +812,6 @@ export function QuotesDashboard() {
             />
           </div>
         </section>
-
-        <aside className="grid h-fit gap-4">
-          <section className="rounded-lg border border-black/10 bg-white/86 p-4 shadow-sm backdrop-blur-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-industrial-muted">
-              Workflow
-            </p>
-            <div className="mt-4 grid gap-3">
-              {[
-                ["Open", String(summary.open)],
-                ["Needs pricing", String(summary.needsPricing)],
-                ["Approved", String(summary.approved)],
-                ["Converted", String(summary.converted)]
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between gap-3 border-b border-black/10 pb-2 last:border-b-0 last:pb-0">
-                  <span className="text-sm font-semibold text-industrial-ink">{label}</span>
-                  <span className="text-sm font-semibold text-industrial-muted">{value}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-lg border border-black/10 bg-white/86 p-4 shadow-sm backdrop-blur-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-industrial-muted">
-              Pipeline value
-            </p>
-            <p className="mt-2 text-3xl font-semibold text-industrial-ink">
-              {formatCurrency(summary.value)}
-            </p>
-            <Button
-              className="mt-4 h-11 w-full rounded-lg normal-case tracking-normal"
-              disabled={isCreatingQuote}
-              onClick={handleCreateQuote}
-              type="button"
-              variant="primary"
-            >
-              <Send size={16} />
-              New quote
-            </Button>
-          </section>
-        </aside>
       </div>
     </main>
   );
