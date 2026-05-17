@@ -67,7 +67,7 @@ export function SiteSwitcher() {
     <div className="pointer-events-none fixed bottom-3 left-3 z-[90] flex justify-start">
       {collapsed ? (
         <button
-          className="pointer-events-auto flex items-center gap-2 rounded-md border border-white/15 bg-[#101216]/95 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-white shadow-xl backdrop-blur transition hover:bg-[#101216]"
+          className="pointer-events-auto flex items-center gap-2 rounded-md border-2 border-emerald-400 bg-[#15181d] px-3 py-2 text-[11px] font-extrabold uppercase tracking-[0.12em] text-white shadow-2xl transition hover:bg-[#1f242b]"
           onClick={toggle}
           type="button"
         >
@@ -75,16 +75,16 @@ export function SiteSwitcher() {
           Nav
         </button>
       ) : (
-        <div className="pointer-events-auto w-60 overflow-hidden rounded-lg border border-white/15 bg-[#101216]/97 text-white shadow-2xl backdrop-blur">
+        <div className="pointer-events-auto w-60 overflow-hidden rounded-lg border-2 border-emerald-400/70 bg-[#15181d] text-white shadow-2xl">
           {/* Tool header — deliberately not site chrome */}
-          <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-black/40 px-3 py-2">
-            <span className="flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-400">
+          <div className="flex items-center justify-between gap-2 border-b border-white/20 bg-black/70 px-3 py-2">
+            <span className="flex items-center gap-1.5 font-mono text-[10px] font-extrabold uppercase tracking-[0.16em] text-emerald-400">
               <Compass className="h-3.5 w-3.5" />
               Gateworks Nav
             </span>
             <button
               aria-label="Collapse navigator"
-              className="grid h-6 w-6 place-items-center rounded text-white/60 transition hover:bg-white/10 hover:text-white"
+              className="grid h-6 w-6 place-items-center rounded bg-white/10 text-white transition hover:bg-white/25"
               onClick={toggle}
               type="button"
             >
@@ -93,16 +93,16 @@ export function SiteSwitcher() {
           </div>
 
           <div className="p-2.5">
-            <p className="px-1 pb-1 font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-white/35">
+            <p className="px-1 pb-1.5 font-mono text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/60">
               Sites
             </p>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               {SITES.map((site) => (
                 <Link
-                  className={`rounded px-2.5 py-1.5 text-xs font-bold transition ${
+                  className={`rounded px-2.5 py-1.5 text-xs font-extrabold transition ${
                     site.id === currentSite
-                      ? "bg-emerald-500 text-[#101216]"
-                      : "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+                      ? "bg-emerald-400 text-[#0a0b0d]"
+                      : "bg-[#2c323b] text-white hover:bg-[#3a424d]"
                   }`}
                   href={siteHref(site.id)}
                   key={site.id}
@@ -114,17 +114,17 @@ export function SiteSwitcher() {
 
             {currentSite ? (
               <Link
-                className="mt-2 flex items-center gap-2 rounded border border-white/15 px-2.5 py-1.5 text-xs font-bold text-white transition hover:bg-white/10"
+                className="mt-2.5 flex items-center gap-2 rounded bg-[#2c323b] px-2.5 py-1.5 text-xs font-extrabold text-white transition hover:bg-[#3a424d]"
                 href={inAdmin ? `/${currentSite}` : `/${currentSite}/admin`}
               >
                 {inAdmin ? (
                   <>
-                    <Store className="h-3.5 w-3.5 text-emerald-400" />
+                    <Store className="h-4 w-4 text-emerald-400" />
                     Storefront
                   </>
                 ) : (
                   <>
-                    <Shield className="h-3.5 w-3.5 text-emerald-400" />
+                    <Shield className="h-4 w-4 text-emerald-400" />
                     Admin portal
                   </>
                 )}
@@ -132,14 +132,14 @@ export function SiteSwitcher() {
             ) : null}
 
             <Link
-              className={`mt-1.5 flex items-center gap-2 rounded px-2.5 py-1.5 text-xs font-bold transition ${
+              className={`mt-1.5 flex items-center gap-2 rounded px-2.5 py-1.5 text-xs font-extrabold transition ${
                 onDesignLab
-                  ? "bg-emerald-500 text-[#101216]"
-                  : "border border-white/15 text-white hover:bg-white/10"
+                  ? "bg-emerald-400 text-[#0a0b0d]"
+                  : "bg-[#2c323b] text-white hover:bg-[#3a424d]"
               }`}
               href="/design-lab"
             >
-              <LayoutGrid className="h-3.5 w-3.5" />
+              <LayoutGrid className="h-4 w-4" />
               Design Lab
             </Link>
           </div>
