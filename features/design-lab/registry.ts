@@ -20,7 +20,8 @@ export const designLabDesigns: DesignLabDesign[] = [
   { id: "d8", name: "Blueprint", note: "Project-led selling — shop by what you're building, technical-drafting aesthetic." },
   { id: "d9", name: "Showroom", note: "Immersive luxury showroom — large-format imagery, aspirational brand feel." },
   { id: "d10", name: "Signal", note: "Fast & intelligent — command-driven search, keyboard-first, personalized." },
-  { id: "d11", name: "Wayfinder", note: "Warehouse-wayfinding storefront — aisle maps, bay locations, will-call pickup, mono SKUs." }
+  { id: "d11", name: "Wayfinder", note: "Warehouse-wayfinding storefront — aisle maps, bay locations, will-call pickup, mono SKUs." },
+  { id: "jobbr", name: "Jobbr", note: "Jobber-inspired operations shell — light, dense, green-action, field-service calm." }
 ];
 
 export const designLabPages: DesignLabPage[] = [
