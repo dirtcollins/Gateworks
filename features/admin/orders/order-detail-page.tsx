@@ -1188,7 +1188,9 @@ export function OrderDetailPage({
 
   useEffect(() => {
     async function loadOrders() {
-      const response = await fetch("/api/orders?limit=250&includeItems=true");
+      const response = await fetch(
+        "/api/orders?limit=250&includeItems=true&includeDrawings=true"
+      );
       if (!response.ok) return;
       const payload = (await response.json()) as {
         orders?: typeof storedOrders;
@@ -1371,7 +1373,7 @@ export function OrderDetailPage({
       ? draftSubtotal * TAX_RATE
     : order.subtotal > 0
       ? (order.tax / order.subtotal) * draftSubtotal
-      : draftSubtotal * 0.0834;
+      : draftSubtotal * TAX_RATE;
   const draftTotal = draftSubtotal + draftTax + draftDeliveryCharge - draftDiscountAmount;
   const draftOrderNotesText = useMemo(
     () => formatNewOrderNotes(draftCustomerNotes, draftDeliveryNotes, draftOrderNotes),
@@ -1640,7 +1642,7 @@ export function OrderDetailPage({
       drawings: [],
       pickupContact: draftCustomerName.trim(),
       subtotal: draftSubtotal,
-      tax: draftSubtotal * TAX_RATE,
+      tax: draftTax,
       deliveryFee: draftDeliveryCharge,
       total: draftTotal,
       status: nextStatus,

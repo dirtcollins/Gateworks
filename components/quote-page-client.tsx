@@ -23,7 +23,7 @@ import type { Product } from "@/lib/types";
 import { useQuoteStore } from "@/lib/quote-store";
 import { cn, formatCurrency } from "@/lib/utils";
 import { customerDirectory, getCustomerById } from "@/lib/customers";
-import { DEFAULT_TAX_RATE } from "@/lib/tax";
+import { DEFAULT_TAX_RATE, calculateTax } from "@/lib/tax";
 
 const taxRate = DEFAULT_TAX_RATE;
 
@@ -255,7 +255,7 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
   const selectedCustomerId = currentQuote.customerId || "";
   const items = currentQuote.items;
   const subtotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
-  const estimatedTax = subtotal * taxRate;
+  const estimatedTax = calculateTax(subtotal, { rate: taxRate });
   const deliveryFee = subtotal >= 100 || subtotal === 0 ? 0 : 14.95;
   const total = subtotal + estimatedTax + deliveryFee;
   const amountPaid = 0;

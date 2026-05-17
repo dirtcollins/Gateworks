@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseClient } from "@/lib/supabase";
+import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
 type SiteUserRow = {
   id: string;
@@ -30,7 +30,7 @@ function toClientUser(user: SiteUserRow) {
 }
 
 export async function GET() {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
     return NextResponse.json({ users: [] });
@@ -55,7 +55,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
     return NextResponse.json(

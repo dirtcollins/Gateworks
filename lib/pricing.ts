@@ -173,7 +173,10 @@ export function applyTubingPricing(product: Product, steelCwtPrice = DEFAULT_STE
     applyTubingPricingToVariant(product, variant, steelCwtPrice)
   );
   const firstPricedVariant = variants.find((variant) => variant.final_price !== undefined);
-  const price = Math.min(...variants.map((variant) => variant.final_price ?? variant.price));
+  const price = variants.reduce(
+    (min, variant) => Math.min(min, variant.final_price ?? variant.price),
+    Number.POSITIVE_INFINITY
+  );
 
   return {
     ...product,
