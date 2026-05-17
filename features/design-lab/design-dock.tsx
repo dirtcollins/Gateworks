@@ -3,19 +3,41 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeftRight, ChevronDown, Layers, LayoutGrid } from "lucide-react";
+import {
+  ArrowLeftRight,
+  ChevronDown,
+  Layers,
+  LayoutGrid,
+  LogOut
+} from "lucide-react";
 import { designLabDesigns, designLabPages } from "@/features/design-lab/registry";
+import {
+  StarRating,
+  ratingFor,
+  useRatings,
+  useReviewer,
+  votesFor
+} from "@/features/design-lab/ratings";
 
 const COLLAPSE_KEY = "gateworks-design-dock-collapsed";
 
 // A floating switcher shown on every individual design page. It lets you flip
 // to another concept on the same page, jump to a different page of the same
-// concept, or open the side-by-side comparison — without returning to the hub.
+// concept, rate the current page, or open compare — without leaving the demo.
 export function DesignDock() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [inIframe, setInIframe] = useState(false);
   const [ready, setReady] = useState(false);
+
+  const segments = pathname.split("/").filter(Boolean);
+  const design = designLabDesigns.find((item) => item.id === segments[1]);
+  const page = designLabPages.find((item) => item.slug === segments[2]);
+  const isDesignPage =
+    segments[0] === "design-lab" && Boolean(design) && Boolean(page);
+
+  const { reviewer, reviewers, setReviewer } = useReviewer();
+  const { ratings, rate } = useRatings(isDesignPage);
 
   useEffect(() => {
     setInIframe(window.self !== window.top);
@@ -39,18 +61,18 @@ export function DesignDock() {
     });
   }
 
-  const segments = pathname.split("/").filter(Boolean);
-  const design = designLabDesigns.find((item) => item.id === segments[1]);
-  const page = designLabPages.find((item) => item.slug === segments[2]);
-
   // Hide inside preview/compare iframes and on non-design-detail routes.
   if (!ready || inIframe) return null;
-  if (segments[0] !== "design-lab" || !design || !page) return null;
+  if (!isDesignPage || !design || !page) return null;
 
-  const chipBase =
-    "rounded px-2 py-1 text-[11px] font-bold transition";
+  const chipBase = "rounded px-2 py-1 text-[11px] font-bold transition";
   const chipActive = "bg-white text-[#0c0c0e]";
   const chipIdle = "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white";
+
+  const myStars = ratingFor(ratings, reviewer, design.id, page.slug);
+  const otherVotes = votesFor(ratings, design.id, page.slug).filter(
+    (vote) => vote.reviewer !== reviewer
+  );
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[80] flex justify-center px-3 pb-3">
@@ -80,7 +102,7 @@ export function DesignDock() {
                 href={`/design-lab/compare/${page.slug}`}
               >
                 <ArrowLeftRight className="h-3.5 w-3.5" />
-                Compare this page
+                Compare
               </Link>
               <Link
                 className="inline-flex h-7 items-center gap-1.5 rounded-md border border-white/15 px-2.5 text-[11px] font-bold text-white transition hover:bg-white/10"
@@ -88,6 +110,13 @@ export function DesignDock() {
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
                 Hub
+              </Link>
+              <Link
+                className="inline-flex h-7 items-center gap-1.5 rounded-md border border-white/15 px-2.5 text-[11px] font-bold text-white transition hover:bg-white/10"
+                href="/"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Exit site
               </Link>
               <button
                 aria-label="Collapse design switcher"
@@ -98,6 +127,46 @@ export function DesignDock() {
                 <ChevronDown className="h-4 w-4" />
               </button>
             </div>
+          </div>
+
+          {/* Rate this page */}
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2">
+            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/45">
+              Rate {page.label}
+            </span>
+            <StarRating
+              dark
+              label={`Rate ${design.name} ${page.label}`}
+              onRate={(stars) => rate(reviewer, design.id, page.slug, stars)}
+              size={18}
+              value={myStars}
+            />
+            <label className="flex items-center gap-1 text-[11px] text-white/55">
+              as
+              <select
+                className="rounded border border-white/15 bg-white/10 px-1.5 py-0.5 text-[11px] font-bold text-white"
+                onChange={(event) => setReviewer(event.target.value)}
+                value={reviewer}
+              >
+                {reviewers.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {otherVotes.length > 0 ? (
+              <span className="flex flex-wrap gap-x-2 text-[11px] text-white/55">
+                {otherVotes.map((vote) => (
+                  <span key={vote.reviewer}>
+                    {vote.reviewer}{" "}
+                    <span className="font-bold text-amber-400">
+                      {vote.stars}&#9733;
+                    </span>
+                  </span>
+                ))}
+              </span>
+            ) : null}
           </div>
 
           <p className="mt-2.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">

@@ -265,7 +265,7 @@ export function D1DesignBadge() {
       <span>Design Lab &middot; Concept 1 &mdash; Industrial Pro</span>
       <Link
         className="flex items-center gap-1 text-d1-pine hover:underline"
-        href="/design-lab/d1/home"
+        href="/design-lab"
       >
         Restart tour <ArrowUpRight className="h-3.5 w-3.5" />
       </Link>

@@ -408,7 +408,7 @@ export function D7DesignBadge() {
       </span>
       <Link
         className="flex items-center gap-1 font-semibold hover:underline"
-        href="/design-lab/d7/home"
+        href="/design-lab"
       >
         Restart tour <ArrowUpRight className="h-3.5 w-3.5" />
       </Link>

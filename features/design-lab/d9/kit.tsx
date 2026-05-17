@@ -308,7 +308,7 @@ export function D9DesignBadge() {
       <span>Design Lab · Concept 9 — Showroom</span>
       <Link
         className="flex items-center gap-1.5"
-        href="/design-lab/d9/home"
+        href="/design-lab"
         style={{ color: d9.bronze }}
       >
         Restart tour <ArrowUpRight className="h-3 w-3" />

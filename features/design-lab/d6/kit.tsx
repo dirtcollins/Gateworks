@@ -467,7 +467,7 @@ export function D6DesignBadge() {
       </Mono>
       <Link
         className="flex items-center gap-1.5 transition-colors hover:opacity-80"
-        href="/design-lab/d6/home"
+        href="/design-lab"
         style={{ color: apex.accent }}
       >
         <Mono style={{ color: apex.accent }}>Restart tour</Mono>
