@@ -357,7 +357,7 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
     <main className="px-3 py-4 md:px-6 md:py-6">
       <div className="mx-auto grid max-w-[1280px] gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <section className="overflow-hidden rounded-lg border border-black/10 bg-white/86 shadow-sm backdrop-blur-xl">
-          <div className="flex flex-col gap-3 border-b border-black/10 bg-[#fafaf8] p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-3 border-b border-black/10 bg-[#fafaf8] p-4 print:hidden lg:flex-row lg:items-center lg:justify-between">
             <div>
               <Link
                 className="inline-flex items-center gap-2 text-sm font-medium text-industrial-muted hover:text-industrial-ink"
@@ -558,7 +558,7 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
 
             </section>
 
-            <div className="relative mt-3" ref={addItemRef}>
+            <div className="relative mt-3 print:hidden" ref={addItemRef}>
               <button
                 aria-expanded={isQuickAddOpen}
                 aria-haspopup="true"
