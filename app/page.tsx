@@ -84,7 +84,7 @@ export default async function Home({ searchParams }: HomePageProps) {
         className="mb-4 flex items-center justify-between gap-3 rounded-md border border-dashed border-industrial-ink/30 bg-industrial-paper px-4 py-2.5 text-xs font-bold uppercase tracking-[0.08em] text-industrial-ink transition hover:border-industrial-ink"
         href="/design-lab"
       >
-        <span>Design Lab — preview 5 new site designs and compare them side by side</span>
+        <span>Design Lab — preview 10 new site designs and compare them side by side</span>
         <span aria-hidden="true">→</span>
       </Link>
 
