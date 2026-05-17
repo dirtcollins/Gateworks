@@ -350,6 +350,37 @@ async function resolveOrderItemVariantIds(
   }) as ResolvedOrderItem[];
 }
 
+async function fetchVariantCosts(
+  admin: NonNullable<Awaited<ReturnType<typeof getSupabaseAdminClient>>>,
+  variantIds: string[]
+) {
+  const costByVariant = new Map<string, number>();
+  const uniqueIds = Array.from(new Set(variantIds.filter(Boolean)));
+
+  if (!uniqueIds.length) {
+    return costByVariant;
+  }
+
+  const { data, error } = await admin
+    .from("product_variants")
+    .select("id, cost")
+    .in("id", uniqueIds);
+
+  if (error) {
+    throw error;
+  }
+
+  (data || []).forEach((record) => {
+    const row = record as { id?: string; cost?: number | string | null };
+
+    if (row.id) {
+      costByVariant.set(row.id, Number(row.cost ?? 0));
+    }
+  });
+
+  return costByVariant;
+}
+
 export async function GET(request: NextRequest) {
   const auth = await authorizeAdminRequest(request);
   if (!auth.ok) return auth.response;
@@ -540,6 +571,10 @@ export async function POST(request: NextRequest) {
 
     if (payload.items.length && order?.id) {
       const resolvedItems = await resolveOrderItemVariantIds(admin, payload.items);
+      const variantCosts = await fetchVariantCosts(
+        admin,
+        resolvedItems.map((item) => item.resolvedVariantId)
+      );
 
       const { error: itemsError } = await admin.from("order_items").insert(
         resolvedItems.map((item) => ({
@@ -553,6 +588,7 @@ export async function POST(request: NextRequest) {
           quantity_pulled: 0,
           pulled: false,
           unit_price: item.price,
+          unit_cost: variantCosts.get(item.resolvedVariantId) ?? 0,
           line_total: item.price * item.quantity,
           item_payload: {
             ...item,

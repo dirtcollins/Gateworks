@@ -8,6 +8,12 @@ import {
 import { ProductPageClient } from "@/components/product-page-client";
 import { fetchSupabaseProduct, fetchSupabaseProducts } from "@/lib/supabase-catalog";
 import { UserStorageScope } from "@/components/user-storage-scope";
+import {
+  breadcrumbJsonLd,
+  jsonLdScript,
+  productJsonLd,
+  productMetadata
+} from "@/lib/seo";
 
 type ProductPageProps = {
   params: Promise<{
@@ -27,9 +33,11 @@ export async function generateMetadata({ params }: ProductPageProps) {
   const { slug } = await params;
   const product = (await fetchSupabaseProduct(slug)) || getProduct(slug);
 
-  return {
-    title: product ? `${product.title} | Contractor Supply` : "Product"
-  };
+  if (!product) {
+    return { title: "Product not found" };
+  }
+
+  return productMetadata(product);
 }
 
 export default async function ProductPage({ params }: ProductPageProps) {
@@ -49,8 +57,22 @@ export default async function ProductPage({ params }: ProductPageProps) {
     )
     .slice(0, 8);
 
+  const breadcrumbs = breadcrumbJsonLd([
+    { name: "Home", path: "/" },
+    { name: product.category.name, path: `/?category=${product.category.slug}` },
+    { name: product.title, path: `/products/${product.slug}` }
+  ]);
+
   return (
     <>
+      <script
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(productJsonLd(product)) }}
+        type="application/ld+json"
+      />
+      <script
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(breadcrumbs) }}
+        type="application/ld+json"
+      />
       <UserStorageScope />
       <ProductPageClient
         product={product}

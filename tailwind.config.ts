@@ -31,6 +31,13 @@ const config: Config = {
           amber: "#eee6d8"
         }
       },
+      fontFamily: {
+        sans: ["var(--truewerk-font)"]
+      },
+      borderRadius: {
+        card: "0.5rem",
+        chip: "0.25rem"
+      },
       boxShadow: {
         toolbar: "0 10px 30px rgba(31, 37, 32, 0.12)"
       },
@@ -57,13 +64,18 @@ const config: Config = {
           "52%": { transform: "scale(0.9)", filter: "drop-shadow(0 0 4px rgba(220,38,38,0.25))" },
           "76%": { transform: "scale(1.14)", filter: "drop-shadow(0 0 6px rgba(220,38,38,0.3))" },
           "100%": { transform: "scale(1)", filter: "drop-shadow(0 0 0 rgba(220,38,38,0))" }
+        },
+        "image-fade": {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" }
         }
       },
       animation: {
         "cart-bump": "cart-bump 650ms ease-out",
         "cart-badge": "cart-badge 650ms ease-out",
         "button-confirm": "button-confirm 520ms ease-out both",
-        "heart-save": "heart-save 720ms ease-out both"
+        "heart-save": "heart-save 720ms ease-out both",
+        "image-fade": "image-fade 200ms ease-out"
       }
     }
   },

@@ -481,8 +481,9 @@ export function ProductPageClient({
             <Image
               priority
               alt={product.title}
-              className="object-contain p-2"
+              className="animate-image-fade object-contain p-2"
               fill
+              key={selectedImageSource}
               quality={90}
               sizes="(max-width: 1024px) 100vw, 44vw"
               src={selectedImageSource}

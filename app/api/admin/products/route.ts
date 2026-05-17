@@ -47,6 +47,7 @@ const productFields = new Set([
 
 const variantFields = new Set([
   "price",
+  "cost",
   "manual_price",
   "calculated_price",
   "rounded_price",
