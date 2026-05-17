@@ -11,10 +11,11 @@ export type DesignLabPage = {
 
 export const designLabDesigns: DesignLabDesign[] = [
   { id: "d1", name: "Industrial Pro", note: "Refined industrial — warm, confident, premium." },
-  { id: "d2", name: "Warehouse Dark", note: "Dark, high-contrast B2B operations terminal." },
+  { id: "d2", name: "Mono", note: "Pure monochrome minimalism — hairline grid, type-driven, gallery calm." },
   { id: "d3", name: "Editorial Catalog", note: "Magazine-grade — big imagery, art-directed." },
   { id: "d4", name: "Modern Marketplace", note: "Bright, friendly, conversion-optimized retail." },
-  { id: "d5", name: "Compact Utility", note: "Ultra-dense, fast, terminal-like." }
+  { id: "d5", name: "Field Ops", note: "Rugged field-ready — high-contrast safety-orange, big-touch, fast." },
+  { id: "d6", name: "Apex", note: "Flagship — cinematic dark, spatial depth, high-tech precision." }
 ];
 
 export const designLabPages: DesignLabPage[] = [

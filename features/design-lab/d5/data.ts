@@ -1,7 +1,10 @@
 /**
- * DESIGN 5 — data layer.
- * All exports are derived from the REAL catalog/order/reports data via the
- * shared Design Lab live-data layer. No fake sample arrays remain.
+ * DESIGN 5 — "FIELD OPS" data helpers.
+ *
+ * Every page in this design is wired directly to the shared Design Lab
+ * live-data layer (real catalog / orders / reports). This file contains NO
+ * fake product/order/cart arrays — only re-exports of the live data layer and
+ * a few small presentation helpers (currency, variant labels).
  */
 
 import {
@@ -18,7 +21,7 @@ import {
   searchProducts,
   topCategories
 } from "@/features/design-lab/live-data";
-import type { Product as CatalogProduct, ProductVariant } from "@/lib/types";
+import type { CartItem, Product, ProductVariant } from "@/lib/types";
 
 export {
   categories,
@@ -35,82 +38,38 @@ export {
   topCategories
 };
 
-export type { CatalogProduct, ProductVariant };
+export type { Product, ProductVariant };
 
-/** Currency formatter — kept because every d5 component uses it. */
-export const fmt = (n: number) =>
-  n.toLocaleString("en-US", { style: "currency", currency: "USD" });
-
-/* ------------------------------------------------------------------ */
-/* Derived view helpers — turn the rich catalog Product into the lean  */
-/* shapes d5's terminal-style components consume.                      */
-/* ------------------------------------------------------------------ */
-
-/** Stable swatch color derived from a product id, for d5's dense rows. */
-const SWATCHES = [
-  "#6b7180",
-  "#7a808d",
-  "#5ee6a8",
-  "#3f4450",
-  "#2b2f38",
-  "#c98b3a",
-  "#8b919c",
-  "#6aa6ff"
-];
-
-export function swatchFor(seed: string) {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-  }
-  return SWATCHES[hash % SWATCHES.length];
+/** USD currency formatter used across every Field Ops page. */
+export function money(value: number): string {
+  return value.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
-export type Row = {
-  product: CatalogProduct;
-  variant: ProductVariant;
-  sku: string;
-  name: string;
-  category: string;
-  categorySlug: string;
-  spec: string;
-  price: number;
-  stock: number;
-  swatch: string;
-  inStock: boolean;
-};
-
-function variantSpec(variant: ProductVariant) {
-  const parts = [
-    variant.options.length && variant.options.length !== "Standard"
-      ? variant.options.length
-      : undefined,
-    variant.options.material && variant.options.material !== "Standard"
-      ? variant.options.material
-      : undefined,
-    variant.options.finish && variant.options.finish !== "Standard"
-      ? variant.options.finish
-      : undefined
-  ].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "Standard configuration";
+/** Short, scannable variant label (size · finish) for dense Field Ops rows. */
+export function variantLabel(variant: ProductVariant): string {
+  const parts = [variant.options.length, variant.options.finish].filter(
+    (part) => part && part !== "Standard"
+  );
+  return parts.length ? parts.join(" · ") : variant.sku;
 }
 
-/** Lean row view of a catalog product (uses its primary variant). */
-export function toRow(product: CatalogProduct): Row {
-  const variant =
-    product.variants.find((candidate) => candidate.inventory === "in_stock") ||
-    product.variants[0];
-  return {
-    product,
-    variant,
-    sku: variant?.sku ?? product.id,
-    name: product.title,
-    category: product.category.name,
-    categorySlug: product.category.slug,
-    spec: variant ? variantSpec(variant) : product.category.name,
-    price: product.price,
-    stock: variant?.inventoryQuantity ?? 0,
-    swatch: swatchFor(product.id),
-    inStock: variant ? variant.inventory === "in_stock" : false
-  };
+/** Variant summary from a cart line item. */
+export function cartItemSummary(item: CartItem): string {
+  const parts = [item.options.length, item.options.finish].filter(
+    (part) => part && part !== "Standard"
+  );
+  return parts.length ? parts.join(" · ") : "Standard config";
+}
+
+/** Best primary variant for a product (prefers in-stock). */
+export function primaryVariant(product: Product): ProductVariant | undefined {
+  return (
+    product.variants.find((variant) => variant.inventory === "in_stock") ??
+    product.variants[0]
+  );
+}
+
+/** Count of in-catalog products for a category slug. */
+export function categoryCount(slug: string): number {
+  return getCategoryProducts(slug).length;
 }

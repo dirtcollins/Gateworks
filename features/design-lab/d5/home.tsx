@@ -1,340 +1,413 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { ArrowRight, ShieldCheck, Truck, Zap } from "lucide-react";
+import { Beacon, Button, Chip, FO, Panel, Shell, Stamp, Title } from "./kit";
 import {
-  ArrowUpRight,
-  Check,
-  Flame,
-  History,
-  Layers,
-  Plus,
-  TrendingUp,
-  Truck,
-  Zap
-} from "lucide-react";
-import { Btn, D5, Dot, H, Kbd, Panel, Shell, Tag, mono } from "./kit";
-import {
-  fmt,
-  getCategoryProducts,
+  categoryCount,
+  featuredProduct,
+  money,
   newArrivals,
   popularProducts,
-  swatchFor,
-  toRow,
+  primaryVariant,
   topCategories
 } from "./data";
-import { useCartStore } from "@/lib/cart-store";
 
-const STATS = [
-  { label: "Open orders", value: "37", delta: "+5 today", tone: D5.accent },
-  { label: "Lines to pick", value: "184", delta: "2 hubs", tone: D5.blue },
-  { label: "Backorder SKUs", value: "3", delta: "−1 vs wk", tone: D5.amber },
-  { label: "Spend MTD", value: "$48.2k", delta: "+12.4%", tone: D5.accent }
-];
+const PRODUCT_HREF = "/design-lab/d5/product";
+const CATEGORY_HREF = "/design-lab/d5/category";
+
+function ProductCard({
+  product,
+  flag
+}: {
+  product: (typeof popularProducts)[number];
+  flag?: string;
+}) {
+  const variant = primaryVariant(product);
+  const image = product.images[0]?.url ?? variant?.image;
+  return (
+    <Link
+      href={PRODUCT_HREF}
+      className="group flex flex-col"
+      style={{ background: FO.panel, border: `2px solid ${FO.line}` }}
+    >
+      <div
+        className="relative flex aspect-square items-center justify-center"
+        style={{ background: "#f4f1e9" }}
+      >
+        {image ? (
+          <Image
+            alt={product.title}
+            src={image}
+            width={420}
+            height={420}
+            quality={75}
+            className="h-full w-full object-contain p-5"
+          />
+        ) : (
+          <span className="text-5xl font-black" style={{ color: "rgba(22,20,15,0.12)" }}>
+            GW
+          </span>
+        )}
+        {flag ? (
+          <span
+            className="absolute left-0 top-0 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em]"
+            style={{ background: FO.hi, color: FO.black }}
+          >
+            {flag}
+          </span>
+        ) : null}
+      </div>
+      <div className="flex flex-1 flex-col gap-1 p-3.5">
+        <span
+          className="text-[10px] font-black uppercase tracking-[0.14em]"
+          style={{ color: FO.faint }}
+        >
+          {variant?.sku ?? product.id}
+        </span>
+        <span
+          className="line-clamp-2 flex-1 text-[13px] font-black uppercase leading-tight tracking-[0.02em]"
+          style={{ color: FO.ink }}
+        >
+          {product.title}
+        </span>
+        <div className="mt-2 flex items-end justify-between">
+          <span className="text-xl font-black" style={{ color: FO.hi }}>
+            {money(product.price)}
+          </span>
+          <span
+            className="flex h-9 w-9 items-center justify-center transition-colors group-hover:brightness-110"
+            style={{ background: FO.panelHi, color: FO.ink }}
+          >
+            <ArrowRight size={16} strokeWidth={2.75} />
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+}
 
 export default function D5Home() {
-  const [added, setAdded] = useState<Record<string, boolean>>({});
-  const addItem = useCartStore((state) => state.addItem);
-  const quick = useMemo(() => popularProducts.slice(0, 6).map(toRow), []);
-  const recent = useMemo(() => newArrivals.slice(0, 4).map(toRow), []);
-
-  function add(row: ReturnType<typeof toRow>) {
-    if (row.variant) {
-      addItem({
-        productId: row.product.id,
-        variantId: row.variant.id,
-        title: row.product.title,
-        sku: row.variant.sku,
-        image: row.variant.image,
-        price: row.variant.price,
-        quantity: 1,
-        options: row.variant.options
-      });
-    }
-    setAdded((p) => ({ ...p, [row.sku]: true }));
-    window.setTimeout(() => setAdded((p) => ({ ...p, [row.sku]: false })), 1100);
-  }
+  const heroVariant = primaryVariant(featuredProduct);
+  const heroImage = featuredProduct.images[0]?.url ?? heroVariant?.image;
+  const popular = popularProducts.slice(0, 8);
+  const fresh = newArrivals.slice(0, 4);
 
   return (
-    <Shell crumb="home">
-      {/* hero / command line */}
-      <section
-        className="mb-3 overflow-hidden rounded-md border"
-        style={{ borderColor: D5.line, background: D5.panel }}
-      >
-        <div className="grid gap-px md:grid-cols-[1.6fr_1fr]" style={{ background: D5.line }}>
-          <div className="p-5" style={{ background: D5.panel }}>
-            <Tag tone="accent">
-              <Zap size={10} /> compact utility
-            </Tag>
+    <Shell crumb="Base camp" wide>
+      {/* Hero */}
+      <section className="grid gap-px lg:grid-cols-[1.15fr_1fr]" style={{ background: FO.line }}>
+        <div
+          className="flex flex-col justify-between gap-8 p-6 sm:p-9"
+          style={{ background: FO.panel }}
+        >
+          <div>
+            <Stamp>Rugged gate hardware</Stamp>
             <h1
-              className="mt-3 text-[26px] font-bold leading-[1.1] tracking-tight"
-              style={{ color: D5.ink }}
+              className="mt-5 text-4xl font-black uppercase leading-[0.92] tracking-tight sm:text-6xl"
+              style={{ color: FO.ink }}
             >
-              A terminal for steel.
+              Built for the
+              <br />
+              <span style={{ color: FO.hi }}>jobsite</span>, not the
+              <br />
+              showroom.
             </h1>
-            <p className="mt-2 max-w-md text-[12px] leading-relaxed" style={{ color: D5.dim }}>
-              Quote, source, and track gate hardware and structural steel at counter speed.
-              No carousels. No fluff. Every SKU two clicks away.
-            </p>
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <Btn href="/design-lab/d5/category" variant="primary">
-                <Layers size={13} /> Browse catalog
-              </Btn>
-              <Btn href="/design-lab/d5/orders">
-                <History size={13} /> Order desk
-              </Btn>
-              <span
-                className="flex items-center gap-1.5 text-[10px]"
-                style={{ color: D5.faint }}
-              >
-                <Kbd>⌘</Kbd>
-                <Kbd>K</Kbd> to search anything
-              </span>
-            </div>
-          </div>
-          <div
-            className="flex flex-col justify-between p-5"
-            style={{ background: D5.panelHi }}
-          >
-            <div>
-              <div
-                className="mb-2 text-[10px] uppercase tracking-[0.16em]"
-                style={{ color: D5.faint }}
-              >
-                Live yard status
-              </div>
-              {[
-                { hub: "DEN-01 Denver", state: "Open · cutting", tone: D5.accent },
-                { hub: "COS-02 Colorado Spgs", state: "Open · counter", tone: D5.accent },
-                { hub: "Will-call dock", state: "3 ready for pickup", tone: D5.amber }
-              ].map((r) => (
-                <div
-                  key={r.hub}
-                  className="flex items-center justify-between border-b py-1.5 last:border-0"
-                  style={{ borderColor: D5.line }}
-                >
-                  <span className="flex items-center gap-2 text-[11px]" style={{ color: D5.ink }}>
-                    <Dot color={r.tone} /> {r.hub}
-                  </span>
-                  <span className="text-[10px]" style={{ color: D5.dim }}>
-                    {r.state}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div
-              className="mt-3 flex items-center gap-2 rounded border px-2.5 py-2 text-[10px]"
-              style={{ borderColor: D5.line, color: D5.dim }}
+            <p
+              className="mt-5 max-w-md text-sm font-semibold leading-relaxed"
+              style={{ color: FO.dim }}
             >
-              <Truck size={13} style={{ color: D5.accent }} /> Free flatbed delivery on orders
-              over $750 · cut-to-length same day
-            </div>
+              Gate latches, hinges, and steel — priced for trade, stocked for
+              same-day will-call. Order with gloves on.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button href={CATEGORY_HREF} size="lg" variant="primary">
+              Shop the catalog <ArrowRight size={17} strokeWidth={2.75} />
+            </Button>
+            <Button href={PRODUCT_HREF} size="lg" variant="outline">
+              View featured gear
+            </Button>
           </div>
         </div>
+
+        <Link
+          href={PRODUCT_HREF}
+          className="group flex flex-col justify-between gap-4 p-6 sm:p-7"
+          style={{ background: FO.panelHi }}
+        >
+          <div className="flex items-center justify-between">
+            <Chip tone="hi">
+              <Zap size={12} strokeWidth={3} /> Featured
+            </Chip>
+            <span
+              className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.16em]"
+              style={{ color: FO.go }}
+            >
+              <Beacon tone="go" /> In stock
+            </span>
+          </div>
+          <div
+            className="flex flex-1 items-center justify-center"
+            style={{ background: "#f4f1e9", border: `2px solid ${FO.line}` }}
+          >
+            {heroImage ? (
+              <Image
+                alt={featuredProduct.title}
+                src={heroImage}
+                width={520}
+                height={520}
+                priority
+                quality={75}
+                className="h-full max-h-[260px] w-full object-contain p-6"
+              />
+            ) : (
+              <span className="text-6xl font-black" style={{ color: "rgba(22,20,15,0.12)" }}>
+                GW
+              </span>
+            )}
+          </div>
+          <div>
+            <span
+              className="text-[10px] font-black uppercase tracking-[0.16em]"
+              style={{ color: FO.faint }}
+            >
+              {featuredProduct.category.name} · {heroVariant?.sku}
+            </span>
+            <p
+              className="mt-1 text-lg font-black uppercase leading-tight"
+              style={{ color: FO.ink }}
+            >
+              {featuredProduct.title}
+            </p>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-2xl font-black" style={{ color: FO.hi }}>
+                {money(featuredProduct.price)}
+              </span>
+              <span
+                className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.12em] transition-colors group-hover:brightness-110"
+                style={{ color: FO.ink }}
+              >
+                Open spec <ArrowRight size={14} strokeWidth={2.75} />
+              </span>
+            </div>
+          </div>
+        </Link>
       </section>
 
-      {/* stat ribbon */}
-      <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-        {STATS.map((s) => (
+      {/* Value strip */}
+      <section
+        className="mt-6 grid gap-px sm:grid-cols-3"
+        style={{ background: FO.line, border: `2px solid ${FO.line}` }}
+      >
+        {[
+          { icon: Truck, head: "Same-day will-call", sub: "Order by 11am, pick up by 3" },
+          { icon: ShieldCheck, head: "Trade pricing", sub: "Contractor rates on every SKU" },
+          { icon: Zap, head: "Stocked deep", sub: "Real inventory, no backorder games" }
+        ].map((item) => (
           <div
-            key={s.label}
-            className="rounded-md border px-3 py-2.5"
-            style={{ borderColor: D5.line, background: D5.panel }}
+            key={item.head}
+            className="flex items-center gap-3.5 p-4"
+            style={{ background: FO.panel }}
           >
-            <div
-              className="text-[10px] uppercase tracking-[0.14em]"
-              style={{ color: D5.faint }}
+            <span
+              className="grid h-11 w-11 shrink-0 place-items-center"
+              style={{ background: FO.hiSoft, color: FO.hi }}
             >
-              {s.label}
-            </div>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-[20px] font-bold" style={{ color: D5.ink }}>
-                {s.value}
-              </span>
-              <span className="text-[10px]" style={{ color: s.tone }}>
-                {s.delta}
-              </span>
+              <item.icon size={20} strokeWidth={2.5} />
+            </span>
+            <div>
+              <p
+                className="text-[12px] font-black uppercase tracking-[0.1em]"
+                style={{ color: FO.ink }}
+              >
+                {item.head}
+              </p>
+              <p className="text-[11px] font-semibold" style={{ color: FO.dim }}>
+                {item.sub}
+              </p>
             </div>
           </div>
         ))}
-      </div>
+      </section>
 
-      <div className="grid gap-3 lg:grid-cols-[1fr_300px]">
-        {/* quick-add catalog */}
+      {/* Categories */}
+      <section className="mt-8">
+        <div className="mb-3 flex items-end justify-between">
+          <div>
+            <Stamp>Departments</Stamp>
+            <h2
+              className="mt-2 text-2xl font-black uppercase tracking-tight"
+              style={{ color: FO.ink }}
+            >
+              Pick your aisle
+            </h2>
+          </div>
+          <Link
+            href={CATEGORY_HREF}
+            className="hidden items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.12em] sm:flex"
+            style={{ color: FO.hi }}
+          >
+            All catalog <ArrowRight size={14} strokeWidth={2.75} />
+          </Link>
+        </div>
+        <div
+          className="grid gap-px sm:grid-cols-2 lg:grid-cols-4"
+          style={{ background: FO.line, border: `2px solid ${FO.line}` }}
+        >
+          {topCategories.map((category, index) => (
+            <Link
+              key={category.slug}
+              href={CATEGORY_HREF}
+              className="group flex items-center justify-between gap-3 p-4"
+              style={{ background: FO.panel }}
+            >
+              <div className="min-w-0">
+                <span
+                  className="text-[10px] font-black uppercase tracking-[0.16em]"
+                  style={{ color: FO.hi }}
+                >
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <p
+                  className="truncate text-[13px] font-black uppercase leading-tight"
+                  style={{ color: FO.ink }}
+                >
+                  {category.name}
+                </p>
+                <p
+                  className="text-[10px] font-bold uppercase tracking-[0.12em]"
+                  style={{ color: FO.faint }}
+                >
+                  {categoryCount(category.slug)} SKUs in stock
+                </p>
+              </div>
+              <span
+                className="grid h-9 w-9 shrink-0 place-items-center transition-colors group-hover:bg-[#ff5a1f] group-hover:text-[#16140f]"
+                style={{ background: FO.panelHi, color: FO.ink }}
+              >
+                <ArrowRight size={16} strokeWidth={2.75} />
+              </span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* Popular grid */}
+      <section className="mt-8">
+        <div className="mb-3 flex items-end justify-between">
+          <div>
+            <Stamp>Crew favorites</Stamp>
+            <h2
+              className="mt-2 text-2xl font-black uppercase tracking-tight"
+              style={{ color: FO.ink }}
+            >
+              Top-moving gear
+            </h2>
+          </div>
+          <Link
+            href={CATEGORY_HREF}
+            className="hidden items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.12em] sm:flex"
+            style={{ color: FO.hi }}
+          >
+            Browse all <ArrowRight size={14} strokeWidth={2.75} />
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {popular.map((product, index) => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              flag={index === 0 ? "Best seller" : undefined}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* New arrivals */}
+      <section className="mt-8">
         <Panel
-          title="Quick order"
-          hint="// type or click — qty defaults to UOM"
+          title="Just landed"
+          kicker="// fresh stock"
           right={
             <Link
-              href="/design-lab/d5/category"
-              className="flex items-center gap-1 text-[10px] font-semibold"
-              style={{ color: D5.accent }}
+              href={CATEGORY_HREF}
+              className="text-[10px] font-black uppercase tracking-[0.12em]"
+              style={{ color: FO.hi }}
             >
-              full catalog <ArrowUpRight size={11} />
+              See all
             </Link>
           }
         >
-          <div
-            className="grid grid-cols-[1fr_auto_auto] gap-x-3 border-b px-3 py-1.5 text-[9px] uppercase tracking-[0.14em]"
-            style={{ borderColor: D5.line, color: D5.faint }}
-          >
-            <span>SKU / item</span>
-            <span className="text-right">unit</span>
-            <span className="text-right">add</span>
-          </div>
-          {quick.map((p) => (
-            <div
-              key={p.sku}
-              className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3 border-b px-3 py-2 transition-colors last:border-0 hover:brightness-110"
-              style={{ borderColor: D5.line }}
-            >
-              <div className="flex items-center gap-2.5 overflow-hidden">
-                <span
-                  className="h-7 w-7 shrink-0 rounded"
-                  style={{ background: p.swatch }}
-                />
-                <div className="overflow-hidden">
-                  <Link
-                    href="/design-lab/d5/product"
-                    className="block truncate text-[12px] font-semibold hover:underline"
-                    style={{ color: D5.ink }}
-                  >
-                    {p.name}
-                  </Link>
-                  <div className="truncate text-[10px]" style={{ color: D5.faint }}>
-                    <span style={{ color: D5.dim }}>{p.sku}</span> · {p.spec}
-                  </div>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-[12px] font-bold" style={{ color: D5.ink }}>
-                  {fmt(p.price)}
-                </div>
-                <div className="text-[9px]" style={{ color: D5.faint }}>
-                  /ea
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => add(p)}
-                className="flex h-7 w-16 items-center justify-center gap-1 rounded text-[10px] font-bold transition-colors"
-                style={{
-                  background: added[p.sku] ? D5.accentDim : D5.accent,
-                  color: added[p.sku] ? D5.accent : D5.bg
-                }}
-              >
-                {added[p.sku] ? (
-                  <>
-                    <Check size={12} /> ADDED
-                  </>
-                ) : (
-                  <>
-                    <Plus size={12} /> ADD
-                  </>
-                )}
-              </button>
-            </div>
-          ))}
-        </Panel>
-
-        <div className="flex flex-col gap-3">
-          {/* categories */}
-          <Panel title="Departments" hint={String(topCategories.length)}>
-            <div className="p-1.5">
-              {topCategories.map((c) => (
+          <div className="grid gap-px sm:grid-cols-2 lg:grid-cols-4" style={{ background: FO.line }}>
+            {fresh.map((product) => {
+              const variant = primaryVariant(product);
+              const image = product.images[0]?.url ?? variant?.image;
+              return (
                 <Link
-                  key={c.slug}
-                  href="/design-lab/d5/category"
-                  className="flex items-center justify-between rounded px-2 py-1.5 transition-colors hover:brightness-125"
-                  style={{ color: D5.ink }}
+                  key={product.id}
+                  href={PRODUCT_HREF}
+                  className="flex items-center gap-3.5 p-4"
+                  style={{ background: FO.panel }}
                 >
-                  <span className="flex items-center gap-2 text-[11px] font-semibold">
-                    <span
-                      className="h-3.5 w-3.5 rounded-sm"
-                      style={{ background: swatchFor(c.slug) }}
-                    />
-                    {c.name}
-                  </span>
-                  <span
-                    className="text-[10px]"
-                    style={{ color: D5.faint, fontFamily: mono }}
+                  <div
+                    className="grid h-16 w-16 shrink-0 place-items-center"
+                    style={{ background: "#f4f1e9" }}
                   >
-                    {getCategoryProducts(c.slug).length}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </Panel>
-
-          {/* reorder */}
-          <Panel
-            title="Reorder"
-            hint="// last buys"
-            right={<Flame size={12} style={{ color: D5.amber }} />}
-          >
-            <div className="p-1.5">
-              {recent.map((r) => (
-                <div
-                  key={r.sku}
-                  className="flex items-center justify-between rounded px-2 py-1.5"
-                >
-                  <div className="min-w-0">
-                    <div
-                      className="truncate text-[11px] font-semibold"
-                      style={{ color: D5.ink }}
-                    >
-                      {r.sku}
-                    </div>
-                    <div className="truncate text-[9px]" style={{ color: D5.faint }}>
-                      {r.name}
-                    </div>
+                    {image ? (
+                      <Image
+                        alt={product.title}
+                        src={image}
+                        width={140}
+                        height={140}
+                        quality={75}
+                        className="h-full w-full object-contain p-1.5"
+                      />
+                    ) : (
+                      <span className="text-lg font-black" style={{ color: "rgba(22,20,15,0.16)" }}>
+                        GW
+                      </span>
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => add(r)}
-                    className="flex h-6 items-center gap-1 rounded border px-2 text-[10px] font-bold"
-                    style={{
-                      borderColor: D5.line,
-                      background: D5.panelHi,
-                      color: added[r.sku] ? D5.accent : D5.dim
-                    }}
-                  >
-                    {added[r.sku] ? <Check size={11} /> : <Plus size={11} />}
-                    {added[r.sku] ? "OK" : "RE-ADD"}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </Panel>
+                  <div className="min-w-0">
+                    <p
+                      className="line-clamp-2 text-[12px] font-black uppercase leading-tight"
+                      style={{ color: FO.ink }}
+                    >
+                      {product.title}
+                    </p>
+                    <p className="mt-1 text-sm font-black" style={{ color: FO.hi }}>
+                      {money(product.price)}
+                    </p>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </Panel>
+      </section>
 
-          <Panel title="Spend trend" hint="// 8 wk">
-            <div className="flex h-24 items-end gap-1 p-3">
-              {[42, 55, 38, 61, 70, 58, 79, 92].map((v, i) => (
-                <div
-                  key={i}
-                  className="flex-1 rounded-sm"
-                  style={{
-                    height: `${v}%`,
-                    background: i === 7 ? D5.accent : D5.accentDim
-                  }}
-                />
-              ))}
-            </div>
-            <div
-              className="flex items-center justify-between border-t px-3 py-1.5 text-[10px]"
-              style={{ borderColor: D5.line, color: D5.dim }}
-            >
-              <span className="flex items-center gap-1">
-                <TrendingUp size={11} style={{ color: D5.accent }} /> +12.4% MoM
-              </span>
-              <Link href="/design-lab/d5/reports" style={{ color: D5.accent }}>
-                reports →
-              </Link>
-            </div>
-          </Panel>
+      {/* CTA banner */}
+      <section
+        className="mt-8 flex flex-col items-start justify-between gap-5 p-6 sm:flex-row sm:items-center sm:p-8"
+        style={{ background: FO.hi }}
+      >
+        <div>
+          <Title>
+            <span style={{ color: FO.black }}>Gear up. Get out.</span>
+          </Title>
+          <p
+            className="mt-2 text-sm font-bold uppercase tracking-[0.06em]"
+            style={{ color: FO.black }}
+          >
+            The whole catalog, contractor-priced and ready for will-call.
+          </p>
         </div>
-      </div>
+        <Button href={CATEGORY_HREF} size="lg" variant="dark">
+          Start an order <ArrowRight size={17} strokeWidth={2.75} />
+        </Button>
+      </section>
     </Shell>
   );
 }

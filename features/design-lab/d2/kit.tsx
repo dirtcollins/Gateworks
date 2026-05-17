@@ -1,168 +1,163 @@
 "use client";
 
 /**
- * DESIGN 2 — "WAREHOUSE DARK"
- * Shared design kit: dark industrial-control-room UI primitives.
- * Wired to real catalog/cart/order/reports data — visual design unchanged.
+ * DESIGN 2 — "MONO"
+ * Pure monochrome minimalism. Black, white, and a precise gray scale.
+ * Hairline borders, a visible Swiss/editorial grid, type-driven hierarchy.
+ * Wired to the real Design Lab data layer.
  */
 
 import Image from "next/image";
 import Link from "next/link";
-import type { ReactNode } from "react";
-import {
-  Activity,
-  Boxes,
-  ClipboardList,
-  Cpu,
-  Home,
-  LineChart,
-  ShoppingCart
-} from "lucide-react";
+import type { CSSProperties, ReactNode } from "react";
 
 /* ----------------------------------------------------------------------- */
-/* Tokens                                                                  */
+/* Tokens — monochrome scale only                                          */
 /* ----------------------------------------------------------------------- */
 
-export const D2 = {
-  /** vivid electric-green accent */
-  accent: "#3df58a",
-  accentDim: "#1f3d2e",
-  bg: "#0a0d0f",
-  panel: "#11161a",
-  panelHi: "#161d22",
-  line: "#222b32",
-  text: "#e6edf2",
-  muted: "#6f7d87"
+export const MONO = {
+  ink: "#0a0a0a",
+  paper: "#ffffff",
+  /** page surface — barely-off-white */
+  shell: "#f4f4f3",
+  /** mid surface for cards / product wells */
+  mist: "#fafafa",
+  line: "#e3e3e1",
+  lineStrong: "#0a0a0a",
+  /** secondary text */
+  steel: "#6b6b69",
+  /** tertiary text / labels */
+  muted: "#9a9a98"
 } as const;
 
-export const mono =
-  "font-mono [font-feature-settings:'tnum'] tabular-nums";
+export function formatUsd(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD"
+  }).format(Number.isFinite(value) ? value : 0);
+}
+
+export function formatNumber(value: number): string {
+  return new Intl.NumberFormat("en-US").format(
+    Number.isFinite(value) ? value : 0
+  );
+}
 
 /* ----------------------------------------------------------------------- */
 /* Shell                                                                   */
 /* ----------------------------------------------------------------------- */
 
 const NAV = [
-  { href: "/design-lab/d2/home", label: "Storefront", icon: Home },
-  { href: "/design-lab/d2/category", label: "Catalog", icon: Boxes },
-  { href: "/design-lab/d2/product", label: "Product", icon: Cpu },
-  { href: "/design-lab/d2/cart", label: "Cart", icon: ShoppingCart },
-  { href: "/design-lab/d2/orders", label: "Orders", icon: ClipboardList },
-  { href: "/design-lab/d2/reports", label: "Reports", icon: LineChart }
-];
+  { href: "/design-lab/d2/home", label: "Index" },
+  { href: "/design-lab/d2/category", label: "Catalogue" },
+  { href: "/design-lab/d2/product", label: "Object" },
+  { href: "/design-lab/d2/cart", label: "Cart" },
+  { href: "/design-lab/d2/orders", label: "Orders" },
+  { href: "/design-lab/d2/reports", label: "Reports" }
+] as const;
 
-export function D2Shell({
+export function MonoPage({
   active,
-  children,
-  kicker = "WAREHOUSE TERMINAL"
+  children
 }: {
   active: string;
   children: ReactNode;
-  kicker?: string;
 }) {
   return (
     <div
-      className="min-h-screen w-full font-sans antialiased"
-      style={{ background: D2.bg, color: D2.text }}
+      className="min-h-screen w-full antialiased"
+      style={{
+        background: MONO.shell,
+        color: MONO.ink,
+        fontFamily:
+          "ui-sans-serif, system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif"
+      }}
     >
-      {/* fine grid backdrop */}
       <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 z-0 opacity-[0.35]"
+        className="mx-auto flex min-h-screen max-w-[1320px] flex-col"
         style={{
-          backgroundImage:
-            "linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px)",
-          backgroundSize: "44px 44px"
+          borderLeft: `1px solid ${MONO.line}`,
+          borderRight: `1px solid ${MONO.line}`,
+          background: MONO.paper
         }}
-      />
-      <div className="relative z-10 mx-auto flex min-h-screen max-w-[1440px] flex-col">
-        <D2Header kicker={kicker} />
-        <D2Nav active={active} />
-        <main className="flex-1 px-4 pb-20 pt-6 sm:px-6 lg:px-8">{children}</main>
-        <D2Footer />
+      >
+        <MonoHeader />
+        <MonoNav active={active} />
+        <main className="flex-1">{children}</main>
+        <MonoFooter />
       </div>
     </div>
   );
 }
 
-function D2Header({ kicker }: { kicker: string }) {
+function MonoHeader() {
   return (
     <header
-      className="flex items-center justify-between gap-4 border-b px-4 py-3 sm:px-6 lg:px-8"
-      style={{ borderColor: D2.line, background: D2.panel }}
+      className="flex items-center justify-between gap-4 px-6 py-5 sm:px-10"
+      style={{ borderBottom: `1px solid ${MONO.line}` }}
     >
-      <div className="flex items-center gap-3">
-        <div
-          className="grid h-9 w-9 place-items-center rounded-[3px]"
-          style={{
-            background: D2.accent,
-            boxShadow: `0 0 22px ${D2.accent}55`
-          }}
+      <Link className="flex items-baseline gap-3" href="/design-lab/d2/home">
+        <span
+          className="grid h-8 w-8 place-items-center text-[15px] font-bold"
+          style={{ background: MONO.ink, color: MONO.paper }}
         >
-          <Cpu className="h-5 w-5" style={{ color: D2.bg }} strokeWidth={2.5} />
-        </div>
-        <div className="leading-tight">
-          <div className="text-[15px] font-bold tracking-tight">
-            GATEWORKS<span style={{ color: D2.accent }}>/</span>OPS
-          </div>
-          <div
-            className={`${mono} text-[10px] uppercase tracking-[0.22em]`}
-            style={{ color: D2.muted }}
-          >
-            {kicker}
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-4">
-        <div className="hidden items-center gap-2 sm:flex">
-          <span
-            className="inline-block h-1.5 w-1.5 animate-pulse rounded-full"
-            style={{ background: D2.accent }}
-          />
-          <span
-            className={`${mono} text-[11px] uppercase tracking-wider`}
-            style={{ color: D2.muted }}
-          >
-            Yard live
+          G
+        </span>
+        <span className="flex flex-col leading-none">
+          <span className="text-[17px] font-semibold tracking-[-0.02em]">
+            Gateworks
           </span>
-        </div>
-        <div
-          className={`${mono} hidden text-[11px] tabular-nums md:block`}
-          style={{ color: D2.muted }}
+          <span
+            className="mt-1 text-[9px] font-medium uppercase tracking-[0.34em]"
+            style={{ color: MONO.muted }}
+          >
+            Mono Edition
+          </span>
+        </span>
+      </Link>
+      <div className="flex items-center gap-6">
+        <span
+          className="hidden text-[10px] font-medium uppercase tracking-[0.28em] sm:block"
+          style={{ color: MONO.muted }}
         >
-          17 MAY 2026 · 08:42 MT
-        </div>
-        <div
-          className="grid h-8 w-8 place-items-center rounded-[3px] text-[11px] font-bold"
-          style={{ background: D2.panelHi, color: D2.accent, border: `1px solid ${D2.line}` }}
+          Steel &amp; Gate Hardware
+        </span>
+        <span
+          className="grid h-8 w-8 place-items-center text-[10px] font-semibold uppercase tracking-[0.1em]"
+          style={{ border: `1px solid ${MONO.lineStrong}` }}
         >
           NS
-        </div>
+        </span>
       </div>
     </header>
   );
 }
 
-function D2Nav({ active }: { active: string }) {
+function MonoNav({ active }: { active: string }) {
   return (
     <nav
-      className="flex items-center gap-1 overflow-x-auto border-b px-2 py-1.5 sm:px-4 lg:px-6"
-      style={{ borderColor: D2.line, background: D2.panel }}
+      className="flex items-stretch overflow-x-auto"
+      style={{ borderBottom: `1px solid ${MONO.line}` }}
     >
-      {NAV.map((item) => {
-        const Icon = item.icon;
+      {NAV.map((item, index) => {
         const on = item.label.toLowerCase() === active.toLowerCase();
         return (
           <Link
             key={item.href}
             href={item.href}
-            className={`${mono} group flex shrink-0 items-center gap-2 rounded-[3px] px-3 py-2 text-[11px] uppercase tracking-wider transition`}
+            className="shrink-0 px-6 py-3.5 text-[11px] font-medium uppercase tracking-[0.2em] transition-colors"
             style={{
-              color: on ? D2.bg : D2.muted,
-              background: on ? D2.accent : "transparent"
+              color: on ? MONO.paper : MONO.steel,
+              background: on ? MONO.ink : "transparent",
+              borderLeft: index === 0 ? undefined : `1px solid ${MONO.line}`
             }}
           >
-            <Icon className="h-3.5 w-3.5" strokeWidth={2.4} />
+            <span
+              className="mr-2 text-[9px] tabular-nums"
+              style={{ color: on ? "rgba(255,255,255,0.45)" : MONO.muted }}
+            >
+              {String(index + 1).padStart(2, "0")}
+            </span>
             {item.label}
           </Link>
         );
@@ -171,28 +166,31 @@ function D2Nav({ active }: { active: string }) {
   );
 }
 
-function D2Footer() {
+function MonoFooter() {
   return (
     <footer
-      className="border-t px-4 py-5 sm:px-6 lg:px-8"
-      style={{ borderColor: D2.line, background: D2.panel }}
+      className="mt-auto px-6 py-8 sm:px-10"
+      style={{ borderTop: `1px solid ${MONO.line}` }}
     >
-      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-        <div
-          className={`${mono} text-[11px] uppercase tracking-wider`}
-          style={{ color: D2.muted }}
-        >
-          GATEWORKS/OPS · Steel & Gate Hardware Supply · Design Lab — Concept 2
-        </div>
-        <div className="flex items-center gap-2">
-          <Activity className="h-3.5 w-3.5" style={{ color: D2.accent }} />
-          <span
-            className={`${mono} text-[11px] uppercase tracking-wider`}
-            style={{ color: D2.muted }}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-[18px] font-semibold tracking-[-0.02em]">
+            Gateworks
+          </p>
+          <p
+            className="mt-1 text-[11px] uppercase tracking-[0.22em]"
+            style={{ color: MONO.muted }}
           >
-            Warehouse Dark
-          </span>
+            Design Lab — Concept 02 / Mono
+          </p>
         </div>
+        <p
+          className="max-w-xs text-[12px] leading-relaxed"
+          style={{ color: MONO.steel }}
+        >
+          A disciplined, type-driven storefront. Monochrome by intent — the
+          grid does the work.
+        </p>
       </div>
     </footer>
   );
@@ -202,242 +200,226 @@ function D2Footer() {
 /* Primitives                                                              */
 /* ----------------------------------------------------------------------- */
 
-export function Panel({
+/** Section block with editorial side-padding. */
+export function Section({
   children,
   className = "",
-  glow = false
+  style
 }: {
   children: ReactNode;
   className?: string;
-  glow?: boolean;
+  style?: CSSProperties;
 }) {
   return (
-    <div
-      className={`rounded-[5px] ${className}`}
-      style={{
-        background: D2.panel,
-        border: `1px solid ${D2.line}`,
-        boxShadow: glow ? `0 0 0 1px ${D2.accent}22, 0 18px 40px -24px #000` : undefined
-      }}
-    >
+    <section className={`px-6 sm:px-10 ${className}`} style={style}>
       {children}
-    </div>
+    </section>
   );
 }
 
-export function PanelHead({
-  title,
-  meta,
-  action
+/** Small uppercase label / kicker. */
+export function Label({
+  children,
+  className = "",
+  index
 }: {
+  children: ReactNode;
+  className?: string;
+  index?: string;
+}) {
+  return (
+    <p
+      className={`flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.28em] ${className}`}
+      style={{ color: MONO.muted }}
+    >
+      {index ? (
+        <span
+          className="tabular-nums"
+          style={{ color: MONO.ink }}
+        >
+          {index}
+        </span>
+      ) : null}
+      {children}
+    </p>
+  );
+}
+
+/** Section header: kicker + big headline + optional rule. */
+export function SectionHead({
+  kicker,
+  title,
+  action,
+  index
+}: {
+  kicker: string;
   title: string;
-  meta?: string;
   action?: ReactNode;
+  index?: string;
 }) {
   return (
     <div
-      className="flex items-center justify-between gap-3 border-b px-4 py-3"
-      style={{ borderColor: D2.line }}
+      className="flex flex-wrap items-end justify-between gap-4 pb-5"
+      style={{ borderBottom: `1px solid ${MONO.lineStrong}` }}
     >
-      <div className="flex items-baseline gap-3">
-        <span className="h-3 w-[3px]" style={{ background: D2.accent }} />
-        <h2 className="text-[13px] font-bold uppercase tracking-[0.14em]">{title}</h2>
-        {meta ? (
-          <span className={`${mono} text-[11px]`} style={{ color: D2.muted }}>
-            {meta}
-          </span>
-        ) : null}
+      <div>
+        <Label index={index}>{kicker}</Label>
+        <h2 className="mt-2.5 text-[26px] font-semibold leading-[1.05] tracking-[-0.025em] sm:text-[32px]">
+          {title}
+        </h2>
       </div>
       {action}
     </div>
   );
 }
 
-export function Tag({
+/** Hairline-bordered button. */
+export function MonoButton({
   children,
-  tone = "muted"
+  href,
+  onClick,
+  type = "button",
+  variant = "solid",
+  full = false,
+  disabled = false
 }: {
   children: ReactNode;
-  tone?: "accent" | "muted" | "warn" | "bad";
+  href?: string;
+  onClick?: () => void;
+  type?: "button" | "submit";
+  variant?: "solid" | "outline";
+  full?: boolean;
+  disabled?: boolean;
 }) {
-  const map = {
-    accent: { fg: D2.accent, bg: `${D2.accent}18`, bd: `${D2.accent}55` },
-    muted: { fg: D2.muted, bg: D2.panelHi, bd: D2.line },
-    warn: { fg: "#f5b53d", bg: "#3a2d10", bd: "#6b5318" },
-    bad: { fg: "#ff6b6b", bg: "#3a1717", bd: "#6b2424" }
-  }[tone];
+  const base =
+    "inline-flex items-center justify-center gap-2 px-6 py-3.5 text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors";
+  const style: CSSProperties =
+    variant === "solid"
+      ? { background: MONO.ink, color: MONO.paper }
+      : {
+          background: MONO.paper,
+          color: MONO.ink,
+          border: `1px solid ${MONO.lineStrong}`
+        };
+  const cls = `${base} ${full ? "w-full" : ""} ${
+    disabled ? "cursor-not-allowed opacity-40" : ""
+  } ${variant === "outline" ? "hover:bg-[#0a0a0a] hover:text-white" : "hover:bg-[#333333]"}`;
+
+  if (href && !disabled) {
+    return (
+      <Link className={cls} href={href} style={style}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <button
+      className={cls}
+      disabled={disabled}
+      onClick={onClick}
+      style={style}
+      type={type}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * Product image in a calm, light well. Falls back to a typographic monogram
+ * tile when no usable image url exists.
+ */
+export function ProductImage({
+  src,
+  alt,
+  className = "",
+  sizes = "(max-width: 768px) 50vw, 320px",
+  priority = false,
+  pad = "p-6"
+}: {
+  src?: string;
+  alt: string;
+  className?: string;
+  sizes?: string;
+  priority?: boolean;
+  pad?: string;
+}) {
+  const usable = src && src !== "/assets/logo.svg" && !src.includes("noimage");
+  return (
+    <div
+      className={`relative overflow-hidden ${className}`}
+      style={{ background: MONO.mist }}
+    >
+      {usable ? (
+        <Image
+          alt={alt}
+          src={src as string}
+          fill
+          priority={priority}
+          quality={75}
+          sizes={sizes}
+          className={`object-contain ${pad}`}
+        />
+      ) : (
+        <div className="absolute inset-0 grid place-items-center">
+          <span
+            className="text-[44px] font-semibold tracking-[-0.04em]"
+            style={{ color: MONO.line }}
+          >
+            GW
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Mono status pill — hairline outline, no color. */
+export function Pill({
+  children,
+  filled = false
+}: {
+  children: ReactNode;
+  filled?: boolean;
+}) {
   return (
     <span
-      className={`${mono} inline-flex items-center gap-1 rounded-[3px] px-2 py-0.5 text-[10px] uppercase tracking-wider`}
-      style={{ color: map.fg, background: map.bg, border: `1px solid ${map.bd}` }}
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em]"
+      style={
+        filled
+          ? { background: MONO.ink, color: MONO.paper }
+          : { border: `1px solid ${MONO.lineStrong}`, color: MONO.ink }
+      }
     >
       {children}
     </span>
   );
 }
 
-export function AccentButton({
-  children,
-  href,
-  onClick,
-  className = "",
-  ghost = false,
-  type = "button"
-}: {
-  children: ReactNode;
-  href?: string;
-  onClick?: () => void;
-  className?: string;
-  ghost?: boolean;
-  type?: "button" | "submit";
-}) {
-  const base = `${mono} inline-flex items-center justify-center gap-2 rounded-[3px] px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.14em] transition active:translate-y-px`;
-  const style = ghost
-    ? { color: D2.text, background: "transparent", border: `1px solid ${D2.line}` }
-    : {
-        color: D2.bg,
-        background: D2.accent,
-        boxShadow: `0 0 22px ${D2.accent}40`
-      };
-  if (href) {
-    return (
-      <Link href={href} className={`${base} ${className}`} style={style}>
-        {children}
-      </Link>
-    );
-  }
-  return (
-    <button type={type} onClick={onClick} className={`${base} ${className}`} style={style}>
-      {children}
-    </button>
-  );
-}
-
-/** Color-block product image — no remote deps. */
-export function PartImage({
-  seed,
-  className = "",
-  label
-}: {
-  seed: string;
-  className?: string;
-  label?: string;
-}) {
-  const hue = [...seed].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
-  return (
-    <div
-      className={`relative overflow-hidden rounded-[4px] ${className}`}
-      style={{
-        background: `linear-gradient(135deg, hsl(${hue} 14% 14%), hsl(${
-          (hue + 40) % 360
-        } 16% 9%))`,
-        border: `1px solid ${D2.line}`
-      }}
-    >
-      <div
-        aria-hidden
-        className="absolute inset-0 opacity-30"
-        style={{
-          backgroundImage:
-            "repeating-linear-gradient(45deg,rgba(255,255,255,0.06) 0 2px,transparent 2px 11px)"
-        }}
-      />
-      <div
-        aria-hidden
-        className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-[3px]"
-        style={{ border: `2px solid ${D2.accent}66`, boxShadow: `0 0 30px ${D2.accent}22` }}
-      />
-      {label ? (
-        <span
-          className={`${mono} absolute bottom-1.5 left-2 text-[9px] uppercase tracking-wider`}
-          style={{ color: D2.muted }}
-        >
-          {label}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * Real-photo product image inside the same dark, scan-lined frame as
- * PartImage. Falls back to the color block when no usable image url exists.
- */
-export function PartPhoto({
-  src,
-  alt,
-  seed,
-  className = "",
-  label,
-  quality = 75
-}: {
-  src?: string;
-  alt: string;
-  seed: string;
-  className?: string;
-  label?: string;
-  quality?: number;
-}) {
-  const usable = src && src !== "/assets/logo.svg" && !src.includes("noimage");
-
-  if (!usable) {
-    return <PartImage seed={seed} className={className} label={label} />;
-  }
-
-  return (
-    <div
-      className={`relative overflow-hidden rounded-[4px] ${className}`}
-      style={{ background: D2.panelHi, border: `1px solid ${D2.line}` }}
-    >
-      <Image
-        alt={alt}
-        src={src}
-        fill
-        quality={quality}
-        sizes="(max-width: 768px) 50vw, 320px"
-        className="object-contain p-2"
-      />
-      {label ? (
-        <span
-          className={`${mono} absolute bottom-1.5 left-2 z-10 text-[9px] uppercase tracking-wider`}
-          style={{ color: D2.muted }}
-        >
-          {label}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-export function StatCell({
+/** Big editorial statistic. */
+export function Stat({
   label,
   value,
-  delta,
-  good
+  note
 }: {
   label: string;
   value: string;
-  delta?: string;
-  good?: boolean;
+  note?: string;
 }) {
   return (
-    <div
-      className="flex flex-col gap-1 px-4 py-3.5"
-      style={{ borderLeft: `2px solid ${D2.line}` }}
-    >
+    <div className="flex flex-col gap-2 p-5">
       <span
-        className={`${mono} text-[10px] uppercase tracking-[0.16em]`}
-        style={{ color: D2.muted }}
+        className="text-[10px] font-semibold uppercase tracking-[0.22em]"
+        style={{ color: MONO.muted }}
       >
         {label}
       </span>
-      <span className={`${mono} text-[24px] font-bold leading-none`}>{value}</span>
-      {delta ? (
-        <span
-          className={`${mono} text-[11px]`}
-          style={{ color: good ? D2.accent : "#ff6b6b" }}
-        >
-          {good ? "▲" : "▼"} {delta}
+      <span className="text-[30px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
+        {value}
+      </span>
+      {note ? (
+        <span className="text-[11px]" style={{ color: MONO.steel }}>
+          {note}
         </span>
       ) : null}
     </div>

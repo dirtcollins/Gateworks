@@ -2,356 +2,333 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import {
-  AlertTriangle,
-  ArrowUpRight,
-  Database,
-  Receipt,
-  TrendingUp
-} from "lucide-react";
-import { D5, Dot, H, Panel, Shell, Tag, mono } from "./kit";
-import { fmt } from "./data";
-import type {
-  ReportData,
-  ReportOrderRow
-} from "@/features/admin/reports/reports-dashboard";
+import { ArrowRight, Database, TrendingUp } from "lucide-react";
+import { Beacon, Chip, FO, Panel, Shell, Stamp } from "./kit";
+import { money } from "./data";
+import type { ReportData } from "@/features/admin/reports/reports-dashboard";
 
 function titleCase(value: string) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 }
 
-function paymentTone(status: string): "dim" | "accent" | "amber" | "red" | "blue" {
-  if (status === "paid" || status === "overpaid") return "accent";
-  if (status === "partial") return "amber";
-  if (status === "failed") return "red";
-  if (status === "refunded") return "blue";
-  return "dim";
+function paymentTone(status: string): "hi" | "go" | "warn" | "stop" | "steel" {
+  if (status === "paid" || status === "overpaid") return "go";
+  if (status === "partial") return "warn";
+  if (status === "failed") return "stop";
+  if (status === "refunded") return "hi";
+  return "steel";
 }
+
+const TONE_COLOR: Record<string, string> = {
+  hi: FO.hi,
+  go: FO.go,
+  warn: FO.warn,
+  stop: FO.stop,
+  steel: FO.faint
+};
 
 function shortDate(iso: string) {
   if (!iso) return "—";
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric"
-  }).format(new Date(iso));
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(
+    new Date(iso)
+  );
 }
 
 export default function D5Reports({ data }: { data: ReportData }) {
-  const KPI = [
-    { label: "Revenue 30d", value: fmt(data.revenue30) },
+  const kpis = [
+    { label: "Revenue 30d", value: money(data.revenue30), big: true },
     { label: "Orders 30d", value: String(data.orders30) },
-    { label: "Avg ticket", value: fmt(data.avgOrderValue) },
+    { label: "Avg ticket", value: money(data.avgOrderValue) },
     {
       label: "Gross margin",
       value: data.hasCostData ? `${data.grossMarginPct.toFixed(1)}%` : "No cost data"
     },
-    { label: "Outstanding", value: fmt(data.outstanding) },
-    { label: "Collected", value: fmt(data.collected) }
+    { label: "Collected", value: money(data.collected) },
+    { label: "Outstanding", value: money(data.outstanding), tone: FO.stop }
   ];
 
-  // Revenue chart: real recent-order totals, oldest → newest.
-  const revenueBars = useMemo(() => {
-    const series = [...data.recentOrders]
-      .reverse()
-      .slice(-12)
-      .map((row) => row.total);
+  // Revenue bars from real recent-order totals, oldest -> newest.
+  const bars = useMemo(() => {
+    const series = [...data.recentOrders].reverse().slice(-14).map((row) => row.total);
     return series.length ? series : [0];
   }, [data.recentOrders]);
-  const maxBar = Math.max(...revenueBars, 1);
-
-  // Top orders by revenue stand in for the dense "top" table.
-  const topOrders = useMemo(
-    () => [...data.recentOrders].sort((a, b) => b.total - a.total).slice(0, 5),
-    [data.recentOrders]
-  );
-  const topMax = topOrders[0]?.total || 1;
+  const maxBar = Math.max(...bars, 1);
 
   const collectedPct =
     data.billed > 0 ? Math.round((data.collected / data.billed) * 100) : 0;
+  const paymentTotal = data.paymentBreakdown.reduce((sum, row) => sum + row.total, 0);
+  const maxAging = Math.max(...data.aging.map((bucket) => bucket.total), 1);
 
   return (
-    <Shell crumb="ops / reports">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+    <Shell crumb="Ops / financial reports" wide>
+      <header
+        className="flex flex-wrap items-end justify-between gap-4 p-6"
+        style={{ background: FO.panel, border: `2px solid ${FO.line}` }}
+      >
         <div>
-          <H>Reports</H>
-          <p className="mt-0.5 text-[11px]" style={{ color: D5.faint }}>
-            Live financial analytics · revenue, AR, and gross margin
+          <Stamp>Operations</Stamp>
+          <h1
+            className="mt-3 text-3xl font-black uppercase leading-[0.95] tracking-tight sm:text-5xl"
+            style={{ color: FO.ink }}
+          >
+            Financial reports
+          </h1>
+          <p
+            className="mt-2 text-[12px] font-bold uppercase tracking-[0.1em]"
+            style={{ color: FO.dim }}
+          >
+            Revenue · accounts receivable · gross margin
           </p>
         </div>
-      </div>
+        <Link
+          href="/design-lab/d5/orders"
+          className="flex items-center gap-2 px-5 py-3 text-[11px] font-black uppercase tracking-[0.12em]"
+          style={{ background: FO.panelHi, color: FO.ink, border: `2px solid ${FO.line}` }}
+        >
+          Order desk <ArrowRight size={14} strokeWidth={2.75} />
+        </Link>
+      </header>
 
       {!data.configured ? (
         <div
-          className="mb-3 flex items-start gap-2.5 rounded-md border px-3 py-2.5"
-          style={{ borderColor: "#5a2620", background: "#3a1916" }}
+          className="mt-6 flex items-start gap-3 p-4"
+          style={{ background: FO.warnSoft, border: `2px solid ${FO.warn}` }}
         >
-          <Database size={14} className="mt-0.5 shrink-0" style={{ color: D5.red }} />
+          <Database size={20} strokeWidth={2.5} style={{ color: FO.warn }} className="shrink-0" />
           <div>
-            <div className="text-[11px] font-bold" style={{ color: D5.red }}>
+            <p
+              className="text-[12px] font-black uppercase tracking-[0.12em]"
+              style={{ color: FO.warn }}
+            >
               Supabase not configured
-            </div>
-            <div className="text-[10px]" style={{ color: D5.dim }}>
-              Add Supabase keys to <span style={{ fontFamily: mono }}>.env.local</span> to
-              populate live financial data.
-            </div>
+            </p>
+            <p className="mt-0.5 text-[12px] font-semibold" style={{ color: FO.dim }}>
+              Add Supabase keys to <code>.env.local</code> to populate live financial data.
+            </p>
           </div>
         </div>
       ) : null}
 
       {/* KPI grid */}
-      <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
-        {KPI.map((k) => (
-          <div
-            key={k.label}
-            className="rounded-md border px-3 py-2.5"
-            style={{ borderColor: D5.line, background: D5.panel }}
-          >
-            <div
-              className="text-[10px] uppercase tracking-[0.14em]"
-              style={{ color: D5.faint }}
+      <section
+        className="mt-6 grid grid-cols-2 gap-px md:grid-cols-3 xl:grid-cols-6"
+        style={{ background: FO.line, border: `2px solid ${FO.line}` }}
+      >
+        {kpis.map((kpi) => (
+          <div key={kpi.label} className="p-4" style={{ background: FO.panel }}>
+            <p
+              className="text-[10px] font-black uppercase tracking-[0.14em]"
+              style={{ color: FO.faint }}
             >
-              {k.label}
-            </div>
-            <div className="mt-1 text-[19px] font-bold" style={{ color: D5.ink }}>
-              {k.value}
-            </div>
+              {kpi.label}
+            </p>
+            <p
+              className="mt-1.5 font-black"
+              style={{
+                color: kpi.tone ?? FO.ink,
+                fontSize: kpi.big ? "1.65rem" : "1.35rem",
+                lineHeight: 1.05
+              }}
+            >
+              {kpi.value}
+            </p>
           </div>
         ))}
-      </div>
+      </section>
 
-      <div className="grid gap-3 lg:grid-cols-[1fr_320px]">
-        <div className="flex flex-col gap-3">
-          {/* revenue chart */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
+        <div className="flex flex-col gap-6">
+          {/* Revenue chart */}
           <Panel
-            title="Revenue"
-            hint="// recent orders"
+            title="Revenue trend"
+            kicker="// recent orders"
             right={
               data.hasCostData ? (
                 <span
-                  className="flex items-center gap-1 text-[10px] font-semibold"
-                  style={{ color: D5.accent }}
+                  className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.12em]"
+                  style={{ color: FO.go }}
                 >
-                  <TrendingUp size={11} /> {data.grossMarginPct.toFixed(1)}% margin
+                  <TrendingUp size={13} strokeWidth={2.75} />
+                  {data.grossMarginPct.toFixed(1)}% margin
                 </span>
               ) : null
             }
           >
-            <div className="flex h-44 items-end gap-1.5 px-3 pb-3 pt-4">
-              {revenueBars.map((v, i) => (
-                <div key={i} className="group flex flex-1 flex-col items-center gap-1">
+            <div className="flex h-52 items-end gap-1.5 p-4">
+              {bars.map((value, index) => (
+                <div key={index} className="group flex flex-1 flex-col items-center gap-1.5">
                   <span
-                    className="text-[8px] opacity-0 transition-opacity group-hover:opacity-100"
-                    style={{ color: D5.dim, fontFamily: mono }}
+                    className="text-[8px] font-black opacity-0 transition-opacity group-hover:opacity-100"
+                    style={{ color: FO.dim }}
                   >
-                    {fmt(v)}
+                    {money(value)}
                   </span>
                   <div
-                    className="w-full rounded-sm transition-colors"
+                    className="w-full"
                     style={{
-                      height: `${Math.max((v / maxBar) * 100, 2)}%`,
-                      background: i === revenueBars.length - 1 ? D5.accent : D5.accentDim
+                      height: `${Math.max((value / maxBar) * 100, 3)}%`,
+                      background: index === bars.length - 1 ? FO.hi : FO.hiDark
                     }}
                   />
                 </div>
               ))}
             </div>
             <div
-              className="flex justify-between border-t px-3 py-1.5 text-[9px]"
-              style={{ borderColor: D5.line, color: D5.faint }}
+              className="flex justify-between px-4 py-2 text-[9px] font-black uppercase tracking-[0.16em]"
+              style={{ borderTop: `2px solid ${FO.line}`, color: FO.faint }}
             >
-              <span>oldest</span>
-              <span>most recent</span>
+              <span>Oldest</span>
+              <span>Most recent</span>
             </div>
           </Panel>
 
-          {/* top orders by revenue */}
-          <Panel title="Top orders" hint="// by revenue">
-            <div
-              className="grid grid-cols-[1fr_84px_84px] gap-x-3 border-b px-3 py-1.5 text-[9px] uppercase tracking-[0.14em] md:grid-cols-[1fr_120px_84px_84px]"
-              style={{ borderColor: D5.line, color: D5.faint }}
-            >
-              <span>order</span>
-              <span className="hidden md:block">share</span>
-              <span className="text-right">margin</span>
-              <span className="text-right">revenue</span>
-            </div>
-            {topOrders.length ? (
-              topOrders.map((s: ReportOrderRow) => (
+          {/* AR + aging */}
+          <div className="grid gap-6 md:grid-cols-2">
+            <Panel title="Collections" kicker="// billed vs collected">
+              <div className="p-4">
+                <div className="flex items-center justify-between">
+                  <span
+                    className="text-[11px] font-black uppercase tracking-[0.1em]"
+                    style={{ color: FO.dim }}
+                  >
+                    Collection rate
+                  </span>
+                  <Chip tone={collectedPct >= 75 ? "go" : "warn"}>{collectedPct}%</Chip>
+                </div>
                 <div
-                  key={s.id}
-                  className="grid grid-cols-[1fr_84px_84px] items-center gap-x-3 border-b px-3 py-2 last:border-0 md:grid-cols-[1fr_120px_84px_84px]"
-                  style={{ borderColor: D5.line }}
+                  className="mt-3 h-3"
+                  style={{ background: FO.steel }}
                 >
-                  <div className="overflow-hidden">
-                    <div
-                      className="truncate text-[12px] font-semibold"
-                      style={{ color: D5.ink }}
-                    >
-                      {s.customerName}
+                  <div
+                    className="h-3"
+                    style={{
+                      width: `${collectedPct}%`,
+                      background: collectedPct >= 75 ? FO.go : FO.warn
+                    }}
+                  />
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-px" style={{ background: FO.line }}>
+                  <ARStat label="Billed" value={money(data.billed)} />
+                  <ARStat label="Collected" value={money(data.collected)} />
+                </div>
+                <div
+                  className="mt-px flex items-center justify-between p-3"
+                  style={{ background: FO.panelHi }}
+                >
+                  <span
+                    className="text-[11px] font-black uppercase tracking-[0.12em]"
+                    style={{ color: FO.dim }}
+                  >
+                    Outstanding
+                  </span>
+                  <span className="text-base font-black" style={{ color: FO.stop }}>
+                    {money(data.outstanding)}
+                  </span>
+                </div>
+              </div>
+            </Panel>
+
+            <Panel title="AR aging" kicker="// outstanding by age">
+              <div className="flex flex-col gap-3 p-4">
+                {data.aging.map((bucket) => (
+                  <div key={bucket.bucket}>
+                    <div className="flex items-center justify-between">
+                      <span
+                        className="text-[11px] font-black uppercase tracking-[0.1em]"
+                        style={{ color: FO.dim }}
+                      >
+                        {bucket.bucket} days
+                      </span>
+                      <span className="text-[13px] font-black" style={{ color: FO.ink }}>
+                        {money(bucket.total)}
+                      </span>
                     </div>
-                    <div className="text-[9px]" style={{ color: D5.faint }}>
-                      {s.orderNumber} · {shortDate(s.createdAt)}
-                    </div>
-                  </div>
-                  <div className="hidden md:block">
-                    <div className="h-1.5 rounded-full" style={{ background: D5.line }}>
+                    <div className="mt-1.5 h-2.5" style={{ background: FO.steel }}>
                       <div
-                        className="h-1.5 rounded-full"
+                        className="h-2.5"
                         style={{
-                          width: `${Math.round((s.total / topMax) * 100)}%`,
-                          background: D5.accent
+                          width: `${Math.max((bucket.total / maxAging) * 100, 2)}%`,
+                          background: bucket.bucket === "60+" ? FO.stop : FO.hi
                         }}
                       />
                     </div>
                   </div>
-                  <span
-                    className="text-right text-[11px]"
-                    style={{ color: D5.dim, fontFamily: mono }}
-                  >
-                    {s.margin === null ? "—" : fmt(s.margin)}
-                  </span>
-                  <span
-                    className="text-right text-[12px] font-bold"
-                    style={{ color: D5.ink, fontFamily: mono }}
-                  >
-                    {fmt(s.total)}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <p className="px-3 py-6 text-center text-[11px]" style={{ color: D5.faint }}>
-                No orders in range.
-              </p>
-            )}
-          </Panel>
+                ))}
+              </div>
+            </Panel>
+          </div>
 
-          {/* AR summary */}
-          <Panel title="Accounts receivable" hint="// billed vs collected">
-            <div className="grid gap-px md:grid-cols-2" style={{ background: D5.line }}>
-              <div className="p-3" style={{ background: D5.panel }}>
-                <div className="flex items-center justify-between">
-                  <span className="text-[12px] font-semibold" style={{ color: D5.ink }}>
-                    Collection rate
-                  </span>
-                  <Tag tone={collectedPct >= 75 ? "accent" : "amber"}>
-                    {collectedPct}%
-                  </Tag>
-                </div>
-                <div className="mt-2 flex items-baseline gap-3">
+          {/* Gross profit */}
+          <Panel title="Gross margin" kicker="// recent orders">
+            <div className="p-4">
+              {data.hasCostData ? (
+                <div className="flex flex-wrap items-end gap-x-8 gap-y-2">
                   <div>
-                    <div className="text-[9px] uppercase" style={{ color: D5.faint }}>
-                      billed
-                    </div>
-                    <div className="text-[16px] font-bold" style={{ color: D5.ink }}>
-                      {fmt(data.billed)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[9px] uppercase" style={{ color: D5.faint }}>
-                      collected
-                    </div>
-                    <div className="text-[16px] font-bold" style={{ color: D5.ink }}>
-                      {fmt(data.collected)}
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-2 h-1.5 rounded-full" style={{ background: D5.line }}>
-                  <div
-                    className="h-1.5 rounded-full"
-                    style={{
-                      width: `${collectedPct}%`,
-                      background: collectedPct >= 75 ? D5.accent : D5.amber
-                    }}
-                  />
-                </div>
-              </div>
-              <div className="p-3" style={{ background: D5.panel }}>
-                <div className="flex items-center justify-between">
-                  <span className="text-[12px] font-semibold" style={{ color: D5.ink }}>
-                    Outstanding by age
-                  </span>
-                  <Receipt size={13} style={{ color: D5.amber }} />
-                </div>
-                <div className="mt-2 flex flex-col gap-1">
-                  {data.aging.map((bucket) => (
-                    <div
-                      key={bucket.bucket}
-                      className="flex items-center justify-between text-[11px]"
+                    <p
+                      className="text-[10px] font-black uppercase tracking-[0.14em]"
+                      style={{ color: FO.faint }}
                     >
-                      <span style={{ color: D5.dim }}>{bucket.bucket} days</span>
-                      <span
-                        className="font-bold"
-                        style={{ color: D5.ink, fontFamily: mono }}
-                      >
-                        {fmt(bucket.total)}
-                      </span>
-                    </div>
-                  ))}
+                      Gross profit
+                    </p>
+                    <p className="text-3xl font-black" style={{ color: FO.hi }}>
+                      {money(data.grossProfit)}
+                    </p>
+                  </div>
+                  <p className="text-[12px] font-bold" style={{ color: FO.dim }}>
+                    {data.grossMarginPct.toFixed(1)}% margin across recent orders.
+                  </p>
                 </div>
-              </div>
+              ) : (
+                <p className="text-[12px] font-semibold" style={{ color: FO.dim }}>
+                  Gross margin stays hidden until product unit costs are entered in the
+                  catalog manager — then it calculates from real cost data.
+                </p>
+              )}
             </div>
           </Panel>
         </div>
 
-        {/* side column */}
-        <div className="flex flex-col gap-3">
-          <Panel title="Payment status" hint="// by total">
-            <div className="p-3">
+        {/* Side column */}
+        <div className="flex flex-col gap-6">
+          <Panel title="Payment status" kicker="// by total">
+            <div className="p-4">
               {data.paymentBreakdown.length ? (
                 <>
-                  <div className="flex h-3 overflow-hidden rounded-full">
+                  <div className="flex h-3.5 overflow-hidden">
                     {data.paymentBreakdown.map((row) => {
-                      const sum = data.paymentBreakdown.reduce(
-                        (s, r) => s + r.total,
-                        0
-                      );
-                      const pct = sum > 0 ? (row.total / sum) * 100 : 0;
-                      const tone = paymentTone(row.status);
-                      const color =
-                        tone === "accent"
-                          ? D5.accent
-                          : tone === "amber"
-                            ? D5.amber
-                            : tone === "red"
-                              ? D5.red
-                              : tone === "blue"
-                                ? D5.blue
-                                : D5.faint;
+                      const pct = paymentTotal > 0 ? (row.total / paymentTotal) * 100 : 0;
                       return (
                         <div
                           key={row.status}
-                          style={{ width: `${pct}%`, background: color }}
+                          style={{
+                            width: `${pct}%`,
+                            background: TONE_COLOR[paymentTone(row.status)]
+                          }}
                         />
                       );
                     })}
                   </div>
-                  <div className="mt-3 flex flex-col gap-1.5">
+                  <div className="mt-3 flex flex-col gap-2">
                     {data.paymentBreakdown.map((row) => (
-                      <div
-                        key={row.status}
-                        className="flex items-center justify-between"
-                      >
-                        <span
-                          className="flex items-center gap-2 text-[11px]"
-                          style={{ color: D5.dim }}
-                        >
-                          <Tag tone={paymentTone(row.status)}>
-                            {titleCase(row.status)}
-                          </Tag>
-                          {row.count} orders
+                      <div key={row.status} className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-2">
+                          <Chip tone={paymentTone(row.status)}>{titleCase(row.status)}</Chip>
+                          <span
+                            className="text-[10px] font-bold uppercase tracking-[0.1em]"
+                            style={{ color: FO.faint }}
+                          >
+                            {row.count} {row.count === 1 ? "order" : "orders"}
+                          </span>
                         </span>
-                        <span
-                          className="text-[12px] font-bold"
-                          style={{ color: D5.ink, fontFamily: mono }}
-                        >
-                          {fmt(row.total)}
+                        <span className="text-[13px] font-black" style={{ color: FO.ink }}>
+                          {money(row.total)}
                         </span>
                       </div>
                     ))}
                   </div>
                 </>
               ) : (
-                <p className="text-[11px]" style={{ color: D5.faint }}>
+                <p className="text-[12px] font-semibold" style={{ color: FO.faint }}>
                   No orders in range.
                 </p>
               )}
@@ -360,83 +337,72 @@ export default function D5Reports({ data }: { data: ReportData }) {
 
           <Panel
             title="Recent orders"
-            hint={`// ${data.recentOrders.length}`}
-            right={<AlertTriangle size={12} style={{ color: D5.amber }} />}
+            kicker={`// ${data.recentOrders.length}`}
+            right={<Beacon tone="go" />}
           >
-            <div className="p-1.5">
-              {data.recentOrders.length ? (
-                data.recentOrders.slice(0, 6).map((row) => (
-                  <div key={row.id} className="flex gap-2 rounded px-1.5 py-1.5">
-                    <Dot color={paymentTone(row.paymentStatus) === "accent" ? D5.accent : D5.amber} />
+            {data.recentOrders.length ? (
+              <div className="flex flex-col gap-px" style={{ background: FO.line }}>
+                {data.recentOrders.slice(0, 8).map((row) => (
+                  <div
+                    key={row.id}
+                    className="flex items-center gap-3 p-3"
+                    style={{ background: FO.panel }}
+                  >
+                    <Beacon tone={paymentTone(row.paymentStatus)} />
                     <div className="min-w-0 flex-1">
-                      <div
-                        className="truncate text-[11px] font-bold"
-                        style={{ color: D5.ink }}
+                      <p
+                        className="truncate text-[12px] font-black uppercase"
+                        style={{ color: FO.ink }}
                       >
                         {row.orderNumber}
-                      </div>
-                      <div className="truncate text-[10px]" style={{ color: D5.dim }}>
+                      </p>
+                      <p
+                        className="truncate text-[10px] font-bold uppercase tracking-[0.08em]"
+                        style={{ color: FO.faint }}
+                      >
                         {row.customerName} · {shortDate(row.createdAt)}
-                      </div>
+                      </p>
                     </div>
-                    <span
-                      className="text-[11px] font-bold"
-                      style={{ color: D5.ink, fontFamily: mono }}
-                    >
-                      {fmt(row.total)}
+                    <span className="text-[13px] font-black" style={{ color: FO.hi }}>
+                      {money(row.total)}
                     </span>
                   </div>
-                ))
-              ) : (
-                <p className="px-1.5 py-2 text-[10px]" style={{ color: D5.faint }}>
-                  No orders yet.
-                </p>
-              )}
-            </div>
-            <div className="border-t px-3 py-1.5" style={{ borderColor: D5.line }}>
-              <Link
-                href="/design-lab/d5/orders"
-                className="flex items-center gap-1 text-[10px] font-semibold"
-                style={{ color: D5.accent }}
+                ))}
+              </div>
+            ) : (
+              <p
+                className="p-4 text-[12px] font-semibold"
+                style={{ color: FO.faint }}
               >
-                <ArrowUpRight size={11} /> open order desk →
-              </Link>
-            </div>
+                No orders yet.
+              </p>
+            )}
+            <Link
+              href="/design-lab/d5/orders"
+              className="flex items-center justify-between p-3 text-[10px] font-black uppercase tracking-[0.12em]"
+              style={{ borderTop: `2px solid ${FO.line}`, color: FO.hi }}
+            >
+              Open order desk <ArrowRight size={13} strokeWidth={2.75} />
+            </Link>
           </Panel>
-
-          <Panel title="Margin">
-            <div className="p-3">
-              {data.hasCostData ? (
-                <>
-                  <div className="text-[9px] uppercase" style={{ color: D5.faint }}>
-                    gross profit
-                  </div>
-                  <div className="text-[20px] font-bold" style={{ color: D5.ink }}>
-                    {fmt(data.grossProfit)}
-                  </div>
-                  <div className="mt-1 text-[10px]" style={{ color: D5.dim }}>
-                    {data.grossMarginPct.toFixed(1)}% margin across recent orders.
-                  </div>
-                </>
-              ) : (
-                <p className="text-[10px]" style={{ color: D5.dim }}>
-                  Gross margin is hidden until product unit costs are entered in the
-                  catalog manager.
-                </p>
-              )}
-            </div>
-          </Panel>
-
-          <Link
-            href="/design-lab/d5/orders"
-            className="flex items-center justify-between rounded-md border px-3 py-2.5 text-[11px] font-semibold transition-colors hover:brightness-110"
-            style={{ borderColor: D5.line, background: D5.panel, color: D5.ink }}
-          >
-            <span>Jump to live order desk</span>
-            <ArrowUpRight size={13} style={{ color: D5.accent }} />
-          </Link>
         </div>
       </div>
     </Shell>
+  );
+}
+
+function ARStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="p-3" style={{ background: FO.panelHi }}>
+      <p
+        className="text-[9px] font-black uppercase tracking-[0.14em]"
+        style={{ color: FO.faint }}
+      >
+        {label}
+      </p>
+      <p className="mt-0.5 text-base font-black" style={{ color: FO.ink }}>
+        {value}
+      </p>
+    </div>
   );
 }

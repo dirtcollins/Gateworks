@@ -1,338 +1,305 @@
 "use client";
 
-/** DESIGN 2 — Warehouse Dark · Home / storefront landing */
-
 import Link from "next/link";
 import {
-  ArrowUpRight,
-  Boxes,
-  Gauge,
-  PackageCheck,
-  ShieldCheck,
-  Truck,
-  Zap
-} from "lucide-react";
-import {
-  AccentButton,
-  D2,
-  D2Shell,
-  Panel,
-  PanelHead,
-  PartPhoto,
-  StatCell,
-  Tag,
-  mono
+  Label,
+  MONO,
+  MonoButton,
+  MonoPage,
+  ProductImage,
+  Section,
+  SectionHead,
+  formatUsd
 } from "./kit";
 import {
+  featuredProduct,
   getCategoryProducts,
   newArrivals,
   popularProducts,
-  products,
   topCategories
 } from "@/features/design-lab/live-data";
 import type { Product } from "@/lib/types";
 
-// Marketing copy stays static; numbers below are derived from the real catalog.
-const YARD_STATS = [
-  {
-    label: "SKUs in stock",
-    value: products.length.toLocaleString(),
-    delta: "live",
-    good: true
-  },
-  { label: "Open orders", value: "37", delta: "4 today", good: true },
-  { label: "Avg ship time", value: "1.4d", delta: "0.3d", good: true },
-  { label: "Yard capacity", value: "82%", delta: "6%", good: false }
-];
+/* DESIGN 2 — "MONO" — Index / home, wired to the real catalog. */
 
-// Two-letter zone code from a real category name (e.g. "Gate Hinges" → "GH").
-function categoryCode(name: string) {
-  const words = name.split(/\s+/).filter(Boolean);
-  if (words.length >= 2) {
-    return (words[0][0] + words[1][0]).toUpperCase();
-  }
-  return name.slice(0, 2).toUpperCase();
+function primarySku(product: Product): string {
+  return product.variants[0]?.sku ?? product.id;
 }
 
-const DEPARTMENTS = topCategories.map((category) => {
-  const items = getCategoryProducts(category.slug);
-  return {
-    code: categoryCode(category.name),
-    name: category.name,
-    count: items.length,
-    note: items[0]?.title ?? "Browse stock"
-  };
-});
-
-const FEED = [
-  { t: "08:41", msg: "PO-5512 staged at dock 3", tag: "SHIP" },
-  { t: "08:33", msg: "Cycle count complete — Aisle ST-04", tag: "AUDIT" },
-  { t: "08:21", msg: "Stock dropped below reorder point", tag: "ALERT" },
-  { t: "08:02", msg: "Inbound trailer · 14 pallets structural", tag: "INBOUND" }
-];
-
-// Featured rail = real catalog products; first three popular + one new arrival.
-const FEATURED_BADGES = ["TOP MOVER", "RESTOCKED", "LOW STOCK", "BULK READY"];
-const FEATURED_TONES = ["accent", "muted", "warn", "muted"] as const;
-const FEATURED: Array<{
-  product: Product;
-  badge: string;
-  tone: (typeof FEATURED_TONES)[number];
-}> = (() => {
-  const picks: Product[] = [];
-  const seen = new Set<string>();
-  for (const product of [...popularProducts, ...newArrivals]) {
-    if (seen.has(product.id)) continue;
-    seen.add(product.id);
-    picks.push(product);
-    if (picks.length === 4) break;
-  }
-  return picks.map((product, index) => ({
-    product,
-    badge: FEATURED_BADGES[index],
-    tone: FEATURED_TONES[index]
-  }));
-})();
-
 export function D2Home() {
+  const categoriesWithCounts = topCategories.map((category) => ({
+    ...category,
+    count: getCategoryProducts(category.slug).length
+  }));
+  const heroImage =
+    featuredProduct.images[0]?.url ?? featuredProduct.variants[0]?.image;
+  const featureRail = popularProducts.slice(0, 8);
+  const arrivalsRail = newArrivals.slice(0, 6);
+  const catalogueTotal = categoriesWithCounts.reduce(
+    (sum, category) => sum + category.count,
+    0
+  );
+
   return (
-    <D2Shell active="storefront" kicker="STOREFRONT // GW-OPS">
-      {/* Hero */}
-      <section
-        className="relative overflow-hidden rounded-[6px] px-6 py-10 sm:px-10 sm:py-14"
-        style={{
-          background: `linear-gradient(135deg, ${D2.panelHi}, ${D2.bg})`,
-          border: `1px solid ${D2.line}`
-        }}
+    <MonoPage active="Index">
+      {/* Hero — type-driven, asymmetric grid */}
+      <Section
+        className="pt-14 pb-16"
+        style={{ borderBottom: `1px solid ${MONO.line}` }}
       >
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full blur-3xl"
-          style={{ background: `${D2.accent}22` }}
-        />
-        <div className="relative grid gap-10 lg:grid-cols-[1.4fr_1fr] lg:items-center">
-          <div>
-            <Tag tone="accent">
-              <Zap className="h-3 w-3" /> B2B Supply Terminal
-            </Tag>
-            <h1 className="mt-5 text-[34px] font-bold leading-[1.05] tracking-tight sm:text-[46px]">
-              The steel yard,
+        <div className="grid items-end gap-10 lg:grid-cols-12">
+          <div className="lg:col-span-7">
+            <Label index="01">Steel &amp; Gate Hardware Supply</Label>
+            <h1 className="mt-5 text-[48px] font-semibold leading-[0.98] tracking-[-0.04em] sm:text-[68px]">
+              Hardware,
               <br />
-              <span style={{ color: D2.accent }}>wired into one console.</span>
+              held to a line.
             </h1>
             <p
-              className="mt-4 max-w-xl text-[15px] leading-relaxed"
-              style={{ color: D2.muted }}
+              className="mt-6 max-w-md text-[14px] leading-relaxed"
+              style={{ color: MONO.steel }}
             >
-              Gateworks supplies contractors, fabricators and fencing crews with
-              gate hardware and structural steel — quoted, priced and dispatched
-              from a single live inventory view. Order at 2am, ship at 7.
+              A working catalogue of gate latches, hinges, steel tubing, and
+              fabrication parts. No noise, no clutter — every object on a clean
+              grid, priced and in stock.
             </p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <AccentButton href="/design-lab/d2/category">
-                Browse catalog <ArrowUpRight className="h-3.5 w-3.5" />
-              </AccentButton>
-              <AccentButton ghost href="/design-lab/d2/product">
-                View a product
-              </AccentButton>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <MonoButton href="/design-lab/d2/category">
+                Browse catalogue
+              </MonoButton>
+              <MonoButton href="/design-lab/d2/product" variant="outline">
+                Featured object
+              </MonoButton>
             </div>
           </div>
 
-          {/* live yard panel */}
-          <Panel glow>
-            <PanelHead title="Yard Status" meta="LIVE" />
-            <div className="grid grid-cols-2">
-              {YARD_STATS.map((s) => (
-                <StatCell key={s.label} {...s} />
-              ))}
-            </div>
-          </Panel>
-        </div>
-      </section>
-
-      {/* trust strip */}
-      <div className="mt-6 grid gap-3 sm:grid-cols-3">
-        {[
-          { icon: Truck, t: "Same-day dispatch", s: "Orders in by 1pm MT ship today" },
-          { icon: ShieldCheck, t: "Spec-verified steel", s: "Mill certs on every structural lot" },
-          { icon: Gauge, t: "Contractor pricing", s: "Tiered rates unlock by volume" }
-        ].map((b) => (
-          <Panel key={b.t} className="flex items-center gap-3 px-4 py-4">
-            <div
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-[3px]"
-              style={{ background: D2.panelHi, border: `1px solid ${D2.line}` }}
+          <div className="lg:col-span-5">
+            <Link
+              href="/design-lab/d2/product"
+              className="group block"
+              style={{ border: `1px solid ${MONO.lineStrong}` }}
             >
-              <b.icon className="h-5 w-5" style={{ color: D2.accent }} />
-            </div>
-            <div>
-              <div className="text-[13px] font-semibold">{b.t}</div>
-              <div className={`${mono} text-[11px]`} style={{ color: D2.muted }}>
-                {b.s}
+              <ProductImage
+                alt={featuredProduct.title}
+                className="aspect-[4/3]"
+                priority
+                sizes="(max-width: 1024px) 100vw, 440px"
+                src={heroImage}
+              />
+              <div
+                className="flex items-center justify-between gap-4 px-5 py-4"
+                style={{ borderTop: `1px solid ${MONO.lineStrong}` }}
+              >
+                <div className="min-w-0">
+                  <p
+                    className="text-[10px] font-semibold uppercase tracking-[0.2em]"
+                    style={{ color: MONO.muted }}
+                  >
+                    Featured / {primarySku(featuredProduct)}
+                  </p>
+                  <p className="mt-1 truncate text-[14px] font-semibold tracking-[-0.01em]">
+                    {featuredProduct.title}
+                  </p>
+                </div>
+                <span className="text-[16px] font-semibold tabular-nums">
+                  {formatUsd(featuredProduct.price)}
+                </span>
               </div>
+            </Link>
+          </div>
+        </div>
+
+        {/* Stat strip */}
+        <div
+          className="mt-12 grid grid-cols-2 sm:grid-cols-4"
+          style={{ border: `1px solid ${MONO.line}` }}
+        >
+          {[
+            { k: "Categories", v: String(categoriesWithCounts.length) },
+            { k: "Catalogued objects", v: String(catalogueTotal) },
+            { k: "Featured this week", v: String(featureRail.length) },
+            { k: "Stocked & priced", v: "100%" }
+          ].map((item, index) => (
+            <div
+              key={item.k}
+              className="px-5 py-5"
+              style={{
+                borderLeft: index === 0 ? undefined : `1px solid ${MONO.line}`
+              }}
+            >
+              <p className="text-[28px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
+                {item.v}
+              </p>
+              <p
+                className="mt-2 text-[10px] font-semibold uppercase tracking-[0.18em]"
+                style={{ color: MONO.muted }}
+              >
+                {item.k}
+              </p>
             </div>
-          </Panel>
-        ))}
-      </div>
+          ))}
+        </div>
+      </Section>
 
-      {/* categories + feed */}
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-        <Panel>
-          <PanelHead
-            title="Departments"
-            meta={`${DEPARTMENTS.length} ZONES`}
-            action={
-              <Link
-                href="/design-lab/d2/category"
-                className={`${mono} text-[11px] uppercase tracking-wider`}
-                style={{ color: D2.accent }}
-              >
-                All →
-              </Link>
-            }
-          />
-          <div className="grid grid-cols-1 sm:grid-cols-2">
-            {DEPARTMENTS.map((c, i) => (
-              <Link
-                key={c.code}
-                href="/design-lab/d2/category"
-                className="group flex items-center gap-3 px-4 py-4 transition"
-                style={{
-                  borderTop: i > 1 ? `1px solid ${D2.line}` : undefined,
-                  borderLeft: i % 2 ? `1px solid ${D2.line}` : undefined
-                }}
-              >
-                <div
-                  className={`${mono} grid h-11 w-11 shrink-0 place-items-center rounded-[3px] text-[13px] font-bold`}
-                  style={{
-                    background: D2.panelHi,
-                    color: D2.accent,
-                    border: `1px solid ${D2.line}`
-                  }}
-                >
-                  {c.code}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-[13px] font-semibold">{c.name}</span>
-                    <ArrowUpRight
-                      className="h-3.5 w-3.5 opacity-0 transition group-hover:opacity-100"
-                      style={{ color: D2.accent }}
-                    />
-                  </div>
-                  <div className={`${mono} text-[11px]`} style={{ color: D2.muted }}>
-                    {c.note}
-                  </div>
-                </div>
-                <span className={`${mono} text-[12px]`} style={{ color: D2.muted }}>
-                  {c.count}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </Panel>
-
-        <Panel>
-          <PanelHead title="Yard Feed" meta="REALTIME" />
-          <ul>
-            {FEED.map((f, i) => (
-              <li
-                key={f.t}
-                className="flex items-start gap-3 px-4 py-3.5"
-                style={{ borderTop: i > 0 ? `1px solid ${D2.line}` : undefined }}
-              >
-                <span className={`${mono} text-[11px]`} style={{ color: D2.muted }}>
-                  {f.t}
-                </span>
-                <span className="flex-1 text-[12px] leading-snug">{f.msg}</span>
-                <Tag tone={f.tag === "ALERT" ? "warn" : "muted"}>{f.tag}</Tag>
-              </li>
-            ))}
-          </ul>
-          <div className="px-4 pb-4 pt-2">
-            <AccentButton ghost className="w-full" href="/design-lab/d2/orders">
-              Open orders console
-            </AccentButton>
-          </div>
-        </Panel>
-      </div>
-
-      {/* featured products */}
-      <Panel className="mt-6">
-        <PanelHead
-          title="Featured Stock"
-          meta="HOT SKUS"
+      {/* Categories — Swiss index grid */}
+      <Section
+        className="pt-14 pb-16"
+        style={{ borderBottom: `1px solid ${MONO.line}` }}
+      >
+        <SectionHead
+          index="02"
+          kicker="Departments"
+          title="The catalogue, by category"
           action={
             <Link
               href="/design-lab/d2/category"
-              className={`${mono} text-[11px] uppercase tracking-wider`}
-              style={{ color: D2.accent }}
+              className="text-[11px] font-semibold uppercase tracking-[0.18em] underline underline-offset-4"
             >
-              Full catalog →
+              View all
             </Link>
           }
         />
-        <div className="grid grid-cols-2 lg:grid-cols-4">
-          {FEATURED.map(({ product, badge, tone }, i) => {
-            const variant = product.variants[0];
-            const sku = variant?.sku ?? product.id;
-            const stock = variant?.inventoryQuantity ?? 0;
-            return (
-              <Link
-                key={product.id}
-                href="/design-lab/d2/product"
-                className="group flex flex-col gap-3 p-4 transition hover:bg-white/[0.02]"
-                style={{ borderLeft: i > 0 ? `1px solid ${D2.line}` : undefined }}
+        <div
+          className="mt-px grid sm:grid-cols-2 lg:grid-cols-4"
+          style={{ borderLeft: `1px solid ${MONO.line}` }}
+        >
+          {categoriesWithCounts.map((category, index) => (
+            <Link
+              key={category.id}
+              href="/design-lab/d2/category"
+              className="group flex flex-col justify-between gap-8 p-5 transition-colors hover:bg-[#0a0a0a] hover:text-white"
+              style={{
+                borderRight: `1px solid ${MONO.line}`,
+                borderBottom: `1px solid ${MONO.line}`
+              }}
+            >
+              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] tabular-nums opacity-50">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <span>
+                <span className="block text-[16px] font-semibold leading-tight tracking-[-0.015em]">
+                  {category.name}
+                </span>
+                <span className="mt-1 block text-[11px] uppercase tracking-[0.16em] opacity-60">
+                  {category.count}{" "}
+                  {category.count === 1 ? "object" : "objects"}
+                </span>
+              </span>
+            </Link>
+          ))}
+        </div>
+      </Section>
+
+      {/* Popular — featured product rail */}
+      <Section
+        className="pt-14 pb-16"
+        style={{ borderBottom: `1px solid ${MONO.line}` }}
+      >
+        <SectionHead
+          index="03"
+          kicker="Most specified"
+          title="Popular this season"
+        />
+        <div
+          className="mt-px grid grid-cols-2 lg:grid-cols-4"
+          style={{ borderLeft: `1px solid ${MONO.line}` }}
+        >
+          {featureRail.map((product) => (
+            <Link
+              key={product.id}
+              href="/design-lab/d2/product"
+              className="group flex flex-col"
+              style={{
+                borderRight: `1px solid ${MONO.line}`,
+                borderBottom: `1px solid ${MONO.line}`
+              }}
+            >
+              <ProductImage
+                alt={product.title}
+                className="aspect-square transition-transform duration-300 group-hover:scale-[1.02]"
+                sizes="(max-width: 1024px) 50vw, 300px"
+                src={product.images[0]?.url ?? product.variants[0]?.image}
+              />
+              <div
+                className="flex flex-1 flex-col gap-2 p-4"
+                style={{ borderTop: `1px solid ${MONO.line}` }}
               >
-                <PartPhoto
-                  src={product.images[0]?.url ?? variant?.image}
-                  alt={product.title}
-                  seed={product.id}
-                  className="aspect-square w-full"
-                  label={sku}
-                />
-                <div className="flex items-center justify-between">
-                  <Tag tone={tone}>{badge}</Tag>
-                  <span className={`${mono} text-[11px]`} style={{ color: D2.muted }}>
-                    {stock} on hand
-                  </span>
-                </div>
-                <div className="text-[13px] font-medium leading-snug">{product.title}</div>
-                <div className="mt-auto flex items-baseline justify-between">
-                  <span className={`${mono} text-[18px] font-bold`} style={{ color: D2.accent }}>
-                    ${product.price.toFixed(2)}
+                <p
+                  className="text-[10px] font-semibold uppercase tracking-[0.16em]"
+                  style={{ color: MONO.muted }}
+                >
+                  {primarySku(product)}
+                </p>
+                <p className="flex-1 text-[13px] font-medium leading-snug tracking-[-0.01em]">
+                  {product.title}
+                </p>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[15px] font-semibold tabular-nums">
+                    {formatUsd(product.price)}
                   </span>
                   <span
-                    className={`${mono} flex items-center gap-1 text-[11px] uppercase`}
-                    style={{ color: D2.muted }}
+                    className="text-[10px] uppercase tracking-[0.16em]"
+                    style={{ color: MONO.muted }}
                   >
-                    <PackageCheck className="h-3.5 w-3.5" /> ea
+                    {product.variants.length}{" "}
+                    {product.variants.length === 1 ? "variant" : "variants"}
                   </span>
                 </div>
-              </Link>
-            );
-          })}
+              </div>
+            </Link>
+          ))}
         </div>
-      </Panel>
+      </Section>
 
-      {/* CTA */}
-      <section
-        className="mt-6 flex flex-col items-center justify-between gap-5 rounded-[6px] px-6 py-8 sm:flex-row sm:px-10"
-        style={{
-          background: `linear-gradient(120deg, ${D2.accentDim}, ${D2.panel})`,
-          border: `1px solid ${D2.accent}44`
-        }}
-      >
-        <div className="flex items-center gap-4">
-          <Boxes className="h-9 w-9" style={{ color: D2.accent }} />
-          <div>
-            <div className="text-[18px] font-bold">Run a standing account.</div>
-            <div className={`${mono} text-[12px]`} style={{ color: D2.muted }}>
-              Net-30 terms, saved carts, crew-level ordering.
-            </div>
-          </div>
-        </div>
-        <AccentButton href="/design-lab/d2/cart">Set up account</AccentButton>
-      </section>
-    </D2Shell>
+      {/* New arrivals — horizontal editorial list */}
+      <Section className="pt-14 pb-16">
+        <SectionHead
+          index="04"
+          kicker="Latest additions"
+          title="New to the catalogue"
+        />
+        <ul className="mt-px">
+          {arrivalsRail.map((product, index) => (
+            <li
+              key={product.id}
+              style={{ borderBottom: `1px solid ${MONO.line}` }}
+            >
+              <Link
+                href="/design-lab/d2/product"
+                className="group grid grid-cols-12 items-center gap-4 py-4 transition-colors hover:bg-[#fafafa]"
+              >
+                <span
+                  className="col-span-1 text-[12px] font-semibold tabular-nums"
+                  style={{ color: MONO.muted }}
+                >
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <div className="col-span-2 sm:col-span-1">
+                  <ProductImage
+                    alt={product.title}
+                    className="aspect-square"
+                    pad="p-2"
+                    sizes="64px"
+                    src={product.images[0]?.url ?? product.variants[0]?.image}
+                  />
+                </div>
+                <span className="col-span-6 text-[13px] font-medium tracking-[-0.01em]">
+                  {product.title}
+                </span>
+                <span
+                  className="col-span-3 sm:col-span-2 text-[11px] uppercase tracking-[0.14em]"
+                  style={{ color: MONO.steel }}
+                >
+                  {product.category.name}
+                </span>
+                <span className="col-span-12 sm:col-span-2 text-right text-[15px] font-semibold tabular-nums">
+                  {formatUsd(product.price)}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Section>
+    </MonoPage>
   );
 }

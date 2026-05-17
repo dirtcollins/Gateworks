@@ -3,434 +3,269 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { ArrowRight, Filter, LayoutGrid } from "lucide-react";
+import { Beacon, Button, Chip, FO, Panel, Shell, Stamp } from "./kit";
 import {
-  Check,
-  Filter,
-  LayoutGrid,
-  Minus,
-  Plus,
-  Rows3,
-  SlidersHorizontal,
-  X
-} from "lucide-react";
-import { Btn, D5, Dot, H, Kbd, Panel, Shell, Tag, mono } from "./kit";
-import {
-  fmt,
+  categoryCount,
   featuredCategoryProducts,
+  featuredCategorySlug,
   getCategoryProducts,
-  swatchFor,
-  toRow,
-  topCategories,
-  type Row
+  money,
+  primaryVariant,
+  topCategories
 } from "./data";
-import { useCartStore } from "@/lib/cart-store";
 
-type Sort = "sku" | "price" | "stock";
+const PRODUCT_HREF = "/design-lab/d5/product";
 
-function stockTone(stock: number, inStock: boolean) {
-  if (!inStock || stock === 0) return { tone: "red" as const, label: "OUT" };
-  if (stock < 40) return { tone: "amber" as const, label: "LOW" };
-  return { tone: "accent" as const, label: "IN" };
-}
+type SortKey = "featured" | "price-low" | "price-high";
+
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: "featured", label: "Featured" },
+  { key: "price-low", label: "Price low" },
+  { key: "price-high", label: "Price high" }
+];
 
 export default function D5Category() {
-  const addItem = useCartStore((state) => state.addItem);
-  const [activeCat, setActiveCat] = useState<string | null>(null);
-  const [inStockOnly, setInStockOnly] = useState(false);
-  const [sort, setSort] = useState<Sort>("sku");
-  const [view, setView] = useState<"rows" | "grid">("rows");
-  const [qty, setQty] = useState<Record<string, number>>({});
-  const [added, setAdded] = useState<Record<string, boolean>>({});
+  const [activeSlug, setActiveSlug] = useState(featuredCategorySlug);
+  const [sort, setSort] = useState<SortKey>("featured");
 
-  const baseRows = useMemo<Row[]>(
-    () => featuredCategoryProducts.map(toRow),
-    []
-  );
+  const baseProducts = useMemo(() => {
+    if (activeSlug === featuredCategorySlug) return featuredCategoryProducts;
+    return getCategoryProducts(activeSlug);
+  }, [activeSlug]);
 
-  const rows = useMemo(() => {
-    let r = baseRows.filter((p) => {
-      if (activeCat && p.categorySlug !== activeCat) return false;
-      if (inStockOnly && !p.inStock) return false;
-      return true;
-    });
-    r = [...r].sort((a, b) => {
-      if (sort === "price") return a.price - b.price;
-      if (sort === "stock") return b.stock - a.stock;
-      return a.sku.localeCompare(b.sku);
-    });
-    return r;
-  }, [baseRows, activeCat, inStockOnly, sort]);
+  const products = useMemo(() => {
+    const list = [...baseProducts];
+    if (sort === "price-low") list.sort((a, b) => a.price - b.price);
+    if (sort === "price-high") list.sort((a, b) => b.price - a.price);
+    return list;
+  }, [baseProducts, sort]);
 
-  const getQty = (sku: string) => qty[sku] ?? 1;
-  const bump = (sku: string, d: number) =>
-    setQty((p) => ({ ...p, [sku]: Math.max(1, getQty(sku) + d) }));
-  const add = (row: Row) => {
-    if (row.variant) {
-      addItem({
-        productId: row.product.id,
-        variantId: row.variant.id,
-        title: row.product.title,
-        sku: row.variant.sku,
-        image: row.variant.image,
-        price: row.variant.price,
-        quantity: getQty(row.sku),
-        options: row.variant.options
-      });
-    }
-    setAdded((p) => ({ ...p, [row.sku]: true }));
-    window.setTimeout(() => setAdded((p) => ({ ...p, [row.sku]: false })), 1100);
-  };
-
-  const activeCatName =
-    topCategories.find((c) => c.slug === activeCat)?.name ?? null;
+  const activeCategory =
+    topCategories.find((category) => category.slug === activeSlug) ??
+    featuredCategoryProducts[0]?.category;
+  const lowest = products.length
+    ? Math.min(...products.map((product) => product.price))
+    : 0;
 
   return (
-    <Shell crumb="catalog">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+    <Shell crumb="Catalog" wide>
+      {/* Header */}
+      <section
+        className="flex flex-col gap-5 p-6 sm:flex-row sm:items-end sm:justify-between sm:p-7"
+        style={{ background: FO.panel, border: `2px solid ${FO.line}` }}
+      >
         <div>
-          <H>Catalog · {activeCatName ?? "All departments"}</H>
-          <p className="mt-0.5 text-[11px]" style={{ color: D5.faint }}>
-            {rows.length} SKUs · live catalog pricing · cut-to-length available
+          <Stamp>Catalog</Stamp>
+          <h1
+            className="mt-3 text-3xl font-black uppercase leading-[0.95] tracking-tight sm:text-5xl"
+            style={{ color: FO.ink }}
+          >
+            {activeCategory?.name ?? "All gear"}
+          </h1>
+          <p
+            className="mt-2 text-[12px] font-bold uppercase tracking-[0.12em]"
+            style={{ color: FO.dim }}
+          >
+            {products.length} SKUs · From {money(lowest)}
           </p>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px]" style={{ color: D5.faint }}>
-            view
-          </span>
-          {(["rows", "grid"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              className="grid h-7 w-7 place-items-center rounded border"
-              style={{
-                borderColor: view === v ? D5.lineHi : D5.line,
-                background: view === v ? D5.panelHi : "transparent",
-                color: view === v ? D5.accent : D5.faint
-              }}
-            >
-              {v === "rows" ? <Rows3 size={13} /> : <LayoutGrid size={13} />}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid gap-3 lg:grid-cols-[214px_1fr]">
-        {/* filter rail */}
-        <aside className="flex flex-col gap-3">
-          <Panel
-            title="Filters"
-            hint=""
-            right={
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveCat(null);
-                  setInStockOnly(false);
-                }}
-                className="text-[10px] font-semibold"
-                style={{ color: D5.accent }}
-              >
-                reset
-              </button>
-            }
+        <div
+          className="flex items-center gap-2.5 self-start px-3.5 py-2.5 sm:self-auto"
+          style={{ background: FO.panelHi, border: `2px solid ${FO.line}` }}
+        >
+          <Beacon tone="go" />
+          <span
+            className="text-[11px] font-black uppercase tracking-[0.12em]"
+            style={{ color: FO.ink }}
           >
-            <div className="p-2">
-              <div
-                className="mb-1 flex items-center gap-1 text-[9px] uppercase tracking-[0.14em]"
-                style={{ color: D5.faint }}
+            Stocked for will-call
+          </span>
+        </div>
+      </section>
+
+      <div className="mt-6 grid gap-px lg:grid-cols-[260px_1fr]" style={{ background: FO.line }}>
+        {/* Facets */}
+        <aside className="flex flex-col gap-px" style={{ background: FO.line }}>
+          <div className="p-4" style={{ background: FO.panel }}>
+            <div className="mb-3 flex items-center gap-2">
+              <Filter size={15} strokeWidth={2.75} style={{ color: FO.hi }} />
+              <span
+                className="text-[12px] font-black uppercase tracking-[0.16em]"
+                style={{ color: FO.ink }}
               >
-                <SlidersHorizontal size={10} /> department
-              </div>
-              {topCategories.map((c) => {
-                const on = activeCat === c.slug;
+                Departments
+              </span>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {topCategories.map((category) => {
+                const active = category.slug === activeSlug;
                 return (
                   <button
-                    key={c.slug}
+                    key={category.slug}
                     type="button"
-                    onClick={() => setActiveCat(on ? null : c.slug)}
-                    className="flex w-full items-center justify-between rounded px-1.5 py-1 text-left"
-                    style={{ background: on ? D5.panelHi : "transparent" }}
+                    onClick={() => setActiveSlug(category.slug)}
+                    className="flex items-center justify-between gap-2 px-3 py-2.5 text-left"
+                    style={{
+                      background: active ? FO.hi : FO.panelHi,
+                      color: active ? FO.black : FO.ink
+                    }}
                   >
-                    <span
-                      className="flex items-center gap-1.5 text-[11px] font-semibold"
-                      style={{ color: on ? D5.ink : D5.dim }}
-                    >
-                      <span
-                        className="h-2.5 w-2.5 rounded-sm"
-                        style={{ background: swatchFor(c.slug) }}
-                      />
-                      {c.name}
+                    <span className="truncate text-[12px] font-black uppercase tracking-[0.04em]">
+                      {category.name}
                     </span>
                     <span
-                      className="text-[9px]"
-                      style={{ color: on ? D5.accent : D5.faint, fontFamily: mono }}
+                      className="shrink-0 text-[11px] font-black"
+                      style={{ color: active ? FO.black : FO.faint }}
                     >
-                      {on ? "✓" : getCategoryProducts(c.slug).length}
+                      {categoryCount(category.slug)}
                     </span>
                   </button>
                 );
               })}
-
-              <label
-                className="mt-3 flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-[11px] font-semibold"
-                style={{ background: D5.panelHi, color: D5.dim }}
-              >
-                <span
-                  className="grid h-4 w-4 place-items-center rounded-sm border"
-                  style={{
-                    borderColor: inStockOnly ? D5.accent : D5.lineHi,
-                    background: inStockOnly ? D5.accent : "transparent"
-                  }}
-                >
-                  {inStockOnly ? <Check size={11} style={{ color: D5.bg }} /> : null}
-                </span>
-                <input
-                  type="checkbox"
-                  className="sr-only"
-                  checked={inStockOnly}
-                  onChange={(e) => setInStockOnly(e.target.checked)}
-                />
-                In-stock only
-              </label>
             </div>
-          </Panel>
+          </div>
 
-          <Panel title="Sort">
-            <div className="flex flex-col p-1.5">
-              {(
-                [
-                  ["sku", "SKU A→Z"],
-                  ["price", "Price low→high"],
-                  ["stock", "Stock high→low"]
-                ] as [Sort, string][]
-              ).map(([k, label]) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setSort(k)}
-                  className="flex items-center justify-between rounded px-1.5 py-1 text-[11px] font-semibold"
-                  style={{
-                    background: sort === k ? D5.panelHi : "transparent",
-                    color: sort === k ? D5.ink : D5.dim
-                  }}
-                >
-                  {label}
-                  {sort === k ? <Dot color={D5.accent} /> : null}
-                </button>
-              ))}
+          <div className="p-4" style={{ background: FO.panel }}>
+            <span
+              className="mb-3 block text-[12px] font-black uppercase tracking-[0.16em]"
+              style={{ color: FO.ink }}
+            >
+              Sort
+            </span>
+            <div className="flex flex-col gap-1.5">
+              {SORTS.map((option) => {
+                const active = option.key === sort;
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setSort(option.key)}
+                    className="px-3 py-2.5 text-left text-[12px] font-black uppercase tracking-[0.06em]"
+                    style={{
+                      background: active ? FO.hiSoft : FO.panelHi,
+                      color: active ? FO.hi : FO.dim
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
             </div>
-          </Panel>
+          </div>
         </aside>
 
-        {/* results */}
-        <div>
-          <div
-            className="mb-2 flex flex-wrap items-center gap-1.5 rounded-md border px-2.5 py-1.5"
-            style={{ borderColor: D5.line, background: D5.panel }}
-          >
-            <Filter size={12} style={{ color: D5.faint }} />
-            <span className="text-[10px]" style={{ color: D5.faint }}>
-              active:
-            </span>
-            {[activeCatName, inStockOnly ? "in-stock" : null]
-              .filter(Boolean)
-              .map((f) => (
-                <Tag key={f as string} tone="accent">
-                  {f}
-                  <X size={9} />
-                </Tag>
-              ))}
-            {!activeCat && !inStockOnly ? (
-              <span className="text-[10px]" style={{ color: D5.dim }}>
-                none — showing everything
-              </span>
-            ) : null}
-            <span className="ml-auto text-[10px]" style={{ color: D5.faint }}>
-              <Kbd>/</Kbd> to focus search
+        {/* Grid */}
+        <div className="p-4 sm:p-5" style={{ background: FO.panel }}>
+          <div className="mb-4 flex items-center gap-2">
+            <LayoutGrid size={15} strokeWidth={2.75} style={{ color: FO.hi }} />
+            <span
+              className="text-[11px] font-black uppercase tracking-[0.14em]"
+              style={{ color: FO.dim }}
+            >
+              Showing {products.length} of {categoryCount(activeSlug)}
             </span>
           </div>
 
-          {view === "rows" ? (
-            <Panel>
-              <div
-                className="grid grid-cols-[1fr_88px_92px_110px] gap-x-3 border-b px-3 py-1.5 text-[9px] uppercase tracking-[0.14em] md:grid-cols-[1fr_72px_88px_92px_128px]"
-                style={{ borderColor: D5.line, color: D5.faint }}
-              >
-                <span>SKU / item</span>
-                <span className="hidden text-right md:block">hub</span>
-                <span className="text-right">stock</span>
-                <span className="text-right">price</span>
-                <span className="text-right">order</span>
-              </div>
-              {rows.map((p) => {
-                const st = stockTone(p.stock, p.inStock);
-                const out = !p.inStock;
+          {products.length ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {products.map((product) => {
+                const variant = primaryVariant(product);
+                const image = product.images[0]?.url ?? variant?.image;
+                const inStock = variant?.inventory === "in_stock";
                 return (
-                  <div
-                    key={p.sku}
-                    className="grid grid-cols-[1fr_88px_92px_110px] items-center gap-x-3 border-b px-3 py-2 transition-colors last:border-0 hover:brightness-110 md:grid-cols-[1fr_72px_88px_92px_128px]"
-                    style={{ borderColor: D5.line }}
+                  <Link
+                    key={product.id}
+                    href={PRODUCT_HREF}
+                    className="group flex flex-col"
+                    style={{ background: FO.panelHi, border: `2px solid ${FO.line}` }}
                   >
-                    <div className="flex items-center gap-2.5 overflow-hidden">
-                      <span
-                        className="h-8 w-8 shrink-0 rounded"
-                        style={{ background: p.swatch }}
-                      />
-                      <div className="overflow-hidden">
-                        <Link
-                          href="/design-lab/d5/product"
-                          className="block truncate text-[12px] font-semibold hover:underline"
-                          style={{ color: D5.ink }}
-                        >
-                          {p.name}
-                        </Link>
-                        <div className="truncate text-[10px]" style={{ color: D5.faint }}>
-                          <span style={{ color: D5.dim }}>{p.sku}</span> · {p.spec}
-                        </div>
-                      </div>
-                    </div>
-                    <span
-                      className="hidden text-right text-[10px] md:block"
-                      style={{ color: D5.dim }}
+                    <div
+                      className="relative flex aspect-square items-center justify-center"
+                      style={{ background: "#f4f1e9" }}
                     >
-                      DEN-01
-                    </span>
-                    <div className="text-right">
-                      <Tag tone={st.tone}>{st.label}</Tag>
-                      <div className="mt-0.5 text-[9px]" style={{ color: D5.faint }}>
-                        {p.stock} ea
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[12px] font-bold" style={{ color: D5.ink }}>
-                        {fmt(p.price)}
-                      </div>
-                      <div className="text-[9px]" style={{ color: D5.faint }}>
-                        /ea
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-end gap-1">
-                      <div
-                        className="flex items-center rounded border"
-                        style={{ borderColor: D5.line }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => bump(p.sku, -1)}
-                          disabled={out}
-                          className="grid h-6 w-5 place-items-center disabled:opacity-30"
-                          style={{ color: D5.dim }}
-                        >
-                          <Minus size={10} />
-                        </button>
-                        <span
-                          className="w-6 text-center text-[11px] font-bold"
-                          style={{ color: D5.ink }}
-                        >
-                          {getQty(p.sku)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => bump(p.sku, 1)}
-                          disabled={out}
-                          className="grid h-6 w-5 place-items-center disabled:opacity-30"
-                          style={{ color: D5.dim }}
-                        >
-                          <Plus size={10} />
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => add(p)}
-                        disabled={out}
-                        className="grid h-6 w-6 place-items-center rounded disabled:opacity-30"
-                        style={{
-                          background: added[p.sku] ? D5.accentDim : D5.accent,
-                          color: added[p.sku] ? D5.accent : D5.bg
-                        }}
-                      >
-                        {added[p.sku] ? <Check size={12} /> : <Plus size={12} />}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </Panel>
-          ) : (
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
-              {rows.map((p) => {
-                const st = stockTone(p.stock, p.inStock);
-                const out = !p.inStock;
-                return (
-                  <div
-                    key={p.sku}
-                    className="flex flex-col rounded-md border"
-                    style={{ borderColor: D5.line, background: D5.panel }}
-                  >
-                    <Link href="/design-lab/d5/product">
-                      <div
-                        className="relative h-24 overflow-hidden rounded-t-md"
-                        style={{ background: D5.panelHi }}
-                      >
+                      {image ? (
                         <Image
-                          src={p.variant?.image || "/assets/logo.svg"}
-                          alt={p.name}
-                          fill
+                          alt={product.title}
+                          src={image}
+                          width={360}
+                          height={360}
                           quality={75}
-                          sizes="220px"
-                          className="object-contain p-2"
+                          className="h-full w-full object-contain p-4"
                         />
-                        <span className="absolute left-1.5 top-1.5">
-                          <Tag tone={st.tone}>{st.label}</Tag>
-                        </span>
-                      </div>
-                    </Link>
-                    <div className="flex flex-1 flex-col p-2">
-                      <div className="text-[9px]" style={{ color: D5.faint }}>
-                        {p.sku}
-                      </div>
-                      <Link
-                        href="/design-lab/d5/product"
-                        className="text-[11px] font-semibold leading-tight hover:underline"
-                        style={{ color: D5.ink }}
-                      >
-                        {p.name}
-                      </Link>
-                      <div
-                        className="mt-auto flex items-end justify-between pt-2"
-                      >
-                        <span className="text-[13px] font-bold" style={{ color: D5.ink }}>
-                          {fmt(p.price)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => add(p)}
-                          disabled={out}
-                          className="flex h-6 items-center gap-1 rounded px-2 text-[10px] font-bold disabled:opacity-30"
-                          style={{
-                            background: added[p.sku] ? D5.accentDim : D5.accent,
-                            color: added[p.sku] ? D5.accent : D5.bg
-                          }}
+                      ) : (
+                        <span
+                          className="text-4xl font-black"
+                          style={{ color: "rgba(22,20,15,0.12)" }}
                         >
-                          {added[p.sku] ? <Check size={11} /> : <Plus size={11} />}
-                          {added[p.sku] ? "OK" : "ADD"}
-                        </button>
+                          GW
+                        </span>
+                      )}
+                      <span className="absolute right-1.5 top-1.5">
+                        <Chip tone={inStock ? "go" : "stop"}>
+                          {inStock ? "In stock" : "Backorder"}
+                        </Chip>
+                      </span>
+                    </div>
+                    <div className="flex flex-1 flex-col gap-1 p-3">
+                      <span
+                        className="text-[10px] font-black uppercase tracking-[0.14em]"
+                        style={{ color: FO.faint }}
+                      >
+                        {variant?.sku ?? product.id}
+                      </span>
+                      <span
+                        className="line-clamp-2 flex-1 text-[12px] font-black uppercase leading-tight"
+                        style={{ color: FO.ink }}
+                      >
+                        {product.title}
+                      </span>
+                      <div className="mt-1.5 flex items-end justify-between">
+                        <span className="text-lg font-black" style={{ color: FO.hi }}>
+                          {money(product.price)}
+                        </span>
+                        <span
+                          className="flex h-8 w-8 items-center justify-center transition-colors group-hover:bg-[#ff5a1f] group-hover:text-[#16140f]"
+                          style={{ background: FO.steel, color: FO.ink }}
+                        >
+                          <ArrowRight size={15} strokeWidth={2.75} />
+                        </span>
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
+          ) : (
+            <div
+              className="flex flex-col items-center gap-4 px-6 py-16 text-center"
+              style={{ border: `2px dashed ${FO.line}` }}
+            >
+              <p
+                className="text-lg font-black uppercase tracking-[0.06em]"
+                style={{ color: FO.ink }}
+              >
+                No gear in this aisle yet
+              </p>
+              <Button onClick={() => setActiveSlug(featuredCategorySlug)} variant="primary">
+                Back to {featuredCategoryProducts[0]?.category.name ?? "catalog"}
+              </Button>
+            </div>
           )}
-
-          <div className="mt-3 flex justify-end">
-            <Btn href="/design-lab/d5/cart" variant="primary">
-              Review cart →
-            </Btn>
-          </div>
         </div>
       </div>
+
+      {/* Footer CTA */}
+      <Panel className="mt-6" title="Need it staged?" kicker="// will-call">
+        <div className="flex flex-col items-start justify-between gap-4 p-5 sm:flex-row sm:items-center">
+          <p className="text-[13px] font-bold" style={{ color: FO.dim }}>
+            Build your order and we will have it pulled and ready at the counter.
+          </p>
+          <Button href="/design-lab/d5/cart" variant="primary">
+            Go to cart <ArrowRight size={15} strokeWidth={2.75} />
+          </Button>
+        </div>
+      </Panel>
     </Shell>
   );
 }

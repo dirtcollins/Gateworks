@@ -1,319 +1,316 @@
 "use client";
 
-/** DESIGN 2 — Warehouse Dark · Category / product listing */
+/* DESIGN 2 — "MONO" — Catalogue / category listing, wired to the catalog. */
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  ChevronRight,
-  LayoutGrid,
-  Rows3,
-  Search,
-  SlidersHorizontal
-} from "lucide-react";
-import { AccentButton, D2, D2Shell, Panel, PanelHead, PartPhoto, Tag, mono } from "./kit";
+  Label,
+  MONO,
+  MonoPage,
+  Pill,
+  ProductImage,
+  Section,
+  formatUsd
+} from "./kit";
 import {
+  categories,
   featuredCategoryProducts,
-  featuredProduct
+  featuredProduct,
+  getCategoryProducts,
+  topCategories
 } from "@/features/design-lab/live-data";
 import type { Product } from "@/lib/types";
 
-type Item = {
-  id: string;
-  sku: string;
-  name: string;
-  group: string;
-  price: number;
-  stock: number;
-  image?: string;
-};
+const CATEGORY = featuredProduct.category;
 
-// Real catalog products for the featured category, mapped to the d2 row shape.
-const ITEMS: Item[] = featuredCategoryProducts.map((product: Product) => {
-  const variant = product.variants[0];
-  return {
-    id: product.id,
-    sku: variant?.sku ?? product.id,
-    name: product.title,
-    group: variant?.options.material ?? product.category.name,
-    price: product.price,
-    stock: variant?.inventoryQuantity ?? 0,
-    image: product.images[0]?.url ?? variant?.image
-  };
-});
+// Facet list: real categories with object counts.
+const FACETS = (() => {
+  const base = topCategories.length ? topCategories : categories;
+  return base
+    .map((category) => ({
+      slug: category.slug,
+      name: category.name,
+      count: getCategoryProducts(category.slug).length
+    }))
+    .filter((facet) => facet.count > 0);
+})();
 
-const CATEGORY_NAME = featuredProduct.category.name;
+const SORTS = [
+  { key: "az", label: "A — Z" },
+  { key: "price-asc", label: "Price ↑" },
+  { key: "price-desc", label: "Price ↓" },
+  { key: "variants", label: "Variants" }
+] as const;
 
-// Facet groups derived from the real variant materials in this category.
-const GROUPS = ["All", ...Array.from(new Set(ITEMS.map((item) => item.group)))];
-const SORTS = ["Price ↑", "Price ↓", "Stock", "A–Z"];
+type SortKey = (typeof SORTS)[number]["key"];
+
+function primarySku(product: Product): string {
+  return product.variants[0]?.sku ?? product.id;
+}
 
 export function D2Category() {
-  const [group, setGroup] = useState("All");
-  const [sort, setSort] = useState("Stock");
   const [query, setQuery] = useState("");
-  const [inStock, setInStock] = useState(false);
-  const [grid, setGrid] = useState(true);
+  const [sort, setSort] = useState<SortKey>("az");
 
   const results = useMemo(() => {
-    let r = ITEMS.filter((i) => group === "All" || i.group === group);
-    if (inStock) r = r.filter((i) => i.stock > 0);
-    if (query.trim()) {
-      const q = query.toLowerCase();
-      r = r.filter(
-        (i) => i.name.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q)
+    const normalized = query.trim().toLowerCase();
+    const filtered = featuredCategoryProducts.filter((product) => {
+      if (!normalized) return true;
+      return (
+        product.title.toLowerCase().includes(normalized) ||
+        product.variants.some((variant) =>
+          variant.sku.toLowerCase().includes(normalized)
+        )
       );
-    }
-    return [...r].sort((a, b) => {
-      if (sort === "Price ↑") return a.price - b.price;
-      if (sort === "Price ↓") return b.price - a.price;
-      if (sort === "A–Z") return a.name.localeCompare(b.name);
-      return b.stock - a.stock;
     });
-  }, [group, sort, query, inStock]);
+    return [...filtered].sort((a, b) => {
+      if (sort === "price-asc") return a.price - b.price;
+      if (sort === "price-desc") return b.price - a.price;
+      if (sort === "variants") return b.variants.length - a.variants.length;
+      return a.title.localeCompare(b.title);
+    });
+  }, [query, sort]);
 
   return (
-    <D2Shell active="catalog" kicker={`CATALOG // ${CATEGORY_NAME.toUpperCase()}`}>
-      <div
-        className={`${mono} mb-5 flex items-center gap-1.5 text-[11px] uppercase tracking-wider`}
-        style={{ color: D2.muted }}
+    <MonoPage active="Catalogue">
+      {/* Department header */}
+      <Section
+        className="pt-12 pb-10"
+        style={{ borderBottom: `1px solid ${MONO.lineStrong}` }}
       >
-        <Link href="/design-lab/d2/home">Storefront</Link>
-        <ChevronRight className="h-3 w-3" />
-        <span style={{ color: D2.accent }}>{CATEGORY_NAME}</span>
-      </div>
+        <Label index="CAT">Department</Label>
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-6">
+          <h1 className="text-[44px] font-semibold leading-[0.98] tracking-[-0.035em] sm:text-[56px]">
+            {CATEGORY.name}
+          </h1>
+          <p
+            className="max-w-xs text-[13px] leading-relaxed"
+            style={{ color: MONO.steel }}
+          >
+            {featuredCategoryProducts.length} catalogued objects in this
+            department, every one priced and stocked.
+          </p>
+        </div>
+      </Section>
 
-      <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
-        {/* filter rail */}
-        <aside className="flex flex-col gap-4">
-          <Panel>
-            <PanelHead title="Filter" />
-            <div className="p-4">
-              <div
-                className="flex items-center gap-2 rounded-[3px] px-3 py-2.5"
-                style={{ background: D2.bg, border: `1px solid ${D2.line}` }}
+      <Section className="pt-10 pb-16">
+        <div className="grid gap-10 lg:grid-cols-12">
+          {/* Facet rail */}
+          <aside className="lg:col-span-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em]">
+              Departments
+            </p>
+            <ul
+              className="mt-4"
+              style={{ borderTop: `1px solid ${MONO.line}` }}
+            >
+              {FACETS.map((facet) => {
+                const on = facet.slug === CATEGORY.slug;
+                return (
+                  <li
+                    key={facet.slug}
+                    style={{ borderBottom: `1px solid ${MONO.line}` }}
+                  >
+                    <Link
+                      href="/design-lab/d2/category"
+                      className="flex items-center justify-between py-2.5 text-[12px] transition-colors"
+                      style={{
+                        fontWeight: on ? 600 : 400,
+                        color: on ? MONO.ink : MONO.steel
+                      }}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="inline-block h-1.5 w-1.5"
+                          style={{
+                            background: on ? MONO.ink : "transparent",
+                            border: `1px solid ${
+                              on ? MONO.ink : MONO.line
+                            }`
+                          }}
+                        />
+                        {facet.name}
+                      </span>
+                      <span
+                        className="tabular-nums"
+                        style={{ color: MONO.muted }}
+                      >
+                        {String(facet.count).padStart(2, "0")}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div
+              className="mt-8 p-4"
+              style={{ border: `1px solid ${MONO.lineStrong}` }}
+            >
+              <p className="text-[12px] font-semibold tracking-[-0.01em]">
+                Trade pricing
+              </p>
+              <p
+                className="mt-1.5 text-[12px] leading-relaxed"
+                style={{ color: MONO.steel }}
               >
-                <Search className="h-4 w-4" style={{ color: D2.muted }} />
+                Sign in to unlock tiered crew and yard rates across the full
+                catalogue.
+              </p>
+            </div>
+          </aside>
+
+          {/* Results */}
+          <div className="lg:col-span-9">
+            {/* Toolbar */}
+            <div
+              className="flex flex-wrap items-center justify-between gap-3 pb-4"
+              style={{ borderBottom: `1px solid ${MONO.lineStrong}` }}
+            >
+              <div
+                className="flex items-center gap-2 px-3 py-2"
+                style={{ border: `1px solid ${MONO.line}` }}
+              >
+                <span
+                  className="text-[11px] uppercase tracking-[0.16em]"
+                  style={{ color: MONO.muted }}
+                >
+                  Find
+                </span>
                 <input
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="SKU or name…"
-                  className={`${mono} w-full bg-transparent text-[12px] outline-none placeholder:text-[#3f4a52]`}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Name or SKU"
+                  className="w-40 bg-transparent text-[12px] outline-none placeholder:text-[#b5b5b3]"
                 />
               </div>
-
-              <div className="mt-4">
-                <div
-                  className={`${mono} mb-2 text-[10px] uppercase tracking-[0.16em]`}
-                  style={{ color: D2.muted }}
+              <div className="flex items-center gap-3">
+                <span
+                  className="text-[11px] uppercase tracking-[0.16em]"
+                  style={{ color: MONO.muted }}
                 >
-                  Material
-                </div>
-                <div className="flex flex-col gap-1">
-                  {GROUPS.map((g) => {
-                    const on = g === group;
+                  Sort
+                </span>
+                <div className="flex" style={{ border: `1px solid ${MONO.line}` }}>
+                  {SORTS.map((option, index) => {
+                    const on = option.key === sort;
                     return (
                       <button
-                        key={g}
+                        key={option.key}
                         type="button"
-                        onClick={() => setGroup(g)}
-                        className={`${mono} flex items-center justify-between rounded-[3px] px-3 py-2 text-[12px] transition`}
+                        onClick={() => setSort(option.key)}
+                        className="px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] transition-colors"
                         style={{
-                          color: on ? D2.bg : D2.text,
-                          background: on ? D2.accent : D2.panelHi,
-                          border: `1px solid ${on ? D2.accent : D2.line}`
+                          background: on ? MONO.ink : "transparent",
+                          color: on ? MONO.paper : MONO.steel,
+                          borderLeft:
+                            index === 0
+                              ? undefined
+                              : `1px solid ${MONO.line}`
                         }}
                       >
-                        {g}
-                        <span style={{ opacity: 0.7 }}>
-                          {g === "All"
-                            ? ITEMS.length
-                            : ITEMS.filter((i) => i.group === g).length}
-                        </span>
+                        {option.label}
                       </button>
                     );
                   })}
                 </div>
               </div>
-
-              <label
-                className="mt-4 flex cursor-pointer items-center justify-between rounded-[3px] px-3 py-2.5"
-                style={{ background: D2.panelHi, border: `1px solid ${D2.line}` }}
-              >
-                <span className={`${mono} text-[12px]`}>In stock only</span>
-                <button
-                  type="button"
-                  onClick={() => setInStock((v) => !v)}
-                  className="relative h-5 w-9 rounded-full transition"
-                  style={{ background: inStock ? D2.accent : D2.line }}
-                  aria-pressed={inStock}
-                >
-                  <span
-                    className="absolute top-0.5 h-4 w-4 rounded-full transition-all"
-                    style={{
-                      left: inStock ? "18px" : "2px",
-                      background: inStock ? D2.bg : D2.muted
-                    }}
-                  />
-                </button>
-              </label>
             </div>
-          </Panel>
 
-          <Panel className="p-4">
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal className="h-4 w-4" style={{ color: D2.accent }} />
-              <span className="text-[12px] font-semibold">Contractor pricing</span>
-            </div>
-            <p className={`${mono} mt-2 text-[11px] leading-relaxed`} style={{ color: D2.muted }}>
-              Sign in to unlock crew & yard tier rates across the full catalog.
+            <p
+              className="mt-3 text-[11px] uppercase tracking-[0.18em]"
+              style={{ color: MONO.muted }}
+            >
+              {results.length} of {featuredCategoryProducts.length} objects
             </p>
-            <AccentButton ghost className="mt-3 w-full" href="/design-lab/d2/cart">
-              Sign in
-            </AccentButton>
-          </Panel>
-        </aside>
 
-        {/* results */}
-        <section>
-          <Panel className="mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-            <span className={`${mono} text-[12px]`} style={{ color: D2.muted }}>
-              <span style={{ color: D2.accent }}>{results.length}</span> of {ITEMS.length} SKUs
-            </span>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1">
-                {SORTS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setSort(s)}
-                    className={`${mono} rounded-[3px] px-2.5 py-1.5 text-[10px] uppercase tracking-wider transition`}
-                    style={{
-                      color: s === sort ? D2.bg : D2.muted,
-                      background: s === sort ? D2.accent : D2.panelHi,
-                      border: `1px solid ${s === sort ? D2.accent : D2.line}`
-                    }}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
+            {/* Grid */}
+            {results.length === 0 ? (
               <div
-                className="flex items-center rounded-[3px]"
-                style={{ border: `1px solid ${D2.line}` }}
+                className="mt-6 grid place-items-center py-24 text-center"
+                style={{ border: `1px solid ${MONO.line}` }}
               >
-                {[
-                  { on: grid, set: () => setGrid(true), Icon: LayoutGrid },
-                  { on: !grid, set: () => setGrid(false), Icon: Rows3 }
-                ].map(({ on, set, Icon }, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={set}
-                    className="grid h-8 w-8 place-items-center"
-                    style={{ background: on ? D2.accent : "transparent", color: on ? D2.bg : D2.muted }}
+                <div>
+                  <p className="text-[16px] font-semibold tracking-[-0.01em]">
+                    No objects match.
+                  </p>
+                  <p
+                    className="mt-1 text-[12px]"
+                    style={{ color: MONO.steel }}
                   >
-                    <Icon className="h-4 w-4" />
-                  </button>
-                ))}
+                    Clear the search to see the full department.
+                  </p>
+                </div>
               </div>
-            </div>
-          </Panel>
-
-          {results.length === 0 ? (
-            <Panel className="grid place-items-center py-20">
-              <span className={`${mono} text-[12px]`} style={{ color: D2.muted }}>
-                No SKUs match — adjust filters.
-              </span>
-            </Panel>
-          ) : grid ? (
-            <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
-              {results.map((p) => (
-                <ProductCard key={p.id} p={p} />
-              ))}
-            </div>
-          ) : (
-            <Panel>
-              {results.map((p, i) => (
-                <Link
-                  key={p.id}
-                  href="/design-lab/d2/product"
-                  className="flex items-center gap-4 p-3.5 transition hover:bg-white/[0.02]"
-                  style={{ borderTop: i > 0 ? `1px solid ${D2.line}` : undefined }}
-                >
-                  <PartPhoto
-                    src={p.image}
-                    alt={p.name}
-                    seed={p.id}
-                    className="h-14 w-14 shrink-0"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className={`${mono} text-[10px]`} style={{ color: D2.muted }}>
-                      {p.sku} · {p.group}
-                    </div>
-                    <div className="truncate text-[13px] font-medium">{p.name}</div>
-                  </div>
-                  <StockChip stock={p.stock} />
-                  <span className={`${mono} w-20 text-right text-[14px] font-bold`} style={{ color: D2.accent }}>
-                    ${p.price.toFixed(2)}
-                  </span>
-                </Link>
-              ))}
-            </Panel>
-          )}
-        </section>
-      </div>
-    </D2Shell>
-  );
-}
-
-function StockChip({ stock }: { stock: number }) {
-  if (stock === 0) return <Tag tone="bad">Out</Tag>;
-  if (stock < 25) return <Tag tone="warn">{stock} left</Tag>;
-  return <Tag tone="accent">{stock} avail</Tag>;
-}
-
-function ProductCard({ p }: { p: Item }) {
-  return (
-    <Link
-      href="/design-lab/d2/product"
-      className="group flex flex-col rounded-[5px] transition"
-      style={{ background: D2.panel, border: `1px solid ${D2.line}` }}
-    >
-      <div className="p-3 pb-0">
-        <PartPhoto
-          src={p.image}
-          alt={p.name}
-          seed={p.id}
-          className="aspect-[4/3] w-full"
-          label={p.sku}
-        />
-      </div>
-      <div className="flex flex-1 flex-col gap-2 p-3.5">
-        <div className="flex items-center justify-between">
-          <span className={`${mono} text-[10px]`} style={{ color: D2.muted }}>
-            {p.group}
-          </span>
-          <StockChip stock={p.stock} />
-        </div>
-        <div className="text-[13px] font-medium leading-snug">{p.name}</div>
-        <div className="mt-auto flex items-end justify-between pt-1">
-          <div>
-            <div className={`${mono} text-[10px]`} style={{ color: D2.muted }}>
-              {p.sku}
-            </div>
-            <div className={`${mono} text-[18px] font-bold`} style={{ color: D2.accent }}>
-              ${p.price.toFixed(2)}
-            </div>
+            ) : (
+              <div
+                className="mt-5 grid grid-cols-2 lg:grid-cols-3"
+                style={{ borderLeft: `1px solid ${MONO.line}` }}
+              >
+                {results.map((product) => {
+                  const inStock =
+                    product.variants[0]?.inventory === "in_stock";
+                  return (
+                    <Link
+                      key={product.id}
+                      href="/design-lab/d2/product"
+                      className="group flex flex-col"
+                      style={{
+                        borderRight: `1px solid ${MONO.line}`,
+                        borderBottom: `1px solid ${MONO.line}`
+                      }}
+                    >
+                      <div className="relative">
+                        <ProductImage
+                          alt={product.title}
+                          className="aspect-square transition-transform duration-300 group-hover:scale-[1.02]"
+                          sizes="(max-width: 1024px) 50vw, 280px"
+                          src={
+                            product.images[0]?.url ??
+                            product.variants[0]?.image
+                          }
+                        />
+                        <span className="absolute left-2.5 top-2.5">
+                          <Pill>{inStock ? "Stock" : "Order"}</Pill>
+                        </span>
+                      </div>
+                      <div
+                        className="flex flex-1 flex-col gap-2 p-4"
+                        style={{ borderTop: `1px solid ${MONO.line}` }}
+                      >
+                        <p
+                          className="text-[10px] font-semibold uppercase tracking-[0.16em]"
+                          style={{ color: MONO.muted }}
+                        >
+                          {primarySku(product)}
+                        </p>
+                        <p className="flex-1 text-[13px] font-medium leading-snug tracking-[-0.01em]">
+                          {product.title}
+                        </p>
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-[15px] font-semibold tabular-nums">
+                            {formatUsd(product.price)}
+                          </span>
+                          <span
+                            className="text-[10px] uppercase tracking-[0.14em]"
+                            style={{ color: MONO.muted }}
+                          >
+                            {product.variants.length}{" "}
+                            {product.variants.length === 1
+                              ? "variant"
+                              : "variants"}
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
           </div>
-          <span
-            className={`${mono} rounded-[3px] px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider transition group-hover:translate-y-0`}
-            style={{ background: D2.panelHi, color: D2.accent, border: `1px solid ${D2.line}` }}
-          >
-            View →
-          </span>
         </div>
-      </div>
-    </Link>
+      </Section>
+    </MonoPage>
   );
 }

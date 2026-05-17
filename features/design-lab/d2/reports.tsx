@@ -1,414 +1,430 @@
 "use client";
 
-/** DESIGN 2 — Warehouse Dark · Admin reports dashboard */
+/* DESIGN 2 — "MONO" — Admin reports. Receives a serializable ReportData prop;
+   "use client" avoids a server/client function-boundary error. */
 
-import { useState } from "react";
-import { ArrowUpRight, Download, TrendingUp } from "lucide-react";
-import { D2, D2Shell, Panel, PanelHead, StatCell, Tag, mono } from "./kit";
+import {
+  Label,
+  MONO,
+  MonoPage,
+  Pill,
+  Section,
+  Stat,
+  formatUsd
+} from "./kit";
 import type { ReportData } from "@/features/admin/reports/reports-dashboard";
 
-const RANGES = ["7D", "30D", "QTR", "YTD"];
-
-const PAYMENT_COLORS: Record<string, string> = {
-  paid: D2.accent,
-  partial: "#f5b53d",
-  unpaid: "#ff6b6b",
-  overpaid: "#3da0f5",
-  refunded: "#8a6bf5",
-  failed: "#ff6b6b"
-};
-
-function currency(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0
-  }).format(value);
-}
-
-function titleCase(value: string) {
+function titleCase(value: string): string {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 }
 
-function formatDate(value: string) {
+function formatDate(value: string): string {
   if (!value) return "—";
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
-    day: "numeric"
+    day: "numeric",
+    year: "numeric"
   }).format(new Date(value));
 }
 
 export function D2Reports({ data }: { data: ReportData }) {
-  const [range, setRange] = useState("30D");
-
-  const kpis = [
-    {
-      label: "Revenue (30d)",
-      value: currency(data.revenue30),
-      delta: "live",
-      good: true
-    },
-    {
-      label: "Orders (30d)",
-      value: String(data.orders30),
-      delta: "live",
-      good: true
-    },
-    {
-      label: "Avg order value",
-      value: currency(data.avgOrderValue),
-      delta: "live",
-      good: true
-    },
-    {
-      label: "Gross margin",
-      value: data.hasCostData ? `${data.grossMarginPct.toFixed(1)}%` : "No cost data",
-      delta: data.hasCostData ? "live" : "n/a",
-      good: data.hasCostData
-    }
-  ];
-
   const collectedPct =
-    data.billed > 0 ? Math.min(100, (data.collected / data.billed) * 100) : 0;
+    data.billed > 0
+      ? Math.min(100, Math.round((data.collected / data.billed) * 100))
+      : 0;
   const maxAging = Math.max(1, ...data.aging.map((bucket) => bucket.total));
-  const paymentTotal = data.paymentBreakdown.reduce((sum, row) => sum + row.total, 0);
-  const maxRecentTotal = Math.max(
-    1,
-    ...data.recentOrders.map((order) => order.total)
+  const paymentTotal = data.paymentBreakdown.reduce(
+    (sum, row) => sum + row.total,
+    0
   );
 
   return (
-    <D2Shell active="reports" kicker="ADMIN // ANALYTICS">
-      <div className="mb-5 flex items-center justify-between">
-        <h1 className="text-[22px] font-bold tracking-tight">Performance Reports</h1>
-        <div className="flex items-center gap-2">
-          <div
-            className="flex items-center rounded-[3px]"
-            style={{ border: `1px solid ${D2.line}` }}
+    <MonoPage active="Reports">
+      <Section
+        className="pt-12 pb-8"
+        style={{ borderBottom: `1px solid ${MONO.lineStrong}` }}
+      >
+        <Label index="FIN">Operations</Label>
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+          <h1 className="text-[44px] font-semibold leading-[0.98] tracking-[-0.035em] sm:text-[56px]">
+            Financial reports
+          </h1>
+          <p
+            className="max-w-xs text-[13px] leading-relaxed"
+            style={{ color: MONO.steel }}
           >
-            {RANGES.map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRange(r)}
-                className={`${mono} px-3 py-1.5 text-[11px] uppercase tracking-wider transition`}
-                style={{
-                  color: r === range ? D2.bg : D2.muted,
-                  background: r === range ? D2.accent : "transparent"
-                }}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className={`${mono} flex items-center gap-1.5 rounded-[3px] px-3 py-1.5 text-[11px] uppercase tracking-wider`}
-            style={{ background: D2.panelHi, color: D2.accent, border: `1px solid ${D2.line}` }}
-          >
-            <Download className="h-3.5 w-3.5" /> Export
-          </button>
+            Revenue, order value, receivables, and gross margin across the
+            last 30 days.
+          </p>
         </div>
-      </div>
+      </Section>
 
       {!data.configured ? (
-        <Panel className="mb-6 flex items-start gap-3 p-4">
-          <Tag tone="warn">OFFLINE</Tag>
-          <span className={`${mono} text-[12px] leading-relaxed`} style={{ color: D2.muted }}>
-            Supabase is not configured — live financial data is unavailable. Add the Supabase
-            keys to .env.local to populate this report.
-          </span>
-        </Panel>
+        <Section className="pt-8">
+          <div
+            className="flex items-center gap-3 px-5 py-4"
+            style={{ border: `1px solid ${MONO.lineStrong}` }}
+          >
+            <Pill filled>Offline</Pill>
+            <p className="text-[12px]" style={{ color: MONO.steel }}>
+              Supabase is not configured — live financial data is unavailable.
+              Add the Supabase keys to{" "}
+              <code style={{ fontFamily: "ui-monospace, monospace" }}>
+                .env.local
+              </code>{" "}
+              to populate this report.
+            </p>
+          </div>
+        </Section>
       ) : null}
 
       {/* KPIs */}
-      <Panel className="mb-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4">
-          {kpis.map((k) => (
-            <StatCell key={k.label} {...k} />
+      <Section
+        className="py-0"
+        style={{ borderBottom: `1px solid ${MONO.line}` }}
+      >
+        <div
+          className="grid grid-cols-2 lg:grid-cols-4"
+          style={{
+            borderLeft: `1px solid ${MONO.line}`,
+            borderRight: `1px solid ${MONO.line}`
+          }}
+        >
+          {[
+            {
+              label: "Revenue / 30d",
+              value: formatUsd(data.revenue30),
+              note: "Last 30 days"
+            },
+            {
+              label: "Orders / 30d",
+              value: String(data.orders30),
+              note: "Placed"
+            },
+            {
+              label: "Avg order value",
+              value: formatUsd(data.avgOrderValue),
+              note: "Per order"
+            },
+            {
+              label: "Gross margin",
+              value: data.hasCostData
+                ? `${data.grossMarginPct.toFixed(1)}%`
+                : "No cost data",
+              note: data.hasCostData
+                ? `${formatUsd(data.grossProfit)} profit`
+                : "Add unit costs"
+            }
+          ].map((kpi, index) => (
+            <div
+              key={kpi.label}
+              style={{
+                borderLeft:
+                  index === 0 ? undefined : `1px solid ${MONO.line}`
+              }}
+            >
+              <Stat label={kpi.label} note={kpi.note} value={kpi.value} />
+            </div>
           ))}
         </div>
-      </Panel>
+      </Section>
 
-      <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
-        {/* accounts receivable */}
-        <Panel>
-          <PanelHead
-            title="Accounts Receivable"
-            meta="BILLED vs COLLECTED"
-            action={
+      <Section className="pt-12 pb-12">
+        <div className="grid gap-10 lg:grid-cols-12">
+          {/* Accounts receivable */}
+          <div className="lg:col-span-7">
+            <div
+              className="flex items-end justify-between pb-4"
+              style={{ borderBottom: `1px solid ${MONO.lineStrong}` }}
+            >
+              <h2 className="text-[22px] font-semibold tracking-[-0.025em]">
+                Accounts receivable
+              </h2>
               <span
-                className={`${mono} flex items-center gap-1 text-[11px]`}
-                style={{ color: D2.accent }}
+                className="text-[11px] font-semibold uppercase tracking-[0.16em] tabular-nums"
+                style={{ color: MONO.muted }}
               >
-                <TrendingUp className="h-3.5 w-3.5" />{" "}
-                {collectedPct.toFixed(0)}% collected
+                {collectedPct}% collected
               </span>
-            }
-          />
-          <div className="p-5">
-            <div className="grid grid-cols-3 gap-3">
+            </div>
+            <div
+              className="mt-px grid grid-cols-3"
+              style={{ borderLeft: `1px solid ${MONO.line}` }}
+            >
               {[
-                ["Billed", data.billed, D2.text],
-                ["Collected", data.collected, D2.accent],
-                ["Outstanding", data.outstanding, "#ff6b6b"]
-              ].map(([label, value, color]) => (
+                ["Billed", data.billed],
+                ["Collected", data.collected],
+                ["Outstanding", data.outstanding]
+              ].map(([label, value]) => (
                 <div
                   key={String(label)}
-                  className="rounded-[3px] p-3"
-                  style={{ background: D2.panelHi, border: `1px solid ${D2.line}` }}
+                  className="px-4 py-5"
+                  style={{
+                    borderRight: `1px solid ${MONO.line}`,
+                    borderBottom: `1px solid ${MONO.line}`
+                  }}
                 >
-                  <div
-                    className={`${mono} text-[10px] uppercase tracking-[0.16em]`}
-                    style={{ color: D2.muted }}
+                  <p
+                    className="text-[10px] font-semibold uppercase tracking-[0.16em]"
+                    style={{ color: MONO.muted }}
                   >
                     {label}
-                  </div>
-                  <div
-                    className={`${mono} mt-1 text-[20px] font-bold`}
-                    style={{ color: color as string }}
-                  >
-                    {currency(value as number)}
-                  </div>
+                  </p>
+                  <p className="mt-2 text-[22px] font-semibold leading-none tracking-[-0.025em] tabular-nums">
+                    {formatUsd(value as number)}
+                  </p>
                 </div>
               ))}
             </div>
+
+            {/* Collected meter */}
             <div
-              className="mt-4 h-2 overflow-hidden rounded-full"
-              style={{ background: D2.line }}
+              className="mt-5 h-[6px]"
+              style={{ border: `1px solid ${MONO.lineStrong}` }}
             >
               <div
-                className="h-full rounded-full"
+                className="h-full"
                 style={{
                   width: `${collectedPct}%`,
-                  background: D2.accent,
-                  boxShadow: `0 0 10px ${D2.accent}`
+                  background: MONO.ink
                 }}
               />
             </div>
-          </div>
-          {/* aging */}
-          <div className="border-t" style={{ borderColor: D2.line }}>
-            <div
-              className={`${mono} px-5 py-2.5 text-[10px] uppercase tracking-[0.16em]`}
-              style={{ color: D2.muted }}
-            >
-              Outstanding by age
-            </div>
-            {data.aging.map((bucket, i) => (
-              <div
-                key={bucket.bucket}
-                className="flex items-center gap-3 px-5 py-2.5"
-                style={{ borderTop: i > 0 ? `1px solid ${D2.line}` : undefined }}
-              >
-                <span className="w-32 text-[12px]">{bucket.bucket} days</span>
-                <div
-                  className="h-2 flex-1 overflow-hidden rounded-full"
-                  style={{ background: D2.line }}
-                >
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${(bucket.total / maxAging) * 100}%`,
-                      background: D2.accent
-                    }}
-                  />
-                </div>
-                <span className={`${mono} w-20 text-right text-[12px] font-bold`}>
-                  {currency(bucket.total)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </Panel>
 
-        {/* payment mix + signals */}
-        <div className="flex flex-col gap-6">
-          <Panel>
-            <PanelHead title="Payment Status" meta="BY REVENUE" />
-            <div className="p-5">
-              {data.paymentBreakdown.length ? (
-                <>
+            {/* Aging */}
+            <p className="mt-8 text-[10px] font-semibold uppercase tracking-[0.22em]">
+              Outstanding by age
+            </p>
+            <ul
+              className="mt-3"
+              style={{ borderTop: `1px solid ${MONO.line}` }}
+            >
+              {data.aging.map((bucket) => (
+                <li
+                  key={bucket.bucket}
+                  className="flex items-center gap-4 py-3"
+                  style={{ borderBottom: `1px solid ${MONO.line}` }}
+                >
+                  <span className="w-24 text-[12px] tabular-nums">
+                    {bucket.bucket} days
+                  </span>
                   <div
-                    className="flex h-3 overflow-hidden rounded-full"
-                    style={{ border: `1px solid ${D2.line}` }}
+                    className="h-2 flex-1"
+                    style={{ background: MONO.shell }}
                   >
-                    {data.paymentBreakdown.map((row) => (
+                    <div
+                      className="h-full"
+                      style={{
+                        width: `${(bucket.total / maxAging) * 100}%`,
+                        background: MONO.ink
+                      }}
+                    />
+                  </div>
+                  <span className="w-24 text-right text-[12px] font-semibold tabular-nums">
+                    {formatUsd(bucket.total)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Payment status */}
+          <div className="lg:col-span-5">
+            <div
+              className="pb-4"
+              style={{ borderBottom: `1px solid ${MONO.lineStrong}` }}
+            >
+              <h2 className="text-[22px] font-semibold tracking-[-0.025em]">
+                Payment status
+              </h2>
+            </div>
+            {data.paymentBreakdown.length ? (
+              <>
+                {/* Monochrome stacked bar — shades distinguish segments */}
+                <div
+                  className="mt-5 flex h-3 overflow-hidden"
+                  style={{ border: `1px solid ${MONO.lineStrong}` }}
+                >
+                  {data.paymentBreakdown.map((row, index) => {
+                    const shade = ["#0a0a0a", "#5a5a58", "#9a9a98", "#cfcfcd"][
+                      index % 4
+                    ];
+                    return (
                       <div
                         key={row.status}
                         style={{
                           width: `${
-                            paymentTotal > 0 ? (row.total / paymentTotal) * 100 : 0
+                            paymentTotal > 0
+                              ? (row.total / paymentTotal) * 100
+                              : 0
                           }%`,
-                          background: PAYMENT_COLORS[row.status] ?? D2.muted
+                          background: shade
                         }}
                       />
-                    ))}
-                  </div>
-                  <ul className="mt-4 flex flex-col gap-2.5">
-                    {data.paymentBreakdown.map((row) => (
-                      <li key={row.status} className="flex items-center gap-2.5">
+                    );
+                  })}
+                </div>
+                <ul
+                  className="mt-5"
+                  style={{ borderTop: `1px solid ${MONO.line}` }}
+                >
+                  {data.paymentBreakdown.map((row, index) => {
+                    const shade = ["#0a0a0a", "#5a5a58", "#9a9a98", "#cfcfcd"][
+                      index % 4
+                    ];
+                    return (
+                      <li
+                        key={row.status}
+                        className="flex items-center gap-3 py-3"
+                        style={{ borderBottom: `1px solid ${MONO.line}` }}
+                      >
                         <span
-                          className="h-2.5 w-2.5 rounded-[2px]"
-                          style={{ background: PAYMENT_COLORS[row.status] ?? D2.muted }}
+                          className="h-2.5 w-2.5"
+                          style={{ background: shade }}
                         />
                         <span className="flex-1 text-[12px]">
-                          {titleCase(row.status)}{" "}
-                          <span style={{ color: D2.muted }}>· {row.count} orders</span>
+                          {titleCase(row.status)}
+                          <span style={{ color: MONO.muted }}>
+                            {" "}
+                            · {row.count}{" "}
+                            {row.count === 1 ? "order" : "orders"}
+                          </span>
                         </span>
-                        <span className={`${mono} text-[12px] font-bold`}>
-                          {currency(row.total)}
+                        <span className="text-[12px] font-semibold tabular-nums">
+                          {formatUsd(row.total)}
                         </span>
                       </li>
-                    ))}
-                  </ul>
-                </>
-              ) : (
-                <p className={`${mono} text-[12px]`} style={{ color: D2.muted }}>
-                  No orders in range.
-                </p>
-              )}
-            </div>
-          </Panel>
+                    );
+                  })}
+                </ul>
+              </>
+            ) : (
+              <p
+                className="mt-5 text-[12px]"
+                style={{ color: MONO.muted }}
+              >
+                No orders in range.
+              </p>
+            )}
 
-          <Panel>
-            <PanelHead title="Signals" meta="MARGIN" />
-            <ul>
-              {[
-                {
-                  tone: data.hasCostData ? ("accent" as const) : ("warn" as const),
-                  tag: data.hasCostData ? "GP" : "COST",
-                  msg: data.hasCostData
-                    ? `Gross profit across recent orders: ${currency(data.grossProfit)}`
-                    : "Gross margin hidden until product unit costs are entered in the catalog."
-                },
-                {
-                  tone:
-                    data.outstanding > 0 ? ("bad" as const) : ("accent" as const),
-                  tag: "A/R",
-                  msg:
-                    data.outstanding > 0
-                      ? `${currency(data.outstanding)} outstanding across receivable buckets.`
-                      : "All billed revenue has been collected."
-                },
-                {
-                  tone: "accent" as const,
-                  tag: "VOL",
-                  msg: `${data.orders30} orders in the last 30 days at ${currency(
-                    data.avgOrderValue
-                  )} average value.`
-                }
-              ].map((a, i) => (
-                <li
-                  key={a.tag}
-                  className="flex items-start gap-3 px-4 py-3"
-                  style={{ borderTop: i > 0 ? `1px solid ${D2.line}` : undefined }}
-                >
-                  <Tag tone={a.tone}>{a.tag}</Tag>
-                  <span className="flex-1 text-[12px] leading-snug">{a.msg}</span>
-                </li>
-              ))}
-            </ul>
-          </Panel>
-        </div>
-      </div>
-
-      {/* recent orders */}
-      <Panel className="mt-6">
-        <PanelHead
-          title="Recent Orders"
-          meta={`${data.recentOrders.length} · BY DATE`}
-          action={
-            <span
-              className={`${mono} flex items-center gap-1 text-[11px] uppercase`}
-              style={{ color: D2.accent }}
+            <div
+              className="mt-8 p-4"
+              style={{ border: `1px solid ${MONO.lineStrong}` }}
             >
-              Full report <ArrowUpRight className="h-3.5 w-3.5" />
-            </span>
-          }
-        />
+              <p className="text-[12px] font-semibold tracking-[-0.01em]">
+                {data.hasCostData ? "Gross profit" : "Cost data"}
+              </p>
+              <p
+                className="mt-1.5 text-[12px] leading-relaxed"
+                style={{ color: MONO.steel }}
+              >
+                {data.hasCostData
+                  ? `Gross profit across recent orders is ${formatUsd(
+                      data.grossProfit
+                    )} at a ${data.grossMarginPct.toFixed(1)}% margin.`
+                  : "Gross margin is hidden until product unit costs are entered in the catalogue manager."}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      {/* Recent orders */}
+      <Section className="pb-16">
         <div
-          className={`${mono} grid grid-cols-[2fr_0.8fr_1fr_1.4fr] gap-2 px-4 py-2 text-[10px] uppercase tracking-wider`}
-          style={{ color: D2.muted, borderBottom: `1px solid ${D2.line}` }}
+          className="flex items-end justify-between pb-4"
+          style={{ borderBottom: `1px solid ${MONO.lineStrong}` }}
         >
-          <span>Order / Customer</span>
-          <span className="text-right">Date</span>
-          <span className="text-right">Total</span>
-          <span>Payment</span>
+          <h2 className="text-[22px] font-semibold tracking-[-0.025em]">
+            Recent orders
+          </h2>
+          <span
+            className="text-[11px] font-semibold uppercase tracking-[0.16em]"
+            style={{ color: MONO.muted }}
+          >
+            {data.recentOrders.length} shown
+          </span>
         </div>
         {data.recentOrders.length ? (
-          data.recentOrders.map((order, i) => (
-            <div
-              key={order.id}
-              className="grid grid-cols-[2fr_0.8fr_1fr_1.4fr] items-center gap-2 px-4 py-3"
-              style={{ borderTop: i > 0 ? `1px solid ${D2.line}` : undefined }}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <span
-                  className={`${mono} grid h-6 w-6 shrink-0 place-items-center rounded-[3px] text-[11px] font-bold`}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[680px] border-collapse text-left">
+              <thead>
+                <tr
+                  className="text-[10px] font-semibold uppercase tracking-[0.16em]"
                   style={{
-                    background: i === 0 ? D2.accent : D2.panelHi,
-                    color: i === 0 ? D2.bg : D2.muted,
-                    border: `1px solid ${D2.line}`
+                    color: MONO.muted,
+                    borderBottom: `1px solid ${MONO.line}`
                   }}
                 >
-                  {i + 1}
-                </span>
-                <div className="min-w-0">
-                  <div className={`${mono} text-[10px]`} style={{ color: D2.muted }}>
-                    {order.orderNumber}
-                  </div>
-                  <div className="truncate text-[12px] font-medium">
-                    {order.customerName}
-                  </div>
-                </div>
-              </div>
-              <span className={`${mono} text-right text-[12px]`} style={{ color: D2.muted }}>
-                {formatDate(order.createdAt)}
-              </span>
-              <span
-                className={`${mono} text-right text-[12px] font-bold`}
-                style={{ color: D2.accent }}
-              >
-                {currency(order.total)}
-              </span>
-              <div className="flex items-center gap-2">
-                <Tag
-                  tone={
-                    order.paymentStatus === "paid"
-                      ? "accent"
-                      : order.paymentStatus === "partial"
-                      ? "warn"
-                      : "bad"
-                  }
-                >
-                  {titleCase(order.paymentStatus)}
-                </Tag>
-                <div
-                  className="h-1.5 flex-1 overflow-hidden rounded-full"
-                  style={{ background: D2.line }}
-                >
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${(order.total / maxRecentTotal) * 100}%`,
-                      background: D2.accent
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          ))
+                  <th className="py-2.5 pr-4">Order</th>
+                  <th className="py-2.5 pr-4">Date</th>
+                  <th className="py-2.5 pr-4">Customer</th>
+                  <th className="py-2.5 pr-4 text-right">Total</th>
+                  <th className="py-2.5 pr-4 text-right">Gross margin</th>
+                  <th className="py-2.5">Payment</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.recentOrders.map((order) => (
+                  <tr
+                    key={order.id}
+                    className="transition-colors hover:bg-[#fafafa]"
+                    style={{ borderBottom: `1px solid ${MONO.line}` }}
+                  >
+                    <td className="py-3.5 pr-4 text-[13px] font-semibold tabular-nums">
+                      {order.orderNumber}
+                    </td>
+                    <td
+                      className="py-3.5 pr-4 text-[12px]"
+                      style={{ color: MONO.steel }}
+                    >
+                      {formatDate(order.createdAt)}
+                    </td>
+                    <td className="py-3.5 pr-4 text-[13px] font-medium tracking-[-0.01em]">
+                      {order.customerName}
+                    </td>
+                    <td className="py-3.5 pr-4 text-right text-[13px] font-semibold tabular-nums">
+                      {formatUsd(order.total)}
+                    </td>
+                    <td
+                      className="py-3.5 pr-4 text-right text-[13px] tabular-nums"
+                      style={{ color: MONO.steel }}
+                    >
+                      {order.margin === null
+                        ? "—"
+                        : formatUsd(order.margin)}
+                    </td>
+                    <td className="py-3.5">
+                      <Pill filled={order.paymentStatus === "paid"}>
+                        {titleCase(order.paymentStatus)}
+                      </Pill>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
-          <div className="grid place-items-center py-12">
-            <span className={`${mono} text-[12px]`} style={{ color: D2.muted }}>
-              {data.configured
-                ? "Orders will appear here once they are placed."
-                : "Connect Supabase to load recent orders."}
-            </span>
+          <div
+            className="mt-5 grid place-items-center py-16 text-center"
+            style={{ border: `1px solid ${MONO.line}` }}
+          >
+            <div>
+              <p className="text-[15px] font-semibold tracking-[-0.01em]">
+                No orders yet
+              </p>
+              <p
+                className="mt-1 text-[12px]"
+                style={{ color: MONO.steel }}
+              >
+                {data.configured
+                  ? "Orders will appear here once they are placed."
+                  : "Connect Supabase to load recent orders."}
+              </p>
+            </div>
           </div>
         )}
-      </Panel>
-    </D2Shell>
+      </Section>
+    </MonoPage>
   );
 }

@@ -3,378 +3,289 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import {
-  Bookmark,
-  Building2,
-  Check,
-  FileText,
-  Minus,
-  Plus,
-  Trash2,
-  Truck,
-  Zap
-} from "lucide-react";
-import { Btn, D5, Dot, H, Kbd, Panel, Shell, Tag, mono } from "./kit";
-import { fmt } from "./data";
+import { ArrowRight, Minus, Plus, ShieldCheck, ShoppingCart, Trash2, Truck } from "lucide-react";
+import { Button, Chip, FO, Panel, Shell, Stamp, Title } from "./kit";
+import { cartItemSummary, money } from "./data";
 import { useCartStore } from "@/lib/cart-store";
+
+const TAX_RATE = 0.0725;
+const CATEGORY_HREF = "/design-lab/d5/category";
 
 export default function D5Cart() {
   const items = useCartStore((state) => state.items);
   const updateQuantity = useCartStore((state) => state.updateQuantity);
   const removeItem = useCartStore((state) => state.removeItem);
-  const clearCart = useCartStore((state) => state.clearCart);
 
-  const [fulfill, setFulfill] = useState<"willcall" | "delivery">("delivery");
-  const [po, setPo] = useState("");
-  const [placed, setPlaced] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
-  // Cart store uses skipHydration; rehydrate on mount for live persisted data.
+  // The cart store uses skipHydration; rehydrate once on the client so SSR
+  // and first client render agree (empty) before persisted data loads.
   useEffect(() => {
     void useCartStore.persist.rehydrate();
     setHydrated(true);
   }, []);
 
-  const bump = (variantId: string, current: number, d: number) =>
-    updateQuantity(variantId, Math.max(1, current + d));
-  const setQ = (variantId: string, q: number) =>
-    updateQuantity(variantId, Math.max(1, q));
-  const remove = (variantId: string) => removeItem(variantId);
+  const lines = hydrated ? items : [];
 
   const subtotal = useMemo(
-    () => items.reduce((s, l) => s + l.price * l.quantity, 0),
-    [items]
+    () => lines.reduce((sum, line) => sum + line.price * line.quantity, 0),
+    [lines]
   );
-  const proSavings = subtotal * 0.085;
-  const freight = fulfill === "delivery" ? (subtotal > 750 ? 0 : 65) : 0;
-  const tax = (subtotal - proSavings) * 0.081;
-  const total = subtotal - proSavings + freight + tax;
-  const units = items.reduce((s, l) => s + l.quantity, 0);
+  const tax = subtotal * TAX_RATE;
+  const fee = subtotal > 0 && subtotal < 750 ? 49 : 0;
+  const total = subtotal + tax + fee;
+  const unitCount = lines.reduce((sum, line) => sum + line.quantity, 0);
 
   return (
-    <Shell crumb="cart">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+    <Shell crumb="Cart / will-call">
+      <header
+        className="flex flex-wrap items-end justify-between gap-3 p-6"
+        style={{ background: FO.panel, border: `2px solid ${FO.line}` }}
+      >
         <div>
-          <H>Cart · order builder</H>
-          <p className="mt-0.5 text-[11px]" style={{ color: D5.faint }}>
-            {items.length} SKUs · {units} units · live catalog pricing
-          </p>
+          <Stamp>Will-call order</Stamp>
+          <h1
+            className="mt-3 text-3xl font-black uppercase leading-[0.95] tracking-tight sm:text-5xl"
+            style={{ color: FO.ink }}
+          >
+            Your cart
+          </h1>
         </div>
-        <div className="flex gap-1.5">
-          <Btn>
-            <Bookmark size={12} /> Save as template
-          </Btn>
-          <Btn>
-            <FileText size={12} /> Export quote
-          </Btn>
-        </div>
-      </div>
+        <Chip tone="hi">
+          <ShoppingCart size={13} strokeWidth={3} />
+          {unitCount} {unitCount === 1 ? "unit" : "units"}
+        </Chip>
+      </header>
 
-      <div className="grid gap-3 lg:grid-cols-[1fr_320px]">
-        <div className="flex flex-col gap-3">
-          {/* line items */}
-          <Panel
-            title="Line items"
-            hint={`// ${items.length} rows`}
-            right={
-              items.length ? (
+      {lines.length === 0 ? (
+        <div
+          className="mt-6 flex flex-col items-center gap-5 px-6 py-20 text-center"
+          style={{ background: FO.panel, border: `2px dashed ${FO.line}` }}
+        >
+          <span
+            className="grid h-20 w-20 place-items-center"
+            style={{ background: FO.hiSoft, color: FO.hi }}
+          >
+            <ShoppingCart size={36} strokeWidth={2.25} />
+          </span>
+          <div>
+            <p
+              className="text-2xl font-black uppercase tracking-[0.04em]"
+              style={{ color: FO.ink }}
+            >
+              Cart's empty
+            </p>
+            <p
+              className="mt-1.5 text-[12px] font-bold uppercase tracking-[0.1em]"
+              style={{ color: FO.dim }}
+            >
+              Load up on gear and we'll stage it for pickup.
+            </p>
+          </div>
+          <Button href={CATEGORY_HREF} size="lg" variant="primary">
+            Browse the catalog <ArrowRight size={17} strokeWidth={2.75} />
+          </Button>
+        </div>
+      ) : (
+        <div className="mt-6 grid gap-px lg:grid-cols-[1fr_360px]" style={{ background: FO.line }}>
+          {/* Lines */}
+          <div className="flex flex-col gap-px" style={{ background: FO.line }}>
+            {lines.map((line) => (
+              <div
+                key={line.variantId}
+                className="flex gap-3.5 p-4"
+                style={{ background: FO.panel }}
+              >
+                <div
+                  className="grid h-24 w-24 shrink-0 place-items-center"
+                  style={{ background: "#f4f1e9" }}
+                >
+                  {line.image ? (
+                    <Image
+                      alt={line.title}
+                      src={line.image}
+                      width={200}
+                      height={200}
+                      quality={75}
+                      className="h-full w-full object-contain p-2"
+                    />
+                  ) : (
+                    <span className="text-2xl font-black" style={{ color: "rgba(22,20,15,0.16)" }}>
+                      GW
+                    </span>
+                  )}
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span
+                    className="text-[10px] font-black uppercase tracking-[0.14em]"
+                    style={{ color: FO.faint }}
+                  >
+                    {line.sku}
+                  </span>
+                  <Link
+                    href="/design-lab/d5/product"
+                    className="text-[14px] font-black uppercase leading-tight"
+                    style={{ color: FO.ink }}
+                  >
+                    {line.title}
+                  </Link>
+                  <span
+                    className="mt-0.5 text-[11px] font-bold uppercase tracking-[0.08em]"
+                    style={{ color: FO.dim }}
+                  >
+                    {cartItemSummary(line)} · {money(line.price)} ea
+                  </span>
+
+                  <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-3">
+                    <div className="flex items-stretch" style={{ border: `2px solid ${FO.line}` }}>
+                      <button
+                        type="button"
+                        aria-label="Decrease quantity"
+                        onClick={() =>
+                          updateQuantity(line.variantId, Math.max(1, line.quantity - 1))
+                        }
+                        className="grid h-10 w-10 place-items-center"
+                        style={{ background: FO.panelHi, color: FO.ink }}
+                      >
+                        <Minus size={16} strokeWidth={3} />
+                      </button>
+                      <span
+                        className="grid h-10 w-12 place-items-center text-base font-black"
+                        style={{
+                          color: FO.ink,
+                          borderLeft: `2px solid ${FO.line}`,
+                          borderRight: `2px solid ${FO.line}`
+                        }}
+                      >
+                        {line.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="Increase quantity"
+                        onClick={() => updateQuantity(line.variantId, line.quantity + 1)}
+                        className="grid h-10 w-10 place-items-center"
+                        style={{ background: FO.panelHi, color: FO.ink }}
+                      >
+                        <Plus size={16} strokeWidth={3} />
+                      </button>
+                    </div>
+                    <span className="text-xl font-black" style={{ color: FO.hi }}>
+                      {money(line.price * line.quantity)}
+                    </span>
+                  </div>
+                </div>
                 <button
                   type="button"
-                  onClick={() => clearCart()}
-                  className="text-[10px] font-semibold"
-                  style={{ color: D5.faint }}
+                  aria-label={`Remove ${line.title}`}
+                  onClick={() => removeItem(line.variantId)}
+                  className="grid h-10 w-10 shrink-0 place-items-center self-start"
+                  style={{ background: FO.stopSoft, color: FO.stop }}
                 >
-                  clear
+                  <Trash2 size={16} strokeWidth={2.5} />
                 </button>
-              ) : null
-            }
-          >
-            <div
-              className="grid grid-cols-[1fr_96px_96px_30px] gap-x-2 border-b px-3 py-1.5 text-[9px] uppercase tracking-[0.14em] md:grid-cols-[1fr_84px_100px_100px_30px]"
-              style={{ borderColor: D5.line, color: D5.faint }}
-            >
-              <span>item</span>
-              <span className="hidden text-right md:block">unit</span>
-              <span className="text-center">qty</span>
-              <span className="text-right">ext</span>
-              <span />
-            </div>
-            {hydrated && items.length === 0 ? (
-              <div className="px-3 py-8 text-center">
-                <p className="text-[12px]" style={{ color: D5.dim }}>
-                  Cart empty.
-                </p>
-                <div className="mt-2 flex justify-center">
-                  <Btn href="/design-lab/d5/category" variant="primary">
-                    Browse catalog
-                  </Btn>
-                </div>
               </div>
-            ) : (
-              items.map((l) => (
-                <div
-                  key={l.variantId}
-                  className="grid grid-cols-[1fr_96px_96px_30px] items-center gap-x-2 border-b px-3 py-2 last:border-0 md:grid-cols-[1fr_84px_100px_100px_30px]"
-                  style={{ borderColor: D5.line }}
-                >
-                  <div className="flex items-center gap-2.5 overflow-hidden">
-                    <span
-                      className="relative h-9 w-9 shrink-0 overflow-hidden rounded"
-                      style={{ background: D5.panelHi }}
-                    >
-                      <Image
-                        src={l.image || "/assets/logo.svg"}
-                        alt={l.title}
-                        fill
-                        quality={75}
-                        sizes="36px"
-                        className="object-contain p-0.5"
-                      />
-                    </span>
-                    <div className="overflow-hidden">
-                      <Link
-                        href="/design-lab/d5/product"
-                        className="block truncate text-[12px] font-semibold hover:underline"
-                        style={{ color: D5.ink }}
-                      >
-                        {l.title}
-                      </Link>
-                      <div className="truncate text-[10px]" style={{ color: D5.faint }}>
-                        <span style={{ color: D5.dim }}>{l.sku}</span> ·{" "}
-                        {[l.options.length, l.options.finish]
-                          .filter((x) => x && x !== "Standard")
-                          .join(" · ") || "Standard"}
-                      </div>
-                    </div>
-                  </div>
-                  <span
-                    className="hidden text-right text-[11px] md:block"
-                    style={{ color: D5.dim }}
-                  >
-                    {fmt(l.price)}
-                  </span>
-                  <div className="flex items-center justify-center">
-                    <div
-                      className="flex items-center rounded border"
-                      style={{ borderColor: D5.line }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => bump(l.variantId, l.quantity, -1)}
-                        className="grid h-7 w-6 place-items-center"
-                        style={{ color: D5.dim }}
-                      >
-                        <Minus size={11} />
-                      </button>
-                      <input
-                        value={l.quantity}
-                        onChange={(e) => setQ(l.variantId, Number(e.target.value) || 1)}
-                        className="w-9 bg-transparent text-center text-[12px] font-bold outline-none"
-                        style={{ color: D5.ink }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => bump(l.variantId, l.quantity, 1)}
-                        className="grid h-7 w-6 place-items-center"
-                        style={{ color: D5.dim }}
-                      >
-                        <Plus size={11} />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[12px] font-bold" style={{ color: D5.ink }}>
-                      {fmt(l.price * l.quantity)}
-                    </div>
-                    <div className="text-[9px]" style={{ color: D5.faint }}>
-                      ships today
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => remove(l.variantId)}
-                    className="grid h-7 w-7 place-items-center rounded"
-                    style={{ color: D5.faint }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              ))
-            )}
-          </Panel>
+            ))}
 
-          {/* fulfillment + PO */}
-          <div className="grid gap-3 md:grid-cols-2">
-            <Panel title="Fulfillment">
-              <div className="flex flex-col gap-1.5 p-2">
-                {(
-                  [
-                    ["willcall", "Will-call pickup", "DEN-01 · ready 30 min", "$0"],
-                    [
-                      "delivery",
-                      "Flatbed delivery",
-                      "Metro next-day · free over $750",
-                      freight === 0 ? "FREE" : fmt(freight)
-                    ]
-                  ] as [typeof fulfill, string, string, string][]
-                ).map(([k, t, d, price]) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setFulfill(k)}
-                    className="flex items-center gap-2.5 rounded px-2 py-2 text-left"
-                    style={{
-                      background: fulfill === k ? D5.panelHi : "transparent",
-                      border: `1px solid ${fulfill === k ? D5.lineHi : D5.line}`
-                    }}
+            <Link
+              href={CATEGORY_HREF}
+              className="flex items-center gap-2 p-4 text-[11px] font-black uppercase tracking-[0.12em]"
+              style={{ background: FO.panel, color: FO.hi }}
+            >
+              <ArrowRight size={14} strokeWidth={2.75} className="rotate-180" />
+              Keep shopping
+            </Link>
+          </div>
+
+          {/* Summary */}
+          <div className="flex flex-col gap-px" style={{ background: FO.line }}>
+            <div className="p-5" style={{ background: FO.panel }}>
+              <h2
+                className="text-[13px] font-black uppercase tracking-[0.16em]"
+                style={{ color: FO.ink }}
+              >
+                Order total
+              </h2>
+              <div className="mt-4 flex flex-col gap-2.5 text-[13px] font-bold">
+                <Row label="Subtotal" value={money(subtotal)} />
+                <Row label="Tax (7.25%)" value={money(tax)} />
+                <Row
+                  label="Will-call / delivery"
+                  value={fee === 0 ? "FREE" : money(fee)}
+                  accent={fee === 0}
+                />
+              </div>
+              <div
+                className="mt-4 flex items-end justify-between pt-4"
+                style={{ borderTop: `2px solid ${FO.line}` }}
+              >
+                <span
+                  className="text-[12px] font-black uppercase tracking-[0.14em]"
+                  style={{ color: FO.dim }}
+                >
+                  Total
+                </span>
+                <span className="text-3xl font-black" style={{ color: FO.hi }}>
+                  {money(total)}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-5" style={{ background: FO.panel }}>
+              <Button full href="/design-lab/d5/orders" size="lg" variant="primary">
+                Submit order <ArrowRight size={17} strokeWidth={2.75} />
+              </Button>
+              <div className="mt-3 grid gap-px" style={{ background: FO.line }}>
+                {[
+                  { icon: Truck, text: "Free will-call on orders over $750" },
+                  { icon: ShieldCheck, text: "Secure trade checkout & net terms" }
+                ].map((row) => (
+                  <p
+                    key={row.text}
+                    className="flex items-center gap-2.5 p-3 text-[11px] font-bold uppercase tracking-[0.06em]"
+                    style={{ background: FO.panelHi, color: FO.dim }}
                   >
-                    <span
-                      className="grid h-4 w-4 place-items-center rounded-full border"
-                      style={{ borderColor: fulfill === k ? D5.accent : D5.lineHi }}
-                    >
-                      {fulfill === k ? <Dot color={D5.accent} /> : null}
-                    </span>
-                    {k === "willcall" ? (
-                      <Building2 size={14} style={{ color: D5.dim }} />
-                    ) : (
-                      <Truck size={14} style={{ color: D5.dim }} />
-                    )}
-                    <div className="flex-1">
-                      <div className="text-[11px] font-semibold" style={{ color: D5.ink }}>
-                        {t}
-                      </div>
-                      <div className="text-[9px]" style={{ color: D5.faint }}>
-                        {d}
-                      </div>
-                    </div>
-                    <span
-                      className="text-[10px] font-bold"
-                      style={{ color: price === "FREE" || price === "$0" ? D5.accent : D5.ink }}
-                    >
-                      {price}
-                    </span>
-                  </button>
+                    <row.icon size={15} strokeWidth={2.5} style={{ color: FO.hi }} />
+                    {row.text}
+                  </p>
                 ))}
               </div>
-            </Panel>
-
-            <Panel title="Reference">
-              <div className="p-2">
-                <label
-                  className="text-[9px] uppercase tracking-[0.14em]"
-                  style={{ color: D5.faint }}
-                >
-                  PO number / job tag
-                </label>
-                <input
-                  value={po}
-                  onChange={(e) => setPo(e.target.value)}
-                  placeholder="e.g. JOB-2210 / Mesa gate"
-                  className="mt-1 h-8 w-full rounded border bg-transparent px-2 text-[12px] outline-none"
-                  style={{ borderColor: D5.line, color: D5.ink }}
-                />
-                <label
-                  className="mt-2 block text-[9px] uppercase tracking-[0.14em]"
-                  style={{ color: D5.faint }}
-                >
-                  Account
-                </label>
-                <div
-                  className="mt-1 flex items-center justify-between rounded border px-2 py-1.5"
-                  style={{ borderColor: D5.line }}
-                >
-                  <span className="text-[11px] font-semibold" style={{ color: D5.ink }}>
-                    Hoover Hardware
-                  </span>
-                  <Tag tone="accent">NET-30</Tag>
-                </div>
-                <p className="mt-2 text-[10px]" style={{ color: D5.faint }}>
-                  Terms approved · credit available $24,800
-                </p>
-              </div>
-            </Panel>
-          </div>
-        </div>
-
-        {/* sticky summary */}
-        <div className="lg:sticky lg:top-[88px] lg:self-start">
-          <Panel title="Order summary" hint="// review">
-            <div className="p-3">
-              {[
-                ["Subtotal", fmt(subtotal), D5.dim],
-                ["PRO tier savings", `−${fmt(proSavings)}`, D5.accent],
-                ["Freight", freight === 0 ? "FREE" : fmt(freight), D5.dim],
-                ["Est. tax (8.1%)", fmt(tax), D5.dim]
-              ].map(([k, v, c]) => (
-                <div
-                  key={k}
-                  className="flex items-baseline justify-between py-1 text-[11px]"
-                >
-                  <span style={{ color: D5.faint }}>{k}</span>
-                  <span style={{ color: c, fontFamily: mono }}>{v}</span>
-                </div>
-              ))}
-              <div
-                className="mt-1 flex items-baseline justify-between border-t pt-2"
-                style={{ borderColor: D5.line }}
-              >
-                <span className="text-[11px] font-semibold" style={{ color: D5.ink }}>
-                  Total due
-                </span>
-                <span className="text-[22px] font-bold" style={{ color: D5.accent }}>
-                  {fmt(total)}
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setPlaced(true);
-                  window.setTimeout(() => setPlaced(false), 2200);
-                }}
-                disabled={items.length === 0}
-                className="mt-3 flex h-10 w-full items-center justify-center gap-1.5 rounded text-[12px] font-bold disabled:opacity-30"
-                style={{
-                  background: placed ? D5.accentDim : D5.accent,
-                  color: placed ? D5.accent : D5.bg
-                }}
-              >
-                {placed ? (
-                  <>
-                    <Check size={15} /> ORDER PLACED — GW-48202
-                  </>
-                ) : (
-                  <>
-                    <Zap size={14} /> PLACE ORDER · {fmt(total)}
-                  </>
-                )}
-              </button>
-              <p
-                className="mt-2 flex items-center justify-center gap-1 text-[9px]"
-                style={{ color: D5.faint }}
-              >
-                <Kbd>⌘</Kbd>
-                <Kbd>↵</Kbd> to place · <Kbd>S</Kbd> save draft
-              </p>
-              <Link
-                href="/design-lab/d5/orders"
-                className="mt-2 block text-center text-[10px] font-semibold"
-                style={{ color: D5.accent }}
-              >
-                track on order desk →
-              </Link>
             </div>
-          </Panel>
-
-          <div
-            className="mt-2 flex items-start gap-2 rounded-md border px-2.5 py-2 text-[10px]"
-            style={{ borderColor: D5.line, background: D5.panel, color: D5.dim }}
-          >
-            <Truck size={13} style={{ color: D5.accent }} className="mt-0.5 shrink-0" />
-            Lock pricing for 14 days by exporting this cart as a quote — no commitment.
           </div>
         </div>
-      </div>
+      )}
+
+      {lines.length > 0 ? (
+        <Panel className="mt-6" title="On the jobsite" kicker="// pickup ready">
+          <div className="flex items-center gap-3 p-5">
+            <Title>
+              <span style={{ color: FO.hi }}>{unitCount}</span>
+            </Title>
+            <p className="text-[13px] font-bold" style={{ color: FO.dim }}>
+              units staged across {lines.length}{" "}
+              {lines.length === 1 ? "line" : "lines"} — ready for same-day will-call.
+            </p>
+          </div>
+        </Panel>
+      ) : null}
     </Shell>
+  );
+}
+
+function Row({
+  label,
+  value,
+  accent
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <span style={{ color: FO.dim }}>{label}</span>
+      <span className="font-black" style={{ color: accent ? FO.go : FO.ink }}>
+        {value}
+      </span>
+    </div>
   );
 }

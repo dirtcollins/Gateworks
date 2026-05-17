@@ -2,429 +2,325 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowRight, Globe, Search } from "lucide-react";
-import { Btn, D5, Dot, H, Kbd, Panel, Shell, Tag } from "./kit";
-import { fmt } from "./data";
+import { ArrowRight, ClipboardList, Search } from "lucide-react";
+import { Beacon, Chip, FO, Panel, Shell, Stamp } from "./kit";
+import { money } from "./data";
 import { useLiveOrders } from "@/features/design-lab/use-live-orders";
 import type { OrderRecord } from "@/lib/order-store";
-import type { OrderStatus } from "@/lib/platform-backend";
 
-/* d5 keeps a lean 5-state pipeline; map the real OrderStatus onto it. */
-type D5Status = "new" | "picking" | "ready" | "shipped" | "hold";
+/* Display buckets mapped from the real OrderStatus enum. */
+type Bucket = "Queued" | "Picking" | "Ready" | "Closed";
 
-const STATUS: Record<
-  D5Status,
-  { label: string; tone: "dim" | "accent" | "amber" | "red" | "blue"; color: string }
-> = {
-  new: { label: "New", tone: "blue", color: D5.blue },
-  picking: { label: "Picking", tone: "amber", color: D5.amber },
-  ready: { label: "Ready", tone: "accent", color: D5.accent },
-  shipped: { label: "Shipped", tone: "dim", color: D5.faint },
-  hold: { label: "Hold", tone: "red", color: D5.red }
+const STATUS_BUCKET: Record<OrderRecord["status"], Bucket> = {
+  draft: "Queued",
+  submitted: "Queued",
+  confirmed: "Picking",
+  picking: "Picking",
+  ready_for_pickup: "Ready",
+  out_for_delivery: "Ready",
+  completed: "Closed",
+  cancelled: "Closed"
 };
 
-const PIPE: { key: D5Status; label: string }[] = [
-  { key: "new", label: "New" },
-  { key: "picking", label: "Picking" },
-  { key: "ready", label: "Ready" },
-  { key: "shipped", label: "Shipped" }
-];
-
-function mapStatus(status: OrderStatus): D5Status {
-  switch (status) {
-    case "draft":
-    case "submitted":
-      return "new";
-    case "confirmed":
-    case "picking":
-      return "picking";
-    case "ready_for_pickup":
-      return "ready";
-    case "out_for_delivery":
-    case "completed":
-      return "shipped";
-    case "cancelled":
-      return "hold";
-    default:
-      return "new";
-  }
-}
-
-function relativeAge(iso: string) {
-  if (!iso) return "—";
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
-
-type Row = {
-  order: OrderRecord;
-  id: string;
-  customer: string;
-  items: number;
-  total: number;
-  status: D5Status;
-  age: string;
+const BUCKET_TONE: Record<Bucket, "hi" | "warn" | "go" | "steel"> = {
+  Queued: "warn",
+  Picking: "hi",
+  Ready: "go",
+  Closed: "steel"
 };
+
+const TABS: ("All" | Bucket)[] = ["All", "Queued", "Picking", "Ready", "Closed"];
+
+function timeAgo(iso: string): string {
+  const created = new Date(iso).getTime();
+  if (!Number.isFinite(created)) return "—";
+  const minutes = Math.round((Date.now() - created) / 60000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? "Yesterday" : `${days}d ago`;
+}
+
+function unitCount(order: OrderRecord): number {
+  return order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+}
 
 export default function D5Orders() {
   const { orders, isLoading } = useLiveOrders();
-  const [filter, setFilter] = useState<D5Status | "all">("all");
-  const [q, setQ] = useState("");
-  const [sel, setSel] = useState<string | null>(null);
-
-  const allRows = useMemo<Row[]>(
-    () =>
-      orders
-        .filter((o) => !o.isQuoteRequest)
-        .map((o) => ({
-          order: o,
-          id: o.orderNumber,
-          customer: o.companyName || o.customerName || "Unknown customer",
-          items: o.items.reduce((s, i) => s + i.quantity, 0),
-          total: o.total,
-          status: mapStatus(o.status),
-          age: relativeAge(o.createdAt)
-        })),
-    [orders]
-  );
+  const [tab, setTab] = useState<(typeof TABS)[number]>("All");
+  const [query, setQuery] = useState("");
 
   const rows = useMemo(
     () =>
-      allRows.filter((o) => {
-        if (filter !== "all" && o.status !== filter) return false;
-        if (q && !`${o.id} ${o.customer}`.toLowerCase().includes(q.toLowerCase()))
-          return false;
-        return true;
-      }),
-    [allRows, filter, q]
+      orders.map((order) => ({
+        order,
+        ref: order.orderNumber,
+        customer: order.companyName || order.customerName || "Walk-in customer",
+        account: order.companyName ? "Trade" : "Retail",
+        units: unitCount(order),
+        total: order.total,
+        channel: order.fulfillmentMethod === "delivery" ? "Delivery" : "Will-call",
+        placed: timeAgo(order.createdAt),
+        bucket: STATUS_BUCKET[order.status] ?? "Queued"
+      })),
+    [orders]
   );
 
-  const selected =
-    allRows.find((o) => o.id === sel) ?? rows[0] ?? allRows[0] ?? null;
+  const visible = useMemo(
+    () =>
+      rows.filter((row) => {
+        const matchesTab = tab === "All" || row.bucket === tab;
+        const q = query.trim().toLowerCase();
+        const matchesQuery =
+          !q ||
+          row.customer.toLowerCase().includes(q) ||
+          row.ref.toLowerCase().includes(q);
+        return matchesTab && matchesQuery;
+      }),
+    [rows, tab, query]
+  );
 
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { all: allRows.length };
-    for (const o of allRows) c[o.status] = (c[o.status] ?? 0) + 1;
-    return c;
-  }, [allRows]);
-
-  const revenue = allRows.reduce((s, o) => s + o.total, 0);
+  const stats = useMemo(() => {
+    const open = rows.filter((row) => row.bucket !== "Closed").length;
+    const ready = rows.filter((row) => row.bucket === "Ready").length;
+    const picking = rows.filter((row) => row.bucket === "Picking").length;
+    return [
+      { label: "Open orders", value: open },
+      { label: "On the bench", value: picking },
+      { label: "Ready for pickup", value: ready },
+      { label: "Total tracked", value: rows.length }
+    ];
+  }, [rows]);
 
   return (
-    <Shell crumb="ops / orders">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+    <Shell crumb="Ops / order desk" wide>
+      <header
+        className="flex flex-wrap items-end justify-between gap-4 p-6"
+        style={{ background: FO.panel, border: `2px solid ${FO.line}` }}
+      >
         <div>
-          <H>Order desk</H>
-          <p className="mt-0.5 text-[11px]" style={{ color: D5.faint }}>
-            {isLoading
-              ? "loading live orders…"
-              : `${allRows.length} active · ${fmt(revenue)} in flight · live`}
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div
-            className="flex h-7 items-center gap-1.5 rounded border px-2"
-            style={{ borderColor: D5.line, background: D5.panel }}
+          <Stamp>Operations</Stamp>
+          <h1
+            className="mt-3 text-3xl font-black uppercase leading-[0.95] tracking-tight sm:text-5xl"
+            style={{ color: FO.ink }}
           >
-            <Search size={12} style={{ color: D5.faint }} />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="filter id / customer"
-              className="w-44 bg-transparent text-[11px] outline-none"
-              style={{ color: D5.ink }}
-            />
-          </div>
-          <Btn variant="primary">New order</Btn>
+            Order desk
+          </h1>
         </div>
-      </div>
-
-      {/* pipeline strip */}
-      <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-        {PIPE.map((s) => {
-          const st = STATUS[s.key];
-          return (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => setFilter(filter === s.key ? "all" : s.key)}
-              className="rounded-md border px-3 py-2 text-left"
-              style={{
-                borderColor: filter === s.key ? D5.lineHi : D5.line,
-                background: filter === s.key ? D5.panelHi : D5.panel
-              }}
-            >
-              <div className="flex items-center gap-1.5">
-                <Dot color={st.color} />
-                <span
-                  className="text-[10px] uppercase tracking-[0.14em]"
-                  style={{ color: D5.faint }}
-                >
-                  {s.label}
-                </span>
-              </div>
-              <div className="mt-1 text-[22px] font-bold" style={{ color: D5.ink }}>
-                {counts[s.key] ?? 0}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="grid gap-3 lg:grid-cols-[1fr_320px]">
-        {/* order table */}
-        <Panel
-          title="Queue"
-          hint={`// ${rows.length} shown`}
-          right={
-            <div className="flex gap-0.5">
-              {(["all", "hold"] as const).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setFilter(f)}
-                  className="rounded px-2 py-0.5 text-[10px] font-bold uppercase"
-                  style={{
-                    background: filter === f ? D5.panelHi : "transparent",
-                    color: filter === f ? D5.accent : D5.faint
-                  }}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-          }
+        <Link
+          href="/design-lab/d5/reports"
+          className="flex items-center gap-2 px-5 py-3 text-[11px] font-black uppercase tracking-[0.12em]"
+          style={{ background: FO.panelHi, color: FO.ink, border: `2px solid ${FO.line}` }}
         >
-          <div
-            className="grid grid-cols-[88px_1fr_64px_72px_84px] gap-x-2 border-b px-3 py-1.5 text-[9px] uppercase tracking-[0.14em] md:grid-cols-[92px_1fr_56px_64px_72px_88px]"
-            style={{ borderColor: D5.line, color: D5.faint }}
-          >
-            <span>order</span>
-            <span>customer</span>
-            <span className="hidden text-center md:block">ch</span>
-            <span className="text-center">items</span>
-            <span className="text-right">total</span>
-            <span className="text-right">status</span>
+          Reports <ArrowRight size={14} strokeWidth={2.75} />
+        </Link>
+      </header>
+
+      {/* Stats */}
+      <section
+        className="mt-6 grid gap-px sm:grid-cols-2 lg:grid-cols-4"
+        style={{ background: FO.line, border: `2px solid ${FO.line}` }}
+      >
+        {stats.map((stat) => (
+          <div key={stat.label} className="p-5" style={{ background: FO.panel }}>
+            <p
+              className="text-[10px] font-black uppercase tracking-[0.16em]"
+              style={{ color: FO.faint }}
+            >
+              {stat.label}
+            </p>
+            <p className="mt-1.5 text-4xl font-black" style={{ color: FO.hi }}>
+              {isLoading ? "—" : stat.value}
+            </p>
           </div>
-          {isLoading ? (
-            <div className="px-3 py-8 text-center text-[12px]" style={{ color: D5.dim }}>
-              Loading order desk…
-            </div>
-          ) : rows.length === 0 ? (
-            <div className="px-3 py-8 text-center text-[12px]" style={{ color: D5.dim }}>
-              No orders match.
-            </div>
-          ) : (
-            rows.map((o) => {
-              const st = STATUS[o.status];
-              const on = selected?.id === o.id;
-              return (
-                <button
-                  key={o.order.id}
-                  type="button"
-                  onClick={() => setSel(o.id)}
-                  className="grid w-full grid-cols-[88px_1fr_64px_72px_84px] items-center gap-x-2 border-b px-3 py-2 text-left transition-colors last:border-0 hover:brightness-110 md:grid-cols-[92px_1fr_56px_64px_72px_88px]"
-                  style={{
-                    borderColor: D5.line,
-                    background: on ? D5.panelHi : "transparent",
-                    borderLeft: `2px solid ${on ? D5.accent : "transparent"}`
-                  }}
-                >
-                  <span
-                    className="truncate text-[11px] font-bold"
-                    style={{ color: on ? D5.accent : D5.ink }}
-                  >
-                    {o.id}
-                  </span>
-                  <div className="overflow-hidden">
-                    <div
-                      className="truncate text-[12px] font-semibold"
-                      style={{ color: D5.ink }}
-                    >
-                      {o.customer}
-                    </div>
-                    <div className="text-[9px]" style={{ color: D5.faint }}>
-                      {o.order.fulfillmentMethod === "pickup" ? "Pickup" : "Delivery"} ·{" "}
-                      {o.age} ago
-                    </div>
-                  </div>
-                  <span className="hidden justify-center md:flex">
-                    <Globe size={13} style={{ color: D5.dim }} />
-                  </span>
-                  <span
-                    className="text-center text-[11px]"
-                    style={{ color: D5.dim }}
-                  >
-                    {o.items}
-                  </span>
-                  <span
-                    className="text-right text-[11px] font-bold"
-                    style={{ color: D5.ink }}
-                  >
-                    {fmt(o.total)}
-                  </span>
-                  <span className="flex justify-end">
-                    <Tag tone={st.tone}>{st.label}</Tag>
-                  </span>
-                </button>
-              );
-            })
-          )}
-        </Panel>
+        ))}
+      </section>
 
-        {/* detail panel */}
-        <div className="flex flex-col gap-3">
-          <Panel title="Order detail" hint={`// ${selected?.id ?? "—"}`}>
-            {selected ? (
-              <div className="p-3">
-                <div className="flex items-center justify-between">
-                  <span
-                    className="text-[15px] font-bold"
-                    style={{ color: D5.ink }}
-                  >
-                    {selected.id}
-                  </span>
-                  <Tag tone={STATUS[selected.status].tone}>
-                    {STATUS[selected.status].label}
-                  </Tag>
-                </div>
-                <div className="mt-1 text-[12px] font-semibold" style={{ color: D5.ink }}>
-                  {selected.customer}
-                </div>
-                <div className="text-[10px]" style={{ color: D5.faint }}>
-                  {selected.order.fulfillmentMethod === "pickup" ? "Pickup" : "Delivery"} ·
-                  placed {selected.age} ago
-                </div>
-
-                <div
-                  className="mt-3 grid grid-cols-3 gap-px overflow-hidden rounded border"
-                  style={{ borderColor: D5.line, background: D5.line }}
-                >
-                  {[
-                    ["Items", String(selected.items)],
-                    ["Payment", selected.order.paymentStatus],
-                    ["Total", fmt(selected.total)]
-                  ].map(([k, v]) => (
-                    <div key={k} className="px-2 py-1.5" style={{ background: D5.panel }}>
-                      <div className="text-[9px] uppercase" style={{ color: D5.faint }}>
-                        {k}
-                      </div>
-                      <div
-                        className="truncate text-[11px] font-bold capitalize"
-                        style={{ color: D5.ink }}
-                      >
-                        {v}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* progress track */}
-                <div className="mt-3">
-                  <div
-                    className="mb-1.5 text-[9px] uppercase tracking-[0.14em]"
-                    style={{ color: D5.faint }}
-                  >
-                    Fulfillment track
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {PIPE.map((s, i) => {
-                      const order = ["new", "picking", "ready", "shipped"];
-                      const cur = order.indexOf(selected.status);
-                      const done = i <= cur && selected.status !== "hold";
-                      return (
-                        <div key={s.key} className="flex flex-1 items-center gap-1">
-                          <div
-                            className="h-1.5 flex-1 rounded-full"
-                            style={{ background: done ? D5.accent : D5.line }}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div
-                    className="mt-1 flex justify-between text-[9px]"
-                    style={{ color: D5.faint }}
-                  >
-                    {PIPE.map((s) => (
-                      <span key={s.key}>{s.label}</span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-3 flex flex-col gap-1.5">
-                  <button
-                    type="button"
-                    className="flex h-8 items-center justify-center gap-1.5 rounded text-[11px] font-bold"
-                    style={{ background: D5.accent, color: D5.bg }}
-                  >
-                    Advance status <ArrowRight size={12} />
-                  </button>
-                  <div className="flex gap-1.5">
-                    <Btn>Print pick</Btn>
-                    <Btn>Message rep</Btn>
-                    <Btn variant="danger">Hold</Btn>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div
-                className="px-3 py-8 text-center text-[12px]"
-                style={{ color: D5.dim }}
+      {/* Toolbar */}
+      <section className="mt-6 flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-px" style={{ background: FO.line }}>
+          {TABS.map((option) => {
+            const active = tab === option;
+            return (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setTab(option)}
+                className="px-4 py-2.5 text-[11px] font-black uppercase tracking-[0.12em]"
+                style={{
+                  background: active ? FO.hi : FO.panel,
+                  color: active ? FO.black : FO.dim
+                }}
               >
-                {isLoading ? "Loading…" : "No order selected."}
-              </div>
-            )}
-          </Panel>
-
-          <Panel title="Activity" hint="// audit log">
-            <div className="p-2">
-              {selected && selected.order.activity.length ? (
-                selected.order.activity.slice(0, 5).map((a) => (
-                  <div key={a.id} className="flex gap-2 px-1 py-1.5">
-                    <span
-                      className="w-9 shrink-0 text-right text-[9px]"
-                      style={{ color: D5.faint }}
-                    >
-                      {relativeAge(a.createdAt)}
-                    </span>
-                    <Dot color={D5.accent} />
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-semibold" style={{ color: D5.ink }}>
-                        {a.label}
-                      </div>
-                      <div className="text-[10px]" style={{ color: D5.dim }}>
-                        {a.detail}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="px-1 py-2 text-[10px]" style={{ color: D5.faint }}>
-                  No activity logged.
-                </p>
-              )}
-            </div>
-          </Panel>
-
-          <div
-            className="flex items-center justify-between rounded-md border px-2.5 py-2 text-[10px]"
-            style={{ borderColor: D5.line, background: D5.panel, color: D5.faint }}
-          >
-            <span>
-              <Kbd>J</Kbd> / <Kbd>K</Kbd> move · <Kbd>↵</Kbd> open
-            </span>
-            <Link href="/design-lab/d5/reports" style={{ color: D5.accent }}>
-              reports →
-            </Link>
-          </div>
+                {option}
+              </button>
+            );
+          })}
         </div>
-      </div>
+        <div
+          className="ml-auto flex items-center gap-2.5 px-3.5"
+          style={{ background: FO.panel, border: `2px solid ${FO.line}` }}
+        >
+          <Search size={15} strokeWidth={2.75} style={{ color: FO.faint }} />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search order or customer"
+            className="h-11 w-52 bg-transparent text-[12px] font-bold outline-none placeholder:font-bold"
+            style={{ color: FO.ink }}
+          />
+        </div>
+      </section>
+
+      {/* Order list */}
+      <Panel
+        className="mt-6"
+        title="Live queue"
+        kicker={`// ${visible.length} shown`}
+        right={
+          <span
+            className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.14em]"
+            style={{ color: FO.go }}
+          >
+            <Beacon tone="go" /> Live
+          </span>
+        }
+      >
+        {/* desktop header */}
+        <div
+          className="hidden grid-cols-[1.4fr_1fr_0.7fr_0.7fr_0.8fr_0.9fr] gap-3 px-4 py-2.5 text-[9px] font-black uppercase tracking-[0.16em] lg:grid"
+          style={{ color: FO.faint, borderBottom: `2px solid ${FO.line}` }}
+        >
+          <span>Order</span>
+          <span>Customer</span>
+          <span>Channel</span>
+          <span className="text-center">Units</span>
+          <span className="text-right">Total</span>
+          <span className="text-right">Status</span>
+        </div>
+
+        {isLoading ? (
+          <p
+            className="px-4 py-16 text-center text-[12px] font-black uppercase tracking-[0.14em]"
+            style={{ color: FO.dim }}
+          >
+            Loading live orders…
+          </p>
+        ) : visible.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 px-4 py-16 text-center">
+            <span
+              className="grid h-14 w-14 place-items-center"
+              style={{ background: FO.hiSoft, color: FO.hi }}
+            >
+              <ClipboardList size={26} strokeWidth={2.25} />
+            </span>
+            <p
+              className="text-[13px] font-black uppercase tracking-[0.1em]"
+              style={{ color: FO.ink }}
+            >
+              No orders match this view
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-px" style={{ background: FO.line }}>
+            {visible.map((row) => (
+              <div
+                key={row.order.id}
+                className="grid grid-cols-2 gap-3 p-4 lg:grid-cols-[1.4fr_1fr_0.7fr_0.7fr_0.8fr_0.9fr] lg:items-center lg:py-3"
+                style={{ background: FO.panel }}
+              >
+                <div>
+                  <span
+                    className="text-[9px] font-black uppercase tracking-[0.16em] lg:hidden"
+                    style={{ color: FO.faint }}
+                  >
+                    Order
+                  </span>
+                  <p className="text-[14px] font-black" style={{ color: FO.ink }}>
+                    {row.ref}
+                  </p>
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-[0.1em]"
+                    style={{ color: FO.faint }}
+                  >
+                    {row.placed}
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  <span
+                    className="text-[9px] font-black uppercase tracking-[0.16em] lg:hidden"
+                    style={{ color: FO.faint }}
+                  >
+                    Customer
+                  </span>
+                  <p
+                    className="truncate text-[13px] font-black uppercase"
+                    style={{ color: FO.ink }}
+                  >
+                    {row.customer}
+                  </p>
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-[0.1em]"
+                    style={{ color: FO.faint }}
+                  >
+                    {row.account}
+                  </p>
+                </div>
+                <div>
+                  <span
+                    className="text-[9px] font-black uppercase tracking-[0.16em] lg:hidden"
+                    style={{ color: FO.faint }}
+                  >
+                    Channel
+                  </span>
+                  <p
+                    className="text-[12px] font-black uppercase"
+                    style={{ color: FO.dim }}
+                  >
+                    {row.channel}
+                  </p>
+                </div>
+                <div className="lg:text-center">
+                  <span
+                    className="text-[9px] font-black uppercase tracking-[0.16em] lg:hidden"
+                    style={{ color: FO.faint }}
+                  >
+                    Units
+                  </span>
+                  <p className="text-[14px] font-black" style={{ color: FO.ink }}>
+                    {row.units}
+                  </p>
+                </div>
+                <div className="lg:text-right">
+                  <span
+                    className="text-[9px] font-black uppercase tracking-[0.16em] lg:hidden"
+                    style={{ color: FO.faint }}
+                  >
+                    Total
+                  </span>
+                  <p className="text-[15px] font-black" style={{ color: FO.hi }}>
+                    {money(row.total)}
+                  </p>
+                </div>
+                <div className="flex lg:justify-end">
+                  <Chip tone={BUCKET_TONE[row.bucket]}>{row.bucket}</Chip>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
+
+      {!isLoading ? (
+        <p
+          className="mt-3 text-[10px] font-black uppercase tracking-[0.14em]"
+          style={{ color: FO.faint }}
+        >
+          Showing {visible.length} of {rows.length} orders · Live will-call queue
+        </p>
+      ) : null}
     </Shell>
   );
 }
