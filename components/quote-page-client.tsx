@@ -373,138 +373,15 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
             </div>
 
             <section className="mt-5 overflow-hidden rounded-lg border border-black/10 bg-white">
-              <div className="grid grid-cols-[minmax(0,1fr)_110px_130px_130px_44px] gap-3 border-b border-black/10 bg-[#f7f7f4] px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">
-                <span>Product or service</span>
-                <span className="text-right">Qty</span>
-                <span className="text-right">Rate</span>
+              <div className="hidden grid-cols-[minmax(0,1fr)_140px_120px_120px_48px] gap-4 border-b border-black/10 bg-[#f7f7f4] px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted md:grid">
+                <span>Product / service</span>
+                <span className="text-right">Quantity</span>
+                <span className="text-right">Price</span>
                 <span className="text-right">Amount</span>
-                <span />
-              </div>
-              <div className="border-b border-black/10 px-4 py-3">
-                <button
-                  className={cn(
-                    "inline-flex h-10 items-center gap-2 rounded-lg bg-industrial-ink px-4 text-sm font-semibold text-white transition hover:bg-jobsite-pine",
-                    isQuickAddOpen ? "bg-jobsite-ink/90" : ""
-                  )}
-                  type="button"
-                  onClick={() => setIsQuickAddOpen((current) => !current)}
-                >
-                  <Plus size={16} />
-                  Add Product
-                </button>
+                <span className="sr-only">Actions</span>
               </div>
 
-              {isQuickAddOpen ? (
-                <div className="border-b border-black/10 bg-[#fafaf8] p-4">
-                  <div className="flex gap-2">
-                    <Search className="mt-2 text-jobsite-steel" size={18} />
-                    <label className="flex-1 text-xs text-industrial-muted" htmlFor="quote-product-search">
-                      Product search
-                    </label>
-                    <button
-                      aria-label="Close add product"
-                      className="grid size-7 place-items-center rounded border border-black/10 text-jobsite-ink"
-                      type="button"
-                      onClick={closeQuickAdd}
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                  <input
-                    autoFocus
-                    className="mt-2 w-full rounded border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-industrial-ink"
-                    id="quote-product-search"
-                    placeholder="Search product title, SKU, or category"
-                    value={quickAddQuery}
-                    onChange={(event) => setQuickAddQuery(event.target.value)}
-                  />
-                  <div className="mt-3 grid gap-2">
-                    <label className="flex items-center gap-2 text-xs font-semibold text-industrial-muted">
-                      Qty
-                      <input
-                        className="h-9 w-16 rounded border border-black/10 bg-white px-2 text-sm outline-none focus:border-industrial-ink"
-                        min={1}
-                        type="number"
-                        value={quickAddQuantity}
-                        onChange={(event) =>
-                          setQuickAddQuantity(String(Math.max(1, Number(event.target.value) || 1)))
-                        }
-                      />
-                    </label>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between text-xs font-semibold text-industrial-muted">
-                    <span>{quickAddResults.length} product{quickAddResults.length === 1 ? "" : "s"}</span>
-                    <span>Press any result to add</span>
-                  </div>
-                  <div className="mt-2 max-h-60 overflow-y-auto pr-1">
-                    {!quickAddResults.length ? (
-                      <p className="rounded border border-dashed border-black/10 p-3 text-xs text-industrial-muted">
-                        No products match your search.
-                      </p>
-                    ) : (
-                      <div className="grid gap-1">
-                        {quickAddResults.slice(0, 10).map((product) => {
-                          const variant = pickDefaultQuoteVariant(product);
-
-                          if (!variant) {
-                            return null;
-                          }
-
-                          const resultImage =
-                            variant.image || product.images[0]?.url || "/assets/logo.svg";
-
-                          return (
-                            <button
-                              key={product.id}
-                              className="grid grid-cols-[34px_minmax(0,1fr)_76px_52px] items-center gap-2 rounded border border-black/10 bg-white px-2 py-1.5 text-left text-sm transition hover:border-industrial-ink"
-                              type="button"
-                              onClick={() => addCatalogItem(product)}
-                            >
-                              <span className="relative size-[34px] overflow-hidden rounded border border-black/10 bg-[#fafaf8]">
-                                <Image
-                                  alt={product.title}
-                                  className="object-contain p-1"
-                                  fill
-                                  quality={45}
-                                  sizes="34px"
-                                  src={resultImage}
-                                />
-                              </span>
-                              <span className="min-w-0 text-industrial-ink">
-                                <span className="block truncate font-semibold leading-tight">
-                                  {product.title}
-                                </span>
-                                <span className="block truncate text-xs text-industrial-muted">
-                                  SKU {variant.sku}
-                                </span>
-                              </span>
-                              <span className="text-right font-semibold text-industrial-ink">
-                                {formatCurrency(variant.price)}
-                              </span>
-                              <span
-                                className={cn(
-                                  "text-right text-xs font-semibold",
-                                  variant.inventory === "in_stock"
-                                    ? "text-jobsite-pine"
-                                    : "text-red-700"
-                                )}
-                              >
-                                {variant.inventory === "in_stock" ? "Stock" : "Out"}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : null}
-
-              {!items.length ? (
-                <div className="grid place-items-center p-10 text-center">
-                  <p className="text-lg font-semibold text-industrial-ink">No line items yet</p>
-                </div>
-              ) : (
+              {items.length ? (
                 <div className="divide-y divide-black/10">
                   {items.map((item) => {
                     const itemTotal = item.price * item.quantity;
@@ -512,17 +389,37 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
                     const shouldFocusQuantity = focusTargetVariantId === item.variantId;
 
                     return (
-                      <article key={item.variantId} className="grid gap-3 px-4 py-4 md:grid-cols-[minmax(0,1fr)_110px_130px_130px_44px] md:items-center">
-                        <Link className="grid min-w-0 grid-cols-[56px_1fr] gap-3" href={`/products/${productSlug}`}>
-                          <span className="relative size-14 rounded-md border border-black/10 bg-[#fafaf8]">
-                            <Image alt={item.title} className="object-contain p-1.5" fill quality={60} sizes="56px" src={item.image} />
+                      <article
+                        className="group grid gap-3 px-4 py-4 transition hover:bg-[#fafaf8] md:grid-cols-[minmax(0,1fr)_140px_120px_120px_48px] md:items-center md:gap-4"
+                        key={item.variantId}
+                      >
+                        <Link
+                          className="grid min-w-0 grid-cols-[56px_1fr] items-center gap-3"
+                          href={`/products/${productSlug}`}
+                        >
+                          <span className="relative size-14 shrink-0 rounded-md border border-black/10 bg-[#fafaf8]">
+                            <Image
+                              alt={item.title}
+                              className="object-contain p-1.5"
+                              fill
+                              quality={60}
+                              sizes="56px"
+                              src={item.image}
+                            />
                           </span>
                           <span className="min-w-0">
-                            <span className="block truncate text-sm font-semibold text-industrial-ink">{item.title}</span>
-                            <span className="mt-1 block text-xs text-industrial-muted">SKU {item.sku}</span>
+                            <span className="block truncate text-sm font-semibold text-industrial-ink">
+                              {item.title}
+                            </span>
+                            <span className="mt-0.5 block truncate text-xs text-industrial-muted">
+                              SKU {item.sku}
+                            </span>
                           </span>
                         </Link>
-                        <div className="justify-self-start md:justify-self-end">
+                        <div className="md:justify-self-end">
+                          <span className="mb-1 block text-xs font-semibold text-industrial-muted md:hidden">
+                            Quantity
+                          </span>
                           <QuantitySelector
                             inputId={`quote-item-qty-${item.variantId}`}
                             inputRef={shouldFocusQuantity ? quoteItemQtyRef : undefined}
@@ -530,13 +427,23 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
                             onChange={(quantity) => updateQuantity(quote.id, item.variantId, quantity)}
                           />
                         </div>
-                        <p className="text-left text-sm font-medium text-industrial-ink md:text-right">{formatCurrency(item.price)}</p>
-                        <p className="text-left text-base font-semibold text-industrial-ink md:text-right">{formatCurrency(itemTotal)}</p>
+                        <p className="text-sm font-medium text-industrial-ink md:text-right">
+                          <span className="mr-1 text-xs font-semibold text-industrial-muted md:hidden">
+                            Price
+                          </span>
+                          {formatCurrency(item.price)}
+                        </p>
+                        <p className="text-base font-semibold text-industrial-ink md:text-right">
+                          <span className="mr-1 text-xs font-semibold text-industrial-muted md:hidden">
+                            Amount
+                          </span>
+                          {formatCurrency(itemTotal)}
+                        </p>
                         <button
                           aria-label={`Remove ${item.title}`}
-                          className="grid size-10 place-items-center rounded-lg border border-black/10 text-industrial-muted transition hover:border-red-700 hover:text-red-700"
-                          type="button"
+                          className="grid size-9 place-items-center justify-self-start rounded-md text-industrial-muted opacity-50 transition hover:bg-red-50 hover:text-red-700 group-hover:opacity-100 md:justify-self-center"
                           onClick={() => removeItem(quote.id, item.variantId)}
+                          type="button"
                         >
                           <Trash2 size={17} />
                         </button>
@@ -544,7 +451,143 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
                     );
                   })}
                 </div>
+              ) : (
+                <div className="grid place-items-center gap-1 px-4 py-10 text-center">
+                  <p className="text-sm font-semibold text-industrial-ink">No line items yet</p>
+                  <p className="text-xs text-industrial-muted">
+                    Add a product below to start building this quote.
+                  </p>
+                </div>
               )}
+
+              <div className="border-t border-black/10 p-3">
+                <button
+                  className={cn(
+                    "inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold transition",
+                    isQuickAddOpen
+                      ? "bg-industrial-ink text-white"
+                      : "text-industrial-steel hover:bg-[#f7f7f4] hover:text-industrial-ink"
+                  )}
+                  onClick={() => setIsQuickAddOpen((current) => !current)}
+                  type="button"
+                >
+                  <Plus size={16} />
+                  Add an item
+                </button>
+
+                {isQuickAddOpen ? (
+                  <div className="mt-3 rounded-lg border border-black/10 bg-[#fafaf8] p-3">
+                    <div className="flex items-center gap-2">
+                      <Search className="text-jobsite-steel" size={18} />
+                      <label
+                        className="flex-1 text-xs font-semibold text-industrial-muted"
+                        htmlFor="quote-product-search"
+                      >
+                        Search products to add
+                      </label>
+                      <button
+                        aria-label="Close add item"
+                        className="grid size-7 place-items-center rounded border border-black/10 text-jobsite-ink transition hover:bg-white"
+                        onClick={closeQuickAdd}
+                        type="button"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <input
+                        autoFocus
+                        className="h-9 min-w-[200px] flex-1 rounded border border-black/10 bg-white px-3 text-sm outline-none focus:border-industrial-ink"
+                        id="quote-product-search"
+                        onChange={(event) => setQuickAddQuery(event.target.value)}
+                        placeholder="Search product title, SKU, or category"
+                        value={quickAddQuery}
+                      />
+                      <label className="flex items-center gap-1.5 text-xs font-semibold text-industrial-muted">
+                        Qty
+                        <input
+                          className="h-9 w-16 rounded border border-black/10 bg-white px-2 text-sm outline-none focus:border-industrial-ink"
+                          min={1}
+                          onChange={(event) =>
+                            setQuickAddQuantity(
+                              String(Math.max(1, Number(event.target.value) || 1))
+                            )
+                          }
+                          type="number"
+                          value={quickAddQuantity}
+                        />
+                      </label>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-xs font-semibold text-industrial-muted">
+                      <span>
+                        {quickAddResults.length} product{quickAddResults.length === 1 ? "" : "s"}
+                      </span>
+                      <span>Press any result to add</span>
+                    </div>
+                    <div className="mt-2 max-h-60 overflow-y-auto pr-1">
+                      {!quickAddResults.length ? (
+                        <p className="rounded border border-dashed border-black/10 p-3 text-xs text-industrial-muted">
+                          No products match your search.
+                        </p>
+                      ) : (
+                        <div className="grid gap-1">
+                          {quickAddResults.slice(0, 10).map((product) => {
+                            const variant = pickDefaultQuoteVariant(product);
+
+                            if (!variant) {
+                              return null;
+                            }
+
+                            const resultImage =
+                              variant.image || product.images[0]?.url || "/assets/logo.svg";
+
+                            return (
+                              <button
+                                className="grid grid-cols-[34px_minmax(0,1fr)_76px_52px] items-center gap-2 rounded border border-black/10 bg-white px-2 py-1.5 text-left text-sm transition hover:border-industrial-ink"
+                                key={product.id}
+                                onClick={() => addCatalogItem(product)}
+                                type="button"
+                              >
+                                <span className="relative size-[34px] overflow-hidden rounded border border-black/10 bg-[#fafaf8]">
+                                  <Image
+                                    alt={product.title}
+                                    className="object-contain p-1"
+                                    fill
+                                    quality={45}
+                                    sizes="34px"
+                                    src={resultImage}
+                                  />
+                                </span>
+                                <span className="min-w-0 text-industrial-ink">
+                                  <span className="block truncate font-semibold leading-tight">
+                                    {product.title}
+                                  </span>
+                                  <span className="block truncate text-xs text-industrial-muted">
+                                    SKU {variant.sku}
+                                  </span>
+                                </span>
+                                <span className="text-right font-semibold text-industrial-ink">
+                                  {formatCurrency(variant.price)}
+                                </span>
+                                <span
+                                  className={cn(
+                                    "text-right text-xs font-semibold",
+                                    variant.inventory === "in_stock"
+                                      ? "text-jobsite-pine"
+                                      : "text-red-700"
+                                  )}
+                                >
+                                  {variant.inventory === "in_stock" ? "Stock" : "Out"}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </section>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_340px]">
