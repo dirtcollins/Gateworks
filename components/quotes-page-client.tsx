@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { FormEvent } from "react";
 import { useState } from "react";
 import {
   ArrowRight,
@@ -24,6 +23,8 @@ const dateFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric"
 });
 
+type QuoteTab = "open" | "draft" | "all";
+
 function formatDate(date: string) {
   return dateFormatter.format(new Date(date));
 }
@@ -42,19 +43,39 @@ function quoteTotal(items: { price: number; quantity: number }[]) {
 
 export function QuotesPageClient() {
   const router = useRouter();
-  const [quoteName, setQuoteName] = useState("");
   const [editingQuoteId, setEditingQuoteId] = useState("");
   const [editingQuoteName, setEditingQuoteName] = useState("");
   const [query, setQuery] = useState("");
+  const [tab, setTab] = useState<QuoteTab>("open");
   const { quotes, createQuote, deleteQuote, renameQuote, setActiveQuote } =
     useQuoteStore();
 
-  const filteredQuotes = quotes.filter((quote) => {
-    const search = query.trim().toLowerCase();
+  function statusOf(quote: (typeof quotes)[number]) {
+    return quote.status || "draft";
+  }
 
-    if (!search) {
-      return true;
-    }
+  function isOpenQuote(quote: (typeof quotes)[number]) {
+    return statusOf(quote) !== "invoiced";
+  }
+
+  const rows = quotes.map((quote) => ({
+    quote,
+    status: statusOf(quote),
+    total: quoteTotal(quote.items)
+  }));
+
+  const openRows = rows.filter((row) => isOpenQuote(row.quote));
+  const draftRows = rows.filter((row) => row.status === "draft");
+  const openTotal = openRows.reduce((total, row) => total + row.total, 0);
+  const draftTotal = draftRows.reduce((total, row) => total + row.total, 0);
+  const invoicedCount = rows.filter((row) => row.status === "invoiced").length;
+
+  const visibleRows = rows.filter(({ quote, status }) => {
+    if (tab === "open" && !isOpenQuote(quote)) return false;
+    if (tab === "draft" && status !== "draft") return false;
+
+    const search = query.trim().toLowerCase();
+    if (!search) return true;
 
     return [
       quote.name,
@@ -62,17 +83,15 @@ export function QuotesPageClient() {
       quote.invoiceNumber,
       quote.customerName,
       quote.customerEmail,
-      quote.status
+      status
     ]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(search));
   });
 
-  function handleCreateQuote(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const quoteId = createQuote(quoteName || "New invoice");
+  function handleNewQuote() {
+    const quoteId = createQuote("New quote");
     setActiveQuote(quoteId);
-    setQuoteName("");
     router.push(`/quotes/${quoteId}`);
   }
 
@@ -82,10 +101,7 @@ export function QuotesPageClient() {
   }
 
   function finishRenamingQuote() {
-    if (!editingQuoteId) {
-      return;
-    }
-
+    if (!editingQuoteId) return;
     renameQuote(editingQuoteId, editingQuoteName);
     setEditingQuoteId("");
     setEditingQuoteName("");
@@ -96,34 +112,94 @@ export function QuotesPageClient() {
     setEditingQuoteName("");
   }
 
-  const openBalance = quotes.reduce((total, quote) => total + quoteTotal(quote.items), 0);
-  const draftCount = quotes.filter((quote) => (quote.status || "draft") === "draft").length;
+  const tabs: Array<{ id: QuoteTab; label: string; count: number | null }> = [
+    { id: "open", label: "Open", count: openRows.length },
+    { id: "draft", label: "Draft", count: draftRows.length },
+    { id: "all", label: "All quotes", count: null }
+  ];
+
+  const summaryCards = [
+    { label: "Open quotes", value: formatCurrency(openTotal), hint: "USD" },
+    { label: "Draft quotes", value: formatCurrency(draftTotal), hint: "USD" },
+    { label: "Invoiced", value: String(invoicedCount), hint: "quotes" },
+    { label: "Documents", value: String(quotes.length), hint: "total" }
+  ];
 
   return (
     <main className="px-3 py-4 md:px-6 md:py-6">
-      <div className="mx-auto grid max-w-[1280px] gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="mx-auto grid max-w-[1280px] gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-industrial-muted">
+              Estimate center
+            </p>
+            <h1 className="mt-1 text-2xl font-black text-industrial-ink">Quotes</h1>
+          </div>
+          <button
+            className="inline-flex h-10 w-fit items-center gap-2 rounded-lg bg-industrial-ink px-4 text-sm font-semibold text-white transition hover:bg-jobsite-pine active:translate-y-px"
+            onClick={handleNewQuote}
+            type="button"
+          >
+            <Plus size={18} />
+            Create a quote
+          </button>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {summaryCards.map((card) => (
+            <div
+              className="rounded-lg border border-black/10 bg-white/86 p-4 shadow-sm"
+              key={card.label}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-industrial-muted">
+                {card.label}
+              </p>
+              <p className="mt-2 text-2xl font-black text-industrial-ink">{card.value}</p>
+              <p className="mt-1 text-xs text-industrial-muted">{card.hint}</p>
+            </div>
+          ))}
+        </div>
+
         <section className="overflow-hidden rounded-lg border border-black/10 bg-white/86 shadow-sm backdrop-blur-xl">
           <div className="flex flex-col gap-3 border-b border-black/10 bg-[#fafaf8] p-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-black/10 bg-white px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">
-                  Sales documents
-                </span>
-                <span className="text-sm font-medium text-industrial-muted">
-                  {quotes.length} document{quotes.length === 1 ? "" : "s"}
-                </span>
-              </div>
-              <h1 className="mt-3 text-2xl font-semibold text-industrial-ink">
-                Invoices and quotes
-              </h1>
+            <div className="flex flex-wrap gap-1.5">
+              {tabs.map((tabItem) => {
+                const isActive = tab === tabItem.id;
+                return (
+                  <button
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black uppercase tracking-[0.06em] transition ${
+                      isActive
+                        ? "border-industrial-ink bg-industrial-ink text-white"
+                        : "border-black/10 bg-white text-industrial-ink hover:border-industrial-ink/60"
+                    }`}
+                    key={tabItem.id}
+                    onClick={() => setTab(tabItem.id)}
+                    type="button"
+                  >
+                    {tabItem.label}
+                    {tabItem.count !== null ? (
+                      <span
+                        className={
+                          isActive ? "text-white/70" : "text-industrial-muted"
+                        }
+                      >
+                        {tabItem.count}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
-            <label className="relative block lg:w-96">
-              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-industrial-muted" size={16} />
+            <label className="relative block lg:w-80">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-industrial-muted"
+                size={16}
+              />
               <input
-                className="h-10 w-full rounded-lg border border-black/10 bg-white pl-9 pr-3 text-sm text-industrial-ink outline-none"
-                placeholder="Search customer or invoice"
-                value={query}
+                className="h-10 w-full rounded-lg border border-black/10 bg-white pl-9 pr-3 text-sm text-industrial-ink outline-none focus:border-industrial-ink"
                 onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search customer or quote number"
+                value={query}
               />
             </label>
           </div>
@@ -132,22 +208,23 @@ export function QuotesPageClient() {
             <span>Document</span>
             <span>Customer</span>
             <span>Status</span>
-            <span className="text-right">Balance</span>
+            <span className="text-right">Quote total</span>
             <span className="text-right">Actions</span>
           </div>
 
           <div className="divide-y divide-black/10">
-            {filteredQuotes.map((quote) => {
-              const total = quoteTotal(quote.items);
+            {visibleRows.map(({ quote, status, total }) => {
               const totalQuantity = quote.items.reduce(
                 (itemCount, item) => itemCount + item.quantity,
                 0
               );
               const invoiceNumber = quote.invoiceNumber || quote.quoteNumber;
-              const status = quote.status || "draft";
 
               return (
-                <article key={quote.id} className="grid gap-3 p-4 transition hover:bg-[#fafaf8] lg:grid-cols-[1.2fr_1fr_120px_130px_150px] lg:items-center">
+                <article
+                  className="grid gap-3 p-4 transition hover:bg-[#fafaf8] lg:grid-cols-[1.2fr_1fr_120px_130px_150px] lg:items-center"
+                  key={quote.id}
+                >
                   <div>
                     <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">
                       <span>{invoiceNumber}</span>
@@ -163,7 +240,6 @@ export function QuotesPageClient() {
                           aria-label={`Rename ${quote.name}`}
                           autoFocus
                           className="h-10 min-w-0 flex-1 rounded-lg border border-black/10 bg-white px-2 text-lg font-semibold text-industrial-ink outline-none"
-                          value={editingQuoteName}
                           onBlur={finishRenamingQuote}
                           onChange={(event) => setEditingQuoteName(event.target.value)}
                           onKeyDown={(event) => {
@@ -176,6 +252,7 @@ export function QuotesPageClient() {
                               cancelRenamingQuote();
                             }
                           }}
+                          value={editingQuoteName}
                         />
                       ) : (
                         <>
@@ -185,8 +262,8 @@ export function QuotesPageClient() {
                           <button
                             aria-label={`Rename ${quote.name}`}
                             className="grid size-8 shrink-0 place-items-center rounded-lg border border-black/10 bg-white text-industrial-muted transition hover:text-industrial-ink"
-                            type="button"
                             onClick={() => startRenamingQuote(quote.id, quote.name)}
+                            type="button"
                           >
                             <Pencil size={15} />
                           </button>
@@ -217,7 +294,7 @@ export function QuotesPageClient() {
 
                   <div className="flex gap-2 lg:justify-end">
                     <Link
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-industrial-ink px-3 text-sm font-semibold text-white"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-industrial-ink px-3 text-sm font-semibold text-white transition hover:bg-jobsite-pine"
                       href={`/quotes/${quote.id}`}
                       onClick={() => setActiveQuote(quote.id)}
                     >
@@ -227,8 +304,8 @@ export function QuotesPageClient() {
                     <button
                       aria-label={`Delete ${quote.name}`}
                       className="grid size-10 place-items-center rounded-lg border border-black/10 text-industrial-muted transition hover:border-red-700 hover:text-red-700"
-                      type="button"
                       onClick={() => deleteQuote(quote.id)}
+                      type="button"
                     >
                       <Trash2 size={17} />
                     </button>
@@ -238,55 +315,23 @@ export function QuotesPageClient() {
             })}
           </div>
 
-          {!filteredQuotes.length ? (
+          {!visibleRows.length ? (
             <div className="grid place-items-center p-10 text-center">
-              <FileText size={28} />
-              <p className="mt-3 text-lg font-semibold text-industrial-ink">No matching documents.</p>
+              <FileText className="text-industrial-muted" size={28} />
+              <p className="mt-3 text-lg font-semibold text-industrial-ink">
+                No quotes in this view.
+              </p>
+              <button
+                className="mt-3 inline-flex h-10 items-center gap-2 rounded-lg bg-industrial-ink px-4 text-sm font-semibold text-white transition hover:bg-jobsite-pine"
+                onClick={handleNewQuote}
+                type="button"
+              >
+                <Plus size={16} />
+                Create a quote
+              </button>
             </div>
           ) : null}
         </section>
-
-        <aside className="grid h-fit gap-4">
-          <section className="rounded-lg border border-black/10 bg-white/86 p-4 shadow-sm backdrop-blur-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-industrial-muted">
-              Create
-            </p>
-            <form className="mt-3 grid gap-2" onSubmit={handleCreateQuote}>
-              <input
-                className="h-11 min-w-0 rounded-lg border border-black/10 bg-[#f7f7f4] px-3 text-sm text-industrial-ink outline-none focus:bg-white"
-                id="quote-name"
-                placeholder="Customer, job, or invoice name"
-                value={quoteName}
-                onChange={(event) => setQuoteName(event.target.value)}
-              />
-              <button
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-industrial-ink px-4 text-sm font-semibold text-white transition hover:bg-jobsite-pine"
-                type="submit"
-              >
-                <Plus size={18} />
-                New invoice
-              </button>
-            </form>
-          </section>
-
-          <section className="rounded-lg border border-black/10 bg-white/86 p-4 shadow-sm backdrop-blur-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-industrial-muted">
-              Workflow
-            </p>
-            <div className="mt-4 grid gap-3">
-              {[
-                ["Open balance", formatCurrency(openBalance)],
-                ["Drafts", String(draftCount)],
-                ["Documents", String(quotes.length)]
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between gap-3 border-b border-black/10 pb-2 last:border-b-0 last:pb-0">
-                  <span className="text-sm font-semibold text-industrial-ink">{label}</span>
-                  <span className="text-sm font-semibold text-industrial-muted">{value}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-        </aside>
       </div>
     </main>
   );
