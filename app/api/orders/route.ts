@@ -5,6 +5,12 @@ import {
 } from "@/lib/inventory-repository";
 import { authorizeAdminRequest } from "@/lib/admin-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import {
+  applyTierDiscount,
+  resolveLineDiscountPct,
+  type PriceTierRule
+} from "@/lib/pricing-tiers";
+import { calculateTax } from "@/lib/tax";
 import type { FulfillmentMethod, OrderStatus, PaymentStatus } from "@/lib/platform-backend";
 import type { CustomerDrawing, OrderPayment } from "@/lib/order-store";
 
@@ -381,6 +387,61 @@ async function fetchVariantCosts(
   return costByVariant;
 }
 
+// Resolve the customer's B2B pricing tier and its discount rules. Fully
+// defensive: a missing company link or pricing-tier table just yields no
+// discount rather than failing order creation.
+async function resolveTierPricing(
+  admin: NonNullable<Awaited<ReturnType<typeof getSupabaseAdminClient>>>,
+  email: string | undefined
+): Promise<{ tier: string | null; rules: PriceTierRule[] }> {
+  const empty = { tier: null as string | null, rules: [] as PriceTierRule[] };
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (!normalizedEmail) return empty;
+
+  try {
+    const { data: companyUser, error: companyUserError } = await admin
+      .from("company_users")
+      .select("companies (pricing_tier)")
+      .eq("email", normalizedEmail)
+      .maybeSingle();
+
+    if (companyUserError || !companyUser) return empty;
+
+    const companyRecord = Array.isArray(companyUser.companies)
+      ? companyUser.companies[0]
+      : companyUser.companies;
+    const tier = (companyRecord as { pricing_tier?: string } | null)?.pricing_tier;
+    if (!tier) return empty;
+
+    const { data: ruleData, error: ruleError } = await admin
+      .from("price_tier_rules")
+      .select("tier, category_slug, discount_pct, min_quantity")
+      .eq("tier", tier);
+
+    if (ruleError || !ruleData) return { tier, rules: [] };
+
+    const rules: PriceTierRule[] = ruleData.map((row) => {
+      const record = row as {
+        tier: string;
+        category_slug: string | null;
+        discount_pct: number | string;
+        min_quantity: number | string;
+      };
+
+      return {
+        tier: record.tier,
+        categorySlug: record.category_slug,
+        discountPct: Number(record.discount_pct || 0),
+        minQuantity: Number(record.min_quantity || 1)
+      };
+    });
+
+    return { tier, rules };
+  } catch {
+    return empty;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const auth = await authorizeAdminRequest(request);
   if (!auth.ok) return auth.response;
@@ -540,6 +601,43 @@ export async function POST(request: NextRequest) {
       payload.isQuoteRequest
     );
 
+    // Resolve items, costs, and B2B tier pricing before creating the order so
+    // discounted line prices and the order totals stay consistent.
+    const resolvedItems = payload.items.length
+      ? await resolveOrderItemVariantIds(admin, payload.items)
+      : [];
+    const variantCosts = resolvedItems.length
+      ? await fetchVariantCosts(
+          admin,
+          resolvedItems.map((item) => item.resolvedVariantId)
+        )
+      : new Map<string, number>();
+    const { tier, rules: tierRules } = await resolveTierPricing(admin, payload.email);
+
+    const pricedItems = resolvedItems.map((item) => {
+      const discountPct = tier
+        ? resolveLineDiscountPct(tierRules, { tier, quantity: item.quantity })
+        : 0;
+      const unitPrice = applyTierDiscount(item.price, discountPct);
+      return {
+        item,
+        unitPrice,
+        lineTotal: Number((unitPrice * item.quantity).toFixed(2)),
+        discountPct
+      };
+    });
+
+    const hasDiscount = pricedItems.some((priced) => priced.discountPct > 0);
+    const discountedSubtotal = Number(
+      pricedItems.reduce((sum, priced) => sum + priced.lineTotal, 0).toFixed(2)
+    );
+    const orderSubtotal = hasDiscount ? discountedSubtotal : payload.subtotal;
+    const orderTax =
+      hasDiscount && !payload.isQuoteRequest ? calculateTax(discountedSubtotal) : payload.tax;
+    const orderTotal = hasDiscount
+      ? Number((orderSubtotal + orderTax + (payload.deliveryFee || 0)).toFixed(2))
+      : payload.total;
+
     const { data: order, error: orderError } = await admin
       .from("orders")
       .insert({
@@ -555,10 +653,10 @@ export async function POST(request: NextRequest) {
         requested_window: payload.requestedWindow,
         job_name: payload.jobName,
         jobsite_address: payload.jobsiteAddress,
-        subtotal: payload.subtotal,
-        tax_total: payload.tax,
+        subtotal: orderSubtotal,
+        tax_total: orderTax,
         delivery_fee: payload.deliveryFee,
-        total: payload.total,
+        total: orderTotal,
         status: payload.status,
         payment_status: payload.paymentStatus,
         is_quote_request: payload.isQuoteRequest,
@@ -569,15 +667,9 @@ export async function POST(request: NextRequest) {
 
     if (orderError) throw orderError;
 
-    if (payload.items.length && order?.id) {
-      const resolvedItems = await resolveOrderItemVariantIds(admin, payload.items);
-      const variantCosts = await fetchVariantCosts(
-        admin,
-        resolvedItems.map((item) => item.resolvedVariantId)
-      );
-
+    if (pricedItems.length && order?.id) {
       const { error: itemsError } = await admin.from("order_items").insert(
-        resolvedItems.map((item) => ({
+        pricedItems.map(({ item, unitPrice, lineTotal }) => ({
           order_id: order.id,
           product_id: asUuid(item.productId),
           variant_id: item.resolvedVariantId,
@@ -587,9 +679,9 @@ export async function POST(request: NextRequest) {
           quantity_needed: item.quantity,
           quantity_pulled: 0,
           pulled: false,
-          unit_price: item.price,
+          unit_price: unitPrice,
           unit_cost: variantCosts.get(item.resolvedVariantId) ?? 0,
-          line_total: item.price * item.quantity,
+          line_total: lineTotal,
           item_payload: {
             ...item,
             variantId: item.resolvedVariantId
@@ -597,7 +689,7 @@ export async function POST(request: NextRequest) {
         }))
       );
 
-    if (itemsError) throw itemsError;
+      if (itemsError) throw itemsError;
     }
 
     return NextResponse.json({
