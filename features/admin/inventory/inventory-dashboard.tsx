@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { PageShell } from "@/components/ui/page-shell";
 import { StatGrid } from "@/components/ui/stat-grid";
@@ -274,7 +275,6 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
   const [lowOnly, setLowOnly] = useState(false);
   const [outOnly, setOutOnly] = useState(false);
   const [damagedOnly, setDamagedOnly] = useState(false);
-  const [visibleLimit, setVisibleLimit] = useState(220);
   const [operation, setOperation] = useState<OperationState | null>(null);
   const [form, setForm] = useState(createForm());
   const [formError, setFormError] = useState("");
@@ -343,17 +343,6 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
       );
     });
   }, [category, damagedOnly, items, location, lowOnly, outOnly, query, status, supplier]);
-
-  useEffect(() => {
-    setVisibleLimit(220);
-  }, [category, damagedOnly, location, lowOnly, outOnly, query, status, supplier]);
-
-  const visibleRows = useMemo(
-    () => filteredRows.slice(0, visibleLimit),
-    [filteredRows, visibleLimit]
-  );
-
-  const hasMoreRows = visibleRows.length < filteredRows.length;
 
   const lowStockRows = useMemo(
     () =>
@@ -758,6 +747,251 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
       : "border-industrial-rail bg-white text-industrial-ink hover:border-industrial-ink";
   }
 
+  const inventoryColumns: DataTableColumn<InventoryRow>[] = [
+    {
+      key: "product",
+      header: "Product / SKU",
+      sortable: true,
+      sortValue: (row) => row.productTitle.toLowerCase(),
+      render: (row) => (
+        <Link
+          className="flex items-start gap-3 font-black text-industrial-ink hover:underline"
+          href={`/products/${row.productSlug}`}
+        >
+          <span className="relative size-11 shrink-0 rounded-md border border-industrial-rail bg-white p-1">
+            <Image
+              alt={row.productImage?.alt || row.productTitle}
+              className="object-contain"
+              width={44}
+              height={44}
+              decoding="async"
+              quality={45}
+              sizes="44px"
+              src={getRowThumbnail(row)}
+            />
+          </span>
+          <span>
+            <span>{row.productTitle}</span>
+            <span className="mt-1 block text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">
+              {row.sku}
+            </span>
+          </span>
+        </Link>
+      )
+    },
+    {
+      key: "category",
+      header: "Category / Size",
+      render: (row) => (
+        <>
+          <p className="font-semibold text-industrial-ink">{row.category}</p>
+          <p className="mt-1 text-xs text-industrial-steel">
+            {row.size} / {row.material} / {row.finish}
+          </p>
+        </>
+      )
+    },
+    {
+      key: "onHand",
+      header: "On hand",
+      className: "text-right",
+      sortable: true,
+      sortValue: (row) => row.quantityOnHand,
+      render: (row) => (
+        <>
+          {quickEdit?.rowId === row.id && quickEdit.field === "quantityOnHand" ? (
+            <div className="flex items-center justify-end gap-1.5">
+              <Input
+                autoFocus
+                className="h-8 w-24 text-right"
+                inputMode="numeric"
+                min={0}
+                onBlur={submitQuickEdit}
+                onChange={(event) => updateQuickValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    submitQuickEdit();
+                  }
+                  if (event.key === "Escape") {
+                    cancelQuickEdit();
+                  }
+                }}
+                step={1}
+                type="number"
+                value={quickEdit.value}
+              />
+              <button
+                className="rounded border border-industrial-rail px-2 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={submitQuickEdit}
+                type="button"
+              >
+                <Check size={13} />
+              </button>
+              <button
+                className="rounded border border-industrial-rail px-2 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={cancelQuickEdit}
+                type="button"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ) : (
+            <button
+              className="flex w-full items-center justify-end gap-1.5 hover:text-industrial-ink/85"
+              onClick={() => startQuickEdit(row, "quantityOnHand")}
+              type="button"
+            >
+              <span>{formatNumber(row.quantityOnHand)}</span>
+              <Pencil size={13} />
+            </button>
+          )}
+          {row.quantityDamaged > 0 && (
+            <p className="mt-1 text-xs text-red-700">{row.quantityDamaged} damaged</p>
+          )}
+        </>
+      )
+    },
+    {
+      key: "reserved",
+      header: "Reserved",
+      className: "text-right",
+      render: (row) => (
+        <span className="font-black">{formatNumber(row.quantityReserved)}</span>
+      )
+    },
+    {
+      key: "available",
+      header: "Available",
+      className: "text-right",
+      sortable: true,
+      sortValue: (row) => row.quantityAvailable,
+      render: (row) => (
+        <span className="font-black text-industrial-pine">
+          {formatNumber(row.quantityAvailable)}
+        </span>
+      )
+    },
+    {
+      key: "supplier",
+      header: "Supplier",
+      render: (row) => (
+        <span className="text-xs font-semibold text-industrial-steel">{row.supplier}</span>
+      )
+    },
+    {
+      key: "costPrice",
+      header: "Cost / Price",
+      render: (row) => (
+        <>
+          <p className="font-black text-industrial-ink">{formatCurrency(row.unitCost)}</p>
+          <p className="mt-1 text-xs text-industrial-steel">
+            {quickEdit?.rowId === row.id && quickEdit.field === "unitPrice" ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Input
+                  autoFocus
+                  className="h-7 w-24 text-right text-xs"
+                  inputMode="decimal"
+                  min={0}
+                  onBlur={submitQuickEdit}
+                  onChange={(event) => updateQuickValue(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      submitQuickEdit();
+                    }
+                    if (event.key === "Escape") {
+                      cancelQuickEdit();
+                    }
+                  }}
+                  step={0.01}
+                  type="number"
+                  value={quickEdit.value}
+                />
+                <button
+                  className="rounded border border-industrial-rail px-2 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={submitQuickEdit}
+                  type="button"
+                >
+                  <Check size={12} />
+                </button>
+                <button
+                  className="rounded border border-industrial-rail px-2 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={cancelQuickEdit}
+                  type="button"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ) : (
+              <button
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-industrial-steel transition hover:text-industrial-ink/85"
+                onClick={() => startQuickEdit(row, "unitPrice")}
+                type="button"
+              >
+                Sale {formatCurrency(row.unitPrice)}
+                <Pencil size={13} />
+              </button>
+            )}
+          </p>
+        </>
+      )
+    },
+    {
+      key: "rackBin",
+      header: "Rack/bin",
+      render: (row) => (
+        <>
+          <p className="font-black text-industrial-ink">{row.locationCode}</p>
+          <p className="mt-1 text-xs text-industrial-steel">{row.binCode}</p>
+        </>
+      )
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      sortValue: (row) => row.status,
+      render: (row) => (
+        <>
+          <span
+            className={`inline-flex border px-2 py-1 text-xs font-black uppercase tracking-[0.08em] ${statusClasses[row.status]}`}
+          >
+            {statusLabels[row.status]}
+          </span>
+          <p className="mt-2 text-xs font-semibold text-industrial-muted">
+            Reorder {row.reorderPoint}
+          </p>
+          <p className="mt-1 text-xs text-industrial-steel">
+            Updated {formatDate(row.lastUpdated)}
+          </p>
+        </>
+      )
+    },
+    {
+      key: "controls",
+      header: "Controls",
+      render: (row) => (
+        <div className="flex w-[250px] flex-wrap gap-1.5">
+          {rowActions.map((action) => (
+            <button
+              className="border border-industrial-rail bg-white px-2 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
+              key={action.mode}
+              onClick={() => openOperation(action.mode, row)}
+              type="button"
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      )
+    }
+  ];
+
   return (
     <PageShell
       actions={
@@ -874,9 +1108,6 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
               </div>
               <div className="text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">
                 {formatNumber(filteredRows.length)} rows
-                <span className="ml-2 font-black normal-case text-jobsite-steel">
-                  (showing {formatNumber(visibleRows.length)})
-                </span>
               </div>
             </CardHeader>
             <CardBody className="grid gap-4">
@@ -967,227 +1198,16 @@ export function InventoryDashboard({ categories, rows, summary }: InventoryDashb
                 </p>
               ) : null}
 
-              <div className="overflow-x-auto border border-industrial-rail">
-                <table className="min-w-[1320px] divide-y divide-industrial-rail text-left text-sm">
-                  <thead className="bg-industrial-paper text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">
-                    <tr>
-                      <th className="px-3 py-3">Product / SKU</th>
-                      <th className="px-3 py-3">Category / Size</th>
-                      <th className="px-3 py-3 text-right">On hand</th>
-                      <th className="px-3 py-3 text-right">Reserved</th>
-                      <th className="px-3 py-3 text-right">Available</th>
-                      <th className="px-3 py-3">Supplier</th>
-                      <th className="px-3 py-3">Cost / Price</th>
-                      <th className="px-3 py-3">Rack/bin</th>
-                      <th className="px-3 py-3">Status</th>
-                      <th className="px-3 py-3">Controls</th>
-                    </tr>
-                  </thead>
-              <tbody className="divide-y divide-industrial-rail bg-white">
-                    {visibleRows.map((row) => (
-                      <tr className="align-top" key={row.id}>
-                        <td className="px-3 py-3">
-                          <Link
-                            className="flex items-start gap-3 font-black text-industrial-ink hover:underline"
-                            href={`/products/${row.productSlug}`}
-                          >
-                            <span className="relative size-11 shrink-0 rounded-md border border-industrial-rail bg-white p-1">
-                              <Image
-                                alt={row.productImage?.alt || row.productTitle}
-                                className="object-contain"
-                                width={44}
-                                height={44}
-                                decoding="async"
-                                quality={45}
-                                sizes="44px"
-                                src={getRowThumbnail(row)}
-                              />
-                            </span>
-                            <span>
-                              <span>{row.productTitle}</span>
-                              <span className="mt-1 block text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">
-                                {row.sku}
-                              </span>
-                            </span>
-                          </Link>
-                        </td>
-                        <td className="px-3 py-3">
-                          <p className="font-semibold text-industrial-ink">{row.category}</p>
-                          <p className="mt-1 text-xs text-industrial-steel">
-                            {row.size} / {row.material} / {row.finish}
-                          </p>
-                        </td>
-                        <td className="px-3 py-3 text-right font-black">
-                          {quickEdit?.rowId === row.id &&
-                          quickEdit.field === "quantityOnHand" ? (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <Input
-                                autoFocus
-                                className="h-8 w-24 text-right"
-                                inputMode="numeric"
-                                min={0}
-                                onBlur={submitQuickEdit}
-                                onChange={(event) => updateQuickValue(event.target.value)}
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter") {
-                                    event.preventDefault();
-                                    submitQuickEdit();
-                                  }
-                                  if (event.key === "Escape") {
-                                    cancelQuickEdit();
-                                  }
-                                }}
-                                step={1}
-                                type="number"
-                                value={quickEdit.value}
-                              />
-                              <button
-                                className="rounded border border-industrial-rail px-2 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
-                                onMouseDown={(event) => event.preventDefault()}
-                                onClick={submitQuickEdit}
-                                type="button"
-                              >
-                                <Check size={13} />
-                              </button>
-                              <button
-                                className="rounded border border-industrial-rail px-2 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
-                                onMouseDown={(event) => event.preventDefault()}
-                                onClick={cancelQuickEdit}
-                                type="button"
-                              >
-                                <X size={13} />
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              className="flex w-full items-center justify-end gap-1.5 hover:text-industrial-ink/85"
-                              onClick={() => startQuickEdit(row, "quantityOnHand")}
-                              type="button"
-                            >
-                              <span>{formatNumber(row.quantityOnHand)}</span>
-                              <Pencil size={13} />
-                            </button>
-                          )}
-                          {row.quantityDamaged > 0 && (
-                            <p className="mt-1 text-xs text-red-700">
-                              {row.quantityDamaged} damaged
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-3 py-3 text-right font-black">
-                          {formatNumber(row.quantityReserved)}
-                        </td>
-                        <td className="px-3 py-3 text-right font-black text-industrial-pine">
-                          {formatNumber(row.quantityAvailable)}
-                        </td>
-                        <td className="px-3 py-3 text-xs font-semibold text-industrial-steel">
-                          {row.supplier}
-                        </td>
-                        <td className="px-3 py-3">
-                          <p className="font-black text-industrial-ink">
-                            {formatCurrency(row.unitCost)}
-                          </p>
-                          <p className="mt-1 text-xs text-industrial-steel">
-                            {quickEdit?.rowId === row.id && quickEdit.field === "unitPrice" ? (
-                              <span className="inline-flex items-center gap-1.5">
-                                <Input
-                                  autoFocus
-                                  className="h-7 w-24 text-right text-xs"
-                                  inputMode="decimal"
-                                  min={0}
-                                  onBlur={submitQuickEdit}
-                                  onChange={(event) => updateQuickValue(event.target.value)}
-                                  onKeyDown={(event) => {
-                                    if (event.key === "Enter") {
-                                      event.preventDefault();
-                                      submitQuickEdit();
-                                    }
-                                    if (event.key === "Escape") {
-                                      cancelQuickEdit();
-                                    }
-                                  }}
-                                  step={0.01}
-                                  type="number"
-                                  value={quickEdit.value}
-                                />
-                                <button
-                                  className="rounded border border-industrial-rail px-2 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
-                                  onMouseDown={(event) => event.preventDefault()}
-                                  onClick={submitQuickEdit}
-                                  type="button"
-                                >
-                                  <Check size={12} />
-                                </button>
-                                <button
-                                  className="rounded border border-industrial-rail px-2 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
-                                  onMouseDown={(event) => event.preventDefault()}
-                                  onClick={cancelQuickEdit}
-                                  type="button"
-                                >
-                                  <X size={12} />
-                                </button>
-                              </span>
-                            ) : (
-                              <button
-                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-industrial-steel transition hover:text-industrial-ink/85"
-                                onClick={() => startQuickEdit(row, "unitPrice")}
-                                type="button"
-                              >
-                                Sale {formatCurrency(row.unitPrice)}
-                                <Pencil size={13} />
-                              </button>
-                            )}
-                          </p>
-                        </td>
-                        <td className="px-3 py-3">
-                          <p className="font-black text-industrial-ink">
-                            {row.locationCode}
-                          </p>
-                          <p className="mt-1 text-xs text-industrial-steel">
-                            {row.binCode}
-                          </p>
-                        </td>
-                        <td className="px-3 py-3">
-                          <span
-                            className={`inline-flex border px-2 py-1 text-xs font-black uppercase tracking-[0.08em] ${statusClasses[row.status]}`}
-                          >
-                            {statusLabels[row.status]}
-                          </span>
-                          <p className="mt-2 text-xs font-semibold text-industrial-muted">
-                            Reorder {row.reorderPoint}
-                          </p>
-                          <p className="mt-1 text-xs text-industrial-steel">
-                            Updated {formatDate(row.lastUpdated)}
-                          </p>
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="flex w-[250px] flex-wrap gap-1.5">
-                            {rowActions.map((action) => (
-                              <button
-                                className="border border-industrial-rail bg-white px-2 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
-                                key={action.mode}
-                                onClick={() => openOperation(action.mode, row)}
-                                type="button"
-                              >
-                                {action.label}
-                              </button>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {hasMoreRows ? (
-                  <button
-                    className="mt-3 border border-industrial-rail bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.06em] text-industrial-ink transition hover:border-industrial-ink hover:bg-industrial-paper"
-                    onClick={() => setVisibleLimit((current) => current + 220)}
-                    type="button"
-                  >
-                    Load more rows
-                  </button>
-                ) : null}
-              </div>
+              <DataTable
+                caption="Inventory SKU table"
+                className="min-w-[1320px]"
+                columns={inventoryColumns}
+                emptyDescription="No inventory rows match the current filters."
+                emptyTitle="No inventory found"
+                getRowKey={(row) => row.id}
+                pageSize={25}
+                rows={filteredRows}
+              />
             </CardBody>
           </Card>
 
