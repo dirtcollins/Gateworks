@@ -237,6 +237,7 @@ export function AdminShell({ children }: AdminShellProps) {
           </button>
 
           <label className="relative">
+            <span className="sr-only">Search operations</span>
             <Search
               className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 ${
                 isDarkSidebar ? "text-white/45" : "text-industrial-muted"
@@ -355,11 +356,10 @@ export function AdminShell({ children }: AdminShellProps) {
       </aside>
 
       {isMobileNavOpen ? (
-        <button
+        <div
           aria-hidden="true"
           className="fixed inset-0 z-30 bg-black/25 md:hidden"
           onClick={() => setIsMobileNavOpen(false)}
-          type="button"
         />
       ) : null}
 
@@ -407,9 +407,6 @@ export function AdminShell({ children }: AdminShellProps) {
                 {activeItem ? activeItem.label : "Operations"}
               </p>
             </div>
-            <span className="hidden rounded-md border border-black/10 bg-[#f7f7f4] px-2 py-1 text-xs font-medium text-industrial-muted md:inline-flex">
-              {pathname}
-            </span>
           </div>
         </header>
 

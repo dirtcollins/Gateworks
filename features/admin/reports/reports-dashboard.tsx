@@ -126,14 +126,13 @@ export function ReportsDashboard({ data }: { data: ReportData }) {
       title="Financial reports"
     >
       {!data.configured ? (
-        <Card className="mb-5">
-          <CardBody>
-            <p className="text-sm text-industrial-steel">
-              Supabase is not configured, so live financial data is unavailable. Add the Supabase
-              keys to <code>.env.local</code> to populate this report.
-            </p>
-          </CardBody>
-        </Card>
+        <div
+          className="mb-5 rounded-card border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+          role="alert"
+        >
+          Supabase is not configured, so live financial data is unavailable. Add the Supabase keys
+          to <code>.env.local</code> to populate this report.
+        </div>
       ) : null}
 
       <StatGrid

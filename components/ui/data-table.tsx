@@ -105,7 +105,8 @@ export function DataTable<T>({
                   >
                     {canSort ? (
                       <button
-                        className="inline-flex items-center gap-1 font-black uppercase tracking-[0.1em] hover:text-industrial-ink"
+                        aria-label={`Sort by ${column.key}`}
+                        className="inline-flex items-center gap-1 rounded font-black uppercase tracking-[0.1em] hover:text-industrial-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-industrial-pine"
                         onClick={() => toggleSort(column.key)}
                         type="button"
                       >
