@@ -35,6 +35,29 @@ alter table public.quotes add column if not exists total numeric(12, 2) not null
 alter table public.quotes add column if not exists created_by text;
 alter table public.quotes add column if not exists converted_order_id uuid;
 
+-- A legacy `quotes` table can carry extra NOT NULL columns (e.g. public_token,
+-- client_name) that the website quote API does not populate. Give those a
+-- default so inserts succeed; guarded so fresh databases (no such columns) are
+-- unaffected.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'quotes'
+      and column_name = 'public_token'
+  ) then
+    alter table public.quotes
+      alter column public_token set default gen_random_uuid()::text;
+  end if;
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'quotes'
+      and column_name = 'client_name'
+  ) then
+    alter table public.quotes alter column client_name set default '';
+  end if;
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- Quote items
 -- ---------------------------------------------------------------------------

@@ -1808,7 +1808,8 @@ on conflict do nothing;
 
 -- Accounts-receivable aging view: outstanding balance per order, bucketed by
 -- age. Built on orders LEFT JOIN the summed order_payments ledger.
-create or replace view public.ar_aging as
+create or replace view public.ar_aging
+with (security_invoker = true) as
 select
   o.id as order_id,
   o.order_number,
@@ -1837,19 +1838,24 @@ where coalesce(o.is_quote_request, false) = false
   and coalesce(o.status::text, '') <> 'cancelled';
 
 -- Per-customer aging summary.
-create or replace view public.ar_aging_by_customer as
+create or replace view public.ar_aging_by_customer
+with (security_invoker = true) as
 select
+  site_user_id,
   coalesce(company_name, customer_name, 'Unknown customer') as customer,
   count(*) as order_count,
   sum(billed) as billed,
   sum(collected) as collected,
   sum(outstanding) as outstanding,
-  sum(outstanding) filter (where age_bucket = '0-30') as outstanding_0_30,
-  sum(outstanding) filter (where age_bucket = '31-60') as outstanding_31_60,
-  sum(outstanding) filter (where age_bucket = '60+') as outstanding_60_plus
+  coalesce(sum(outstanding) filter (where age_bucket = '0-30'), 0) as outstanding_0_30,
+  coalesce(sum(outstanding) filter (where age_bucket = '31-60'), 0) as outstanding_31_60,
+  coalesce(sum(outstanding) filter (where age_bucket = '60+'), 0) as outstanding_60_plus
 from public.ar_aging
-group by 1
+group by site_user_id, coalesce(company_name, customer_name, 'Unknown customer')
 order by outstanding desc;
+
+revoke all on public.ar_aging from anon, authenticated;
+revoke all on public.ar_aging_by_customer from anon, authenticated;
 
 
 -- ============================================================
@@ -1915,6 +1921,29 @@ alter table public.quotes add column if not exists tax numeric(12, 2) not null d
 alter table public.quotes add column if not exists total numeric(12, 2) not null default 0;
 alter table public.quotes add column if not exists created_by text;
 alter table public.quotes add column if not exists converted_order_id uuid;
+
+-- A legacy `quotes` table can carry extra NOT NULL columns (e.g. public_token,
+-- client_name) that the website quote API does not populate. Give those a
+-- default so inserts succeed; guarded so fresh databases (no such columns) are
+-- unaffected.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'quotes'
+      and column_name = 'public_token'
+  ) then
+    alter table public.quotes
+      alter column public_token set default gen_random_uuid()::text;
+  end if;
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'quotes'
+      and column_name = 'client_name'
+  ) then
+    alter table public.quotes alter column client_name set default '';
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- Quote items
