@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowRight, ArrowUpRight, Cpu, Layers, Zap } from "lucide-react";
 import {
   ApexButton,
@@ -10,6 +9,7 @@ import {
   Eyebrow,
   Mono,
   Panel,
+  ProductStage,
   SectionHeader,
   apex,
   formatUsd
@@ -147,41 +147,25 @@ export function D6Home() {
         {/* Hero product object */}
         <div className="flex items-center">
           <Panel className="w-full overflow-hidden" glow>
-            <div
-              className="relative flex aspect-[5/4] items-center justify-center"
-              style={{
-                background:
-                  "radial-gradient(70% 60% at 50% 38%, rgba(91,157,255,0.16), transparent 70%)"
-              }}
-            >
-              {HERO.image ? (
-                <Image
-                  alt={HERO.name}
-                  className="h-full w-full object-contain p-12"
-                  height={900}
-                  priority
-                  quality={90}
-                  src={HERO.image}
-                  width={900}
-                />
-              ) : (
+            <ProductStage
+              alt={HERO.name}
+              badge={
                 <span
-                  className="text-8xl font-semibold"
-                  style={{ color: "rgba(255,255,255,0.06)" }}
+                  className="absolute left-5 top-5 z-20 rounded-full px-3 py-1.5"
+                  style={{
+                    background: "rgba(8,8,11,0.82)",
+                    border: `1px solid ${apex.line}`
+                  }}
                 >
-                  GW
+                  <Mono style={{ color: apex.accent }}>Flagship</Mono>
                 </span>
-              )}
-              <span
-                className="absolute left-5 top-5 rounded-full px-3 py-1.5"
-                style={{
-                  background: "rgba(8,8,11,0.7)",
-                  border: `1px solid ${apex.line}`
-                }}
-              >
-                <Mono style={{ color: apex.accent }}>Flagship</Mono>
-              </span>
-            </div>
+              }
+              className="aspect-[5/4]"
+              priority
+              quality={90}
+              size="hero"
+              src={HERO.image}
+            />
             <div
               className="flex items-center justify-between gap-4 border-t px-6 py-5"
               style={{ borderColor: apex.line }}
@@ -320,51 +304,38 @@ export function D6Home() {
             </Link>
           }
         />
-        <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-9 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURED.map((product) => (
             <Link key={product.sku} href="/design-lab/d6/product">
-              <Panel className="group h-full overflow-hidden transition-transform duration-300 hover:-translate-y-1">
-                <div
-                  className="relative flex h-52 items-center justify-center"
-                  style={{
-                    background:
-                      "radial-gradient(60% 60% at 50% 42%, rgba(91,157,255,0.1), transparent 72%)"
-                  }}
-                >
-                  {product.image ? (
-                    <Image
-                      alt={product.name}
-                      className="h-full w-full object-contain p-7 transition-transform duration-500 group-hover:scale-105"
-                      height={420}
-                      quality={75}
-                      src={product.image}
-                      width={420}
-                    />
-                  ) : (
-                    <span
-                      className="text-5xl font-semibold"
-                      style={{ color: "rgba(255,255,255,0.06)" }}
-                    >
-                      GW
-                    </span>
-                  )}
+              <Panel
+                className="group h-full overflow-hidden transition-all duration-300 hover:-translate-y-1.5"
+                style={{ borderColor: "rgba(255,255,255,0.14)" }}
+              >
+                <div className="relative p-2.5">
+                  <ProductStage
+                    alt={product.name}
+                    className="h-60 rounded-xl"
+                    imgClassName="transition-transform duration-500 group-hover:scale-[1.07]"
+                    size="card"
+                    src={product.image}
+                  />
                 </div>
                 <div
                   className="border-t p-5"
                   style={{ borderColor: apex.line }}
                 >
-                  <Mono style={{ color: apex.faint }}>
+                  <Mono style={{ color: apex.mute }}>
                     {product.sku} · {product.variants} variants
                   </Mono>
                   <p
-                    className="mt-2 text-[14px] font-medium leading-snug"
+                    className="mt-2 text-[15px] font-semibold leading-snug"
                     style={{ color: apex.text }}
                   >
                     {product.name}
                   </p>
                   <div className="mt-4 flex items-center justify-between">
                     <span
-                      className="text-lg font-medium tracking-[-0.02em]"
+                      className="text-xl font-semibold tracking-[-0.02em]"
                       style={{ color: apex.text }}
                     >
                       {formatUsd(product.price)}

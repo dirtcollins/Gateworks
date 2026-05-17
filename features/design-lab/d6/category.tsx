@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useMemo, useState } from "react";
 import { ArrowRight, ChevronRight } from "lucide-react";
 import {
@@ -10,6 +9,7 @@ import {
   Eyebrow,
   Mono,
   Panel,
+  ProductStage,
   apex,
   formatUsd
 } from "./kit";
@@ -290,62 +290,53 @@ export function D6Category() {
           </div>
 
           {visible.length ? (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {visible.map((product) => (
                 <Link key={product.sku} href="/design-lab/d6/product">
-                  <Panel className="group h-full overflow-hidden transition-transform duration-300 hover:-translate-y-1">
-                    <div
-                      className="relative flex h-44 items-center justify-center"
-                      style={{
-                        background:
-                          "radial-gradient(60% 60% at 50% 44%, rgba(91,157,255,0.09), transparent 72%)"
-                      }}
-                    >
-                      {product.image ? (
-                        <Image
-                          alt={product.name}
-                          className="h-full w-full object-contain p-6 transition-transform duration-500 group-hover:scale-105"
-                          height={340}
-                          quality={75}
-                          src={product.image}
-                          width={340}
-                        />
-                      ) : (
-                        <span
-                          className="text-4xl font-semibold"
-                          style={{ color: "rgba(255,255,255,0.06)" }}
-                        >
-                          GW
-                        </span>
-                      )}
-                      {!product.inStock ? (
-                        <span
-                          className="absolute left-4 top-4 rounded-full px-2.5 py-1"
-                          style={{
-                            background: "rgba(8,8,11,0.75)",
-                            border: `1px solid ${apex.line}`
-                          }}
-                        >
-                          <Mono style={{ color: apex.mute }}>Backorder</Mono>
-                        </span>
-                      ) : null}
+                  <Panel
+                    className="group h-full overflow-hidden transition-all duration-300 hover:-translate-y-1.5"
+                    style={{ borderColor: "rgba(255,255,255,0.14)" }}
+                  >
+                    <div className="relative p-2.5">
+                      <ProductStage
+                        alt={product.name}
+                        badge={
+                          !product.inStock ? (
+                            <span
+                              className="absolute left-3 top-3 z-20 rounded-full px-2.5 py-1"
+                              style={{
+                                background: "rgba(8,8,11,0.82)",
+                                border: `1px solid ${apex.line}`
+                              }}
+                            >
+                              <Mono style={{ color: apex.mute }}>
+                                Backorder
+                              </Mono>
+                            </span>
+                          ) : undefined
+                        }
+                        className="h-52 rounded-xl"
+                        imgClassName="transition-transform duration-500 group-hover:scale-[1.07]"
+                        size="card"
+                        src={product.image}
+                      />
                     </div>
                     <div
                       className="border-t p-5"
                       style={{ borderColor: apex.line }}
                     >
-                      <Mono style={{ color: apex.faint }}>
+                      <Mono style={{ color: apex.mute }}>
                         {product.sku} · {product.variants} variants
                       </Mono>
                       <p
-                        className="mt-2 text-[14px] font-medium leading-snug"
+                        className="mt-2 text-[15px] font-semibold leading-snug"
                         style={{ color: apex.text }}
                       >
                         {product.name}
                       </p>
                       <div className="mt-4 flex items-center justify-between">
                         <span
-                          className="text-lg font-medium tracking-[-0.02em]"
+                          className="text-xl font-semibold tracking-[-0.02em]"
                           style={{ color: apex.text }}
                         >
                           {formatUsd(product.price)}

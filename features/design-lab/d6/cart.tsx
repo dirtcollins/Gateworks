@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Minus, Plus, ShieldCheck, Trash2, Truck } from "lucide-react";
 import {
@@ -11,6 +10,7 @@ import {
   Eyebrow,
   Mono,
   Panel,
+  ProductStage,
   apex,
   formatUsd
 } from "./kit";
@@ -120,32 +120,14 @@ export function D6Cart() {
             {lines.map((line) => (
               <Panel key={line.variantId} className="p-5">
                 <div className="flex items-center gap-5">
-                  <div
-                    className="grid h-24 w-24 shrink-0 place-items-center rounded-xl border"
-                    style={{
-                      borderColor: apex.line,
-                      background:
-                        "radial-gradient(70% 70% at 50% 45%, rgba(91,157,255,0.1), transparent 75%)"
-                    }}
-                  >
-                    {line.image ? (
-                      <Image
-                        alt={line.title}
-                        className="h-full w-full object-contain p-2.5"
-                        height={200}
-                        quality={75}
-                        src={line.image}
-                        width={200}
-                      />
-                    ) : (
-                      <span
-                        className="text-xl font-semibold"
-                        style={{ color: "rgba(255,255,255,0.08)" }}
-                      >
-                        GW
-                      </span>
-                    )}
-                  </div>
+                  <ProductStage
+                    alt={line.title}
+                    className="h-28 w-28 shrink-0 rounded-xl border"
+                    quality={75}
+                    size="thumb"
+                    src={line.image}
+                    style={{ borderColor: "rgba(255,255,255,0.14)" }}
+                  />
                   <div className="min-w-0 flex-1">
                     <Mono style={{ color: apex.faint }}>{line.sku}</Mono>
                     <Link

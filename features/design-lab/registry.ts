@@ -15,7 +15,11 @@ export const designLabDesigns: DesignLabDesign[] = [
   { id: "d3", name: "Editorial Catalog", note: "Magazine-grade — big imagery, art-directed." },
   { id: "d4", name: "Modern Marketplace", note: "Bright, friendly, conversion-optimized retail." },
   { id: "d5", name: "Field Ops", note: "Rugged field-ready — high-contrast safety-orange, big-touch, fast." },
-  { id: "d6", name: "Apex", note: "Flagship — cinematic dark, spatial depth, high-tech precision." }
+  { id: "d6", name: "Apex", note: "Flagship — cinematic dark, spatial depth, high-tech precision." },
+  { id: "d7", name: "Ledger", note: "B2B procurement portal — net terms, pricing tiers, spend tracking, fintech-calm." },
+  { id: "d8", name: "Blueprint", note: "Project-led selling — shop by what you're building, technical-drafting aesthetic." },
+  { id: "d9", name: "Showroom", note: "Immersive luxury showroom — large-format imagery, aspirational brand feel." },
+  { id: "d10", name: "Signal", note: "Fast & intelligent — command-driven search, keyboard-first, personalized." }
 ];
 
 export const designLabPages: DesignLabPage[] = [

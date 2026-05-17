@@ -16,43 +16,26 @@ const STORAGE_KEY = "gateworks-design-lab-order";
 
 const DEFAULT_ORDER = designLabDesigns.map((design) => design.id);
 
-type DesignMeta = {
-  palette: string[];
-  bestFor: string;
-};
+// Preview thumbnail geometry: a 1440x1125 render of the design's home page,
+// scaled down to fit a fixed 384x300 box.
+const FRAME_WIDTH = 1440;
+const FRAME_HEIGHT = 1125;
+const PREVIEW_WIDTH = 384;
+const PREVIEW_HEIGHT = 300;
+const PREVIEW_SCALE = PREVIEW_WIDTH / FRAME_WIDTH;
 
-// Representative palette + positioning line for each concept, used to give
-// every card a distinct visual identity on the selection page.
-const designMeta: Record<string, DesignMeta> = {
-  d1: {
-    palette: ["#16150f", "#2f6f4e", "#d6a93f", "#f6f3ec"],
-    bestFor: "Trade counters that want a premium, established feel."
-  },
-  d2: {
-    palette: ["#0a0a0a", "#404040", "#a3a3a3", "#ffffff"],
-    bestFor: "Brands that sell through restraint and typography."
-  },
-  d3: {
-    palette: ["#1c1c1c", "#8a7a5c", "#efece4", "#ffffff"],
-    bestFor: "Storytelling-led catalogs with strong photography."
-  },
-  d4: {
-    palette: ["#2563eb", "#f97316", "#0f172a", "#ffffff"],
-    bestFor: "High-velocity retail and the broadest consumer reach."
-  },
-  d5: {
-    palette: ["#16140f", "#ff5a1f", "#3f3a30", "#e8e4da"],
-    bestFor: "Contractors ordering fast from the jobsite."
-  },
-  d6: {
-    palette: ["#0a0a0c", "#5b9dff", "#1a1a22", "#e8e8f0"],
-    bestFor: "A flagship, future-facing digital experience."
-  }
-};
-
-const fallbackMeta: DesignMeta = {
-  palette: ["#16150f", "#6c685c", "#c8c4ba", "#f6f3ec"],
-  bestFor: "A complete, fully-working storefront concept."
+// Positioning line for each concept — the "why you'd choose this" pitch.
+const bestForById: Record<string, string> = {
+  d1: "Trade counters that want a premium, established feel.",
+  d2: "Brands that sell through restraint and typography.",
+  d3: "Storytelling-led catalogs with strong photography.",
+  d4: "High-velocity retail and the broadest consumer reach.",
+  d5: "Contractors ordering fast from the jobsite.",
+  d6: "A flagship, future-facing digital experience.",
+  d7: "Purchasing managers running repeat B2B procurement.",
+  d8: "Buyers who shop by the project they're building.",
+  d9: "An aspirational, premium brand showroom.",
+  d10: "Buyers who want to find anything instantly."
 };
 
 export function DesignLabHome() {
@@ -81,7 +64,7 @@ export function DesignLabHome() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(order));
     } catch {
-      // ignore storage failures (private mode, quota)
+      // ignore storage failures
     }
   }, [order, hydrated]);
 
@@ -115,58 +98,40 @@ export function DesignLabHome() {
     .map((id) => designLabDesigns.find((design) => design.id === id))
     .filter((design): design is (typeof designLabDesigns)[number] => Boolean(design));
 
-  const isCustomOrder =
-    hydrated && order.join(",") !== DEFAULT_ORDER.join(",");
+  const isCustomOrder = hydrated && order.join(",") !== DEFAULT_ORDER.join(",");
 
   return (
-    <main className="min-h-screen bg-[#f7f7f4]">
+    <main className="min-h-screen bg-[#f7f7f4] pb-20">
       {/* Hero */}
       <section className="border-b border-black/10 bg-white">
-        <div className="mx-auto max-w-[1100px] px-5 py-14 sm:py-20">
+        <div className="mx-auto max-w-[1180px] px-5 py-12 sm:py-16">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-industrial-pine">
             Gateworks Design Lab
           </p>
-          <h1 className="mt-4 max-w-3xl text-4xl font-black leading-[1.05] tracking-tight text-industrial-ink sm:text-6xl">
-            Six directions for the future of Gateworks.
+          <h1 className="mt-3 max-w-3xl text-3xl font-black leading-[1.06] tracking-tight text-industrial-ink sm:text-5xl">
+            Ten ways to build Gateworks. Pick your favorite.
           </h1>
-          <p className="mt-5 max-w-2xl text-base leading-relaxed text-industrial-steel">
-            Every concept below is a complete, fully-working storefront and
-            operations console &mdash; wired to the same live catalog, cart, and
-            order data. Explore each one, compare any single page side by side,
-            then drag to rank the directions in your order of preference.
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-industrial-steel sm:text-base">
+            Every concept below is a complete, working storefront and operations
+            console &mdash; all wired to the same live catalog, cart, and order
+            data. Preview each home page in the box, open any concept to walk
+            its pages, compare a single page across all ten, and drag the cards
+            to rank them in your order of preference.
           </p>
-          <dl className="mt-9 grid max-w-xl grid-cols-3 divide-x divide-black/10 border-y border-black/10">
-            {[
-              { value: designLabDesigns.length, label: "Concepts" },
-              {
-                value: designLabDesigns.length * designLabPages.length,
-                label: "Live pages"
-              },
-              { value: "1", label: "Real dataset" }
-            ].map((stat) => (
-              <div key={stat.label} className="px-4 py-3 first:pl-0">
-                <dt className="text-2xl font-black text-industrial-ink">
-                  {stat.value}
-                </dt>
-                <dd className="text-[11px] font-bold uppercase tracking-[0.14em] text-industrial-muted">
-                  {stat.label}
-                </dd>
-              </div>
-            ))}
-          </dl>
         </div>
       </section>
 
-      <div className="mx-auto max-w-[1100px] px-5 py-12">
+      <div className="mx-auto max-w-[1180px] px-5">
         {/* Compare bar */}
-        <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+        <div className="mt-8 rounded-xl border border-black/10 bg-white p-5 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-black text-industrial-ink">
-                Compare one page across all six concepts
+                Compare one page across all ten concepts
               </p>
               <p className="mt-0.5 text-xs text-industrial-muted">
-                See every design&apos;s take on the same page, side by side.
+                Open a synchronized side-by-side of every design&apos;s take on
+                the same page.
               </p>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -187,11 +152,11 @@ export function DesignLabHome() {
         <div className="mt-10 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-xl font-black text-industrial-ink">
-              Rank the concepts
+              The concepts &mdash; ranked
             </h2>
             <p className="mt-1 text-sm text-industrial-steel">
-              Drag a card by its handle, or use the arrows. Your ranking is
-              saved on this device.
+              Drag a card, or use the arrows. Your ranking is saved on this
+              device.
             </p>
           </div>
           {isCustomOrder ? (
@@ -206,16 +171,15 @@ export function DesignLabHome() {
           ) : null}
         </div>
 
-        {/* Ranked design cards */}
-        <ol className="mt-5 flex flex-col gap-4">
+        {/* Ranked design cards with live home-page previews */}
+        <ol className="mt-5 flex flex-wrap justify-center gap-6 sm:justify-start">
           {orderedDesigns.map((design, index) => {
-            const meta = designMeta[design.id] ?? fallbackMeta;
             const rank = index + 1;
             const isTop = rank === 1;
 
             return (
               <li
-                className={`overflow-hidden rounded-xl border bg-white shadow-sm transition ${
+                className={`flex w-[384px] max-w-full flex-col overflow-hidden rounded-xl border bg-white shadow-sm transition ${
                   dragOverId === design.id
                     ? "border-industrial-ink ring-2 ring-industrial-ink"
                     : "border-black/10"
@@ -231,22 +195,41 @@ export function DesignLabHome() {
                 onDragStart={() => setDragId(design.id)}
                 onDrop={() => dropOn(design.id)}
               >
-                {/* Palette identity banner */}
-                <div className="flex h-14">
-                  {meta.palette.map((color, swatchIndex) => (
-                    <div
-                      className="flex-1"
-                      key={`${design.id}-${swatchIndex}`}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
+                {/* Live home-page preview */}
+                <Link
+                  className="group relative block overflow-hidden border-b border-black/10 bg-white"
+                  draggable={false}
+                  href={`/design-lab/${design.id}/home`}
+                  style={{ height: PREVIEW_HEIGHT }}
+                >
+                  <iframe
+                    aria-hidden="true"
+                    className="pointer-events-none origin-top-left border-0"
+                    loading="lazy"
+                    src={`/design-lab/${design.id}/home`}
+                    style={{
+                      width: FRAME_WIDTH,
+                      height: FRAME_HEIGHT,
+                      transform: `scale(${PREVIEW_SCALE})`
+                    }}
+                    tabIndex={-1}
+                    title={`${design.name} home preview`}
+                  />
+                  <span className="absolute left-3 top-3 rounded bg-black/80 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-white">
+                    {design.name}
+                  </span>
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.08em] text-industrial-ink">
+                      Open home <ArrowRight className="h-3.5 w-3.5" />
+                    </span>
+                  </div>
+                </Link>
 
-                <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start">
-                  {/* Rank + reorder controls */}
-                  <div className="flex items-center gap-3 sm:flex-col sm:items-center sm:gap-2">
+                {/* Card body */}
+                <div className="flex flex-1 flex-col gap-3 p-4">
+                  <div className="flex items-start gap-3">
                     <span
-                      className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-black ${
+                      className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-black ${
                         isTop
                           ? "bg-industrial-ink text-white"
                           : "border border-black/15 bg-white text-industrial-ink"
@@ -254,10 +237,56 @@ export function DesignLabHome() {
                     >
                       {isTop ? <Star className="h-4 w-4" /> : rank}
                     </span>
-                    <div className="flex gap-1 sm:flex-col">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="truncate text-lg font-black text-industrial-ink">
+                          {design.name}
+                        </h3>
+                        {isTop ? (
+                          <span className="rounded bg-industrial-pine px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-white">
+                            Top pick
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-0.5 text-xs leading-relaxed text-industrial-steel">
+                        {design.note}
+                      </p>
+                    </div>
+                    <span
+                      aria-hidden="true"
+                      className="hidden cursor-grab text-industrial-muted active:cursor-grabbing sm:block"
+                      title="Drag to reorder"
+                    >
+                      <GripVertical className="h-5 w-5" />
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-industrial-muted">
+                    <span className="font-bold text-industrial-ink">
+                      Best for:
+                    </span>{" "}
+                    {bestForById[design.id] ??
+                      "A complete, working storefront concept."}
+                  </p>
+
+                  <div className="flex flex-wrap gap-1">
+                    {designLabPages.map((page) => (
+                      <Link
+                        className="inline-flex h-7 items-center rounded border border-black/10 bg-[#f7f7f4] px-2 text-[10px] font-bold text-industrial-ink transition hover:border-industrial-ink hover:bg-white"
+                        draggable={false}
+                        href={`/design-lab/${design.id}/${page.slug}`}
+                        key={page.slug}
+                      >
+                        {page.label}
+                      </Link>
+                    ))}
+                  </div>
+
+                  <div className="mt-auto flex items-center justify-between gap-2 border-t border-black/10 pt-3">
+                    <div className="flex gap-1">
                       <button
                         aria-label={`Move ${design.name} up`}
-                        className="grid h-7 w-7 place-items-center rounded-md border border-black/10 bg-white text-industrial-ink transition hover:border-industrial-ink disabled:cursor-not-allowed disabled:opacity-30"
+                        className="grid h-8 w-8 place-items-center rounded-md border border-black/10 bg-white text-industrial-ink transition hover:border-industrial-ink disabled:cursor-not-allowed disabled:opacity-30"
                         disabled={index === 0}
                         onClick={() => move(design.id, -1)}
                         type="button"
@@ -266,7 +295,7 @@ export function DesignLabHome() {
                       </button>
                       <button
                         aria-label={`Move ${design.name} down`}
-                        className="grid h-7 w-7 place-items-center rounded-md border border-black/10 bg-white text-industrial-ink transition hover:border-industrial-ink disabled:cursor-not-allowed disabled:opacity-30"
+                        className="grid h-8 w-8 place-items-center rounded-md border border-black/10 bg-white text-industrial-ink transition hover:border-industrial-ink disabled:cursor-not-allowed disabled:opacity-30"
                         disabled={index === orderedDesigns.length - 1}
                         onClick={() => move(design.id, 1)}
                         type="button"
@@ -274,61 +303,13 @@ export function DesignLabHome() {
                         <ChevronDown className="h-4 w-4" />
                       </button>
                     </div>
-                  </div>
-
-                  {/* Detail */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      {isTop ? (
-                        <span className="rounded bg-industrial-pine px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-white">
-                          Top pick
-                        </span>
-                      ) : null}
-                      <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-industrial-muted">
-                        Concept {design.id.replace("d", "")}
-                      </span>
-                    </div>
-                    <h3 className="mt-1.5 text-xl font-black text-industrial-ink">
-                      {design.name}
-                    </h3>
-                    <p className="mt-1 text-sm leading-relaxed text-industrial-steel">
-                      {design.note}
-                    </p>
-                    <p className="mt-1.5 text-xs text-industrial-muted">
-                      <span className="font-bold text-industrial-ink">
-                        Best for:
-                      </span>{" "}
-                      {meta.bestFor}
-                    </p>
-
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {designLabPages.map((page) => (
-                        <Link
-                          className="inline-flex h-8 items-center rounded-md border border-black/10 bg-[#f7f7f4] px-2.5 text-[11px] font-bold text-industrial-ink transition hover:border-industrial-ink hover:bg-white"
-                          href={`/design-lab/${design.id}/${page.slug}`}
-                          key={page.slug}
-                        >
-                          {page.label}
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 sm:flex-col sm:items-stretch">
                     <Link
-                      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md bg-industrial-ink px-4 text-xs font-black uppercase tracking-[0.08em] text-white transition hover:bg-industrial-pine"
+                      className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-industrial-ink px-3 text-[11px] font-black uppercase tracking-[0.08em] text-white transition hover:bg-industrial-pine"
+                      draggable={false}
                       href={`/design-lab/${design.id}/home`}
                     >
                       Preview <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
-                    <span
-                      aria-hidden="true"
-                      className="hidden cursor-grab items-center justify-center gap-1 rounded-md border border-black/10 px-3 py-1.5 text-[11px] font-bold text-industrial-muted active:cursor-grabbing sm:inline-flex"
-                    >
-                      <GripVertical className="h-4 w-4" />
-                      Drag
-                    </span>
                   </div>
                 </div>
               </li>
@@ -336,10 +317,10 @@ export function DesignLabHome() {
           })}
         </ol>
 
-        <p className="mt-6 text-xs text-industrial-muted">
-          The original Gateworks site is untouched. Every concept here renders
-          the same live data, so your ranking reflects design and experience
-          &mdash; not the content.
+        <p className="mt-8 text-xs text-industrial-muted">
+          The original Gateworks site is untouched. Every concept renders the
+          same live data, so your ranking reflects design and experience &mdash;
+          not the content.
         </p>
       </div>
     </main>

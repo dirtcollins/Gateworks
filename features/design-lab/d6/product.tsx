@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useState } from "react";
 import {
   ArrowRight,
@@ -20,6 +19,7 @@ import {
   Eyebrow,
   Mono,
   Panel,
+  ProductStage,
   apex,
   formatUsd
 } from "./kit";
@@ -107,69 +107,43 @@ export function D6Product() {
       <section className="grid gap-10 pb-16 lg:grid-cols-[1.05fr_0.95fr]">
         {/* Gallery */}
         <div className="lg:sticky lg:top-24 lg:self-start">
-          <Panel className="overflow-hidden" glow>
-            <div
-              className="relative flex aspect-square items-center justify-center"
-              style={{
-                background:
-                  "radial-gradient(65% 60% at 50% 40%, rgba(91,157,255,0.16), transparent 72%)"
-              }}
-            >
-              {GALLERY[activeThumb] ? (
-                <Image
-                  alt={featuredProduct.title}
-                  className="h-full w-full object-contain p-16"
-                  height={1000}
-                  priority
-                  quality={90}
-                  src={GALLERY[activeThumb]}
-                  width={1000}
-                />
-              ) : (
-                <span
-                  className="text-8xl font-semibold"
-                  style={{ color: "rgba(255,255,255,0.06)" }}
-                >
-                  GW
-                </span>
-              )}
-            </div>
+          <Panel className="overflow-hidden p-3" glow>
+            <ProductStage
+              alt={featuredProduct.title}
+              className="aspect-square rounded-xl"
+              priority
+              quality={90}
+              size="hero"
+              src={GALLERY[activeThumb]}
+            />
           </Panel>
           {GALLERY.length > 1 ? (
             <div className="mt-4 grid grid-cols-4 gap-3">
-              {GALLERY.slice(0, 4).map((image, index) => (
-                <button
-                  key={image || index}
-                  className="flex aspect-square items-center justify-center rounded-xl border transition-all"
-                  onClick={() => setActiveThumb(index)}
-                  style={{
-                    borderColor:
-                      activeThumb === index ? apex.accent : apex.line,
-                    background:
-                      activeThumb === index
-                        ? "rgba(91,157,255,0.08)"
-                        : apex.surface,
-                    boxShadow:
-                      activeThumb === index
-                        ? `0 0 18px -6px ${apex.accentGlow}`
+              {GALLERY.slice(0, 4).map((image, index) => {
+                const active = activeThumb === index;
+                return (
+                  <button
+                    key={image || index}
+                    className="overflow-hidden rounded-xl border p-1 transition-all"
+                    onClick={() => setActiveThumb(index)}
+                    style={{
+                      borderColor: active ? apex.accent : apex.line,
+                      boxShadow: active
+                        ? `0 0 18px -4px ${apex.accentGlow}`
                         : "none"
-                  }}
-                  type="button"
-                >
-                  {image ? (
-                    <Image
+                    }}
+                    type="button"
+                  >
+                    <ProductStage
                       alt={`${featuredProduct.title} view ${index + 1}`}
-                      className="h-full w-full object-contain p-2.5"
-                      height={200}
+                      className="aspect-square rounded-lg"
                       quality={60}
+                      size="thumb"
                       src={image}
-                      width={200}
                     />
-                  ) : (
-                    <span style={{ color: apex.faint }}>{index + 1}</span>
-                  )}
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           ) : null}
         </div>
@@ -422,48 +396,35 @@ export function D6Product() {
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {RELATED.map((item) => (
               <Link key={item.sku} href="/design-lab/d6/product">
-                <Panel className="group h-full overflow-hidden transition-transform duration-300 hover:-translate-y-1">
-                  <div
-                    className="flex h-40 items-center justify-center"
-                    style={{
-                      background:
-                        "radial-gradient(60% 60% at 50% 45%, rgba(91,157,255,0.08), transparent 72%)"
-                    }}
-                  >
-                    {item.image ? (
-                      <Image
-                        alt={item.name}
-                        className="h-full w-full object-contain p-5 transition-transform duration-500 group-hover:scale-105"
-                        height={300}
-                        quality={75}
-                        src={item.image}
-                        width={300}
-                      />
-                    ) : (
-                      <span
-                        className="text-4xl font-semibold"
-                        style={{ color: "rgba(255,255,255,0.06)" }}
-                      >
-                        GW
-                      </span>
-                    )}
+                <Panel
+                  className="group h-full overflow-hidden transition-all duration-300 hover:-translate-y-1.5"
+                  style={{ borderColor: "rgba(255,255,255,0.14)" }}
+                >
+                  <div className="p-2.5">
+                    <ProductStage
+                      alt={item.name}
+                      className="h-44 rounded-xl"
+                      imgClassName="transition-transform duration-500 group-hover:scale-[1.07]"
+                      size="card"
+                      src={item.image}
+                    />
                   </div>
                   <div
                     className="border-t p-4"
                     style={{ borderColor: apex.line }}
                   >
-                    <Mono style={{ color: apex.faint }}>{item.sku}</Mono>
+                    <Mono style={{ color: apex.mute }}>{item.sku}</Mono>
                     <p
-                      className="mt-1.5 text-[13px] font-medium leading-snug"
+                      className="mt-1.5 text-[14px] font-semibold leading-snug"
                       style={{ color: apex.text }}
                     >
                       {item.name}
                     </p>
                     <span
-                      className="mt-3 block text-[15px] font-medium tracking-[-0.02em]"
+                      className="mt-3 block text-[16px] font-semibold tracking-[-0.02em]"
                       style={{ color: apex.text }}
                     >
                       {formatUsd(item.price)}

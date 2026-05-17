@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { ArrowUpRight, Menu, ShoppingBag, X } from "lucide-react";
@@ -113,6 +114,80 @@ export function Panel({
       }}
     >
       {children}
+    </div>
+  );
+}
+
+/* ---- Product stage ------------------------------------------------ *
+ * A lighter "stage" surface that sits behind hardware imagery so the
+ * product pops off the cinematic dark UI — the Apple dark-page /
+ * lit-product treatment. Used everywhere d6 renders a product photo.
+ * ------------------------------------------------------------------- */
+export function ProductStage({
+  src,
+  alt,
+  className,
+  imgClassName,
+  size = "card",
+  priority,
+  quality = 75,
+  badge,
+  style
+}: {
+  src?: string;
+  alt: string;
+  className?: string;
+  imgClassName?: string;
+  size?: "hero" | "card" | "thumb";
+  priority?: boolean;
+  quality?: number;
+  badge?: ReactNode;
+  style?: CSSProperties;
+}) {
+  const dims = size === "hero" ? 1000 : size === "card" ? 560 : 240;
+  const pad =
+    size === "hero" ? "p-10" : size === "card" ? "p-6" : "p-2.5";
+  const fallbackText =
+    size === "hero"
+      ? "text-7xl"
+      : size === "card"
+        ? "text-4xl"
+        : "text-base";
+
+  return (
+    <div
+      className={`relative overflow-hidden ${className ?? ""}`}
+      style={{
+        /* Soft light plate — product reads as a distinct lit object. */
+        background:
+          "radial-gradient(120% 100% at 50% 18%, #f4f6fb 0%, #e7eaf2 46%, #d3d8e6 100%)",
+        boxShadow:
+          "inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -28px 50px -32px rgba(33,40,66,0.4)",
+        ...style
+      }}
+    >
+      {src ? (
+        <Image
+          alt={alt}
+          className={`relative z-10 h-full w-full object-contain ${pad} ${imgClassName ?? ""}`}
+          height={dims}
+          priority={priority}
+          quality={quality}
+          src={src}
+          width={dims}
+          style={{
+            filter: "drop-shadow(0 18px 22px rgba(20,26,48,0.32))"
+          }}
+        />
+      ) : (
+        <span
+          className={`relative z-10 grid h-full w-full place-items-center font-semibold ${fallbackText}`}
+          style={{ color: "rgba(33,40,66,0.18)" }}
+        >
+          GW
+        </span>
+      )}
+      {badge}
     </div>
   );
 }
