@@ -15,10 +15,11 @@ import { Input, Select } from "@/components/ui/input";
 import type { OrderStatus } from "@/lib/platform-backend";
 import { useOrderStore, type OrderRecord } from "@/lib/order-store";
 import { getOrderStatusTone } from "@/lib/order-status";
+import { DEFAULT_TAX_RATE } from "@/lib/tax";
 import { formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 
-const taxRate = 0.0825;
+const taxRate = DEFAULT_TAX_RATE;
 
 const quoteStatusLabels: Record<OrderStatus, string> = {
   draft: "Draft request",

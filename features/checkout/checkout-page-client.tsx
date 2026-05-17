@@ -10,6 +10,7 @@ import { PageShell } from "@/components/ui/page-shell";
 import { useCartStore } from "@/lib/cart-store";
 import { useOrderStore, type CustomerDrawing, type OrderAddress } from "@/lib/order-store";
 import { useUserStore } from "@/lib/user-store";
+import { calculateTax } from "@/lib/tax";
 import { formatCurrency } from "@/lib/utils";
 import type { FulfillmentMethod } from "@/lib/platform-backend";
 
@@ -72,7 +73,7 @@ export function CheckoutPageClient() {
     [items]
   );
   const deliveryFee = fulfillmentMethod === "delivery" ? (subtotal >= 500 ? 0 : 85) : 0;
-  const tax = isQuoteRequest ? 0 : Number((subtotal * 0.0825).toFixed(2));
+  const tax = isQuoteRequest ? 0 : calculateTax(subtotal);
   const total = subtotal + tax + deliveryFee;
 
   function updateAddress(field: keyof OrderAddress, value: string) {

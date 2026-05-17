@@ -18,6 +18,7 @@ import { PageShell } from "@/components/ui/page-shell";
 import { products as fallbackCatalogProducts } from "@/lib/catalog";
 import { useOrderStore, type OrderRecord } from "@/lib/order-store";
 import type { CartItem, Product, ProductVariant } from "@/lib/types";
+import { DEFAULT_TAX_RATE } from "@/lib/tax";
 import { formatCurrency } from "@/lib/utils";
 
 type QuoteDetailPageProps = {
@@ -26,7 +27,7 @@ type QuoteDetailPageProps = {
   catalogProducts?: Product[];
 };
 
-const taxRate = 0.0825;
+const taxRate = DEFAULT_TAX_RATE;
 const unitOptions = ["EA", "FT", "SET", "ROLL", "BOX", "PCS"];
 
 const sampleQuoteFallbacks: OrderRecord[] = [

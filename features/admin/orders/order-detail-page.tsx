@@ -39,6 +39,7 @@ import { useOrderStore, type OrderPayment, type OrderRecord } from "@/lib/order-
 import { getPaymentStatusTone } from "@/lib/order-status";
 import { useUserStore, type SavedUser } from "@/lib/user-store";
 import type { CartItem, Product, ProductVariant } from "@/lib/types";
+import { DEFAULT_TAX_RATE } from "@/lib/tax";
 import { formatCurrency } from "@/lib/utils";
 import { type FulfillmentMethod, type OrderStatus, type PaymentStatus } from "@/lib/platform-backend";
 import { customerDirectory, type CustomerRecord } from "@/lib/customers";
@@ -85,7 +86,7 @@ type SiteUserClient = {
 
 const staffRoster = ["Maya Ortiz", "Cody Lee", "Jordan Blake", "Priya Mehta"];
 
-const TAX_RATE = 0.0825;
+const TAX_RATE = DEFAULT_TAX_RATE;
 const unitOptions = ["EA", "FT", "SET", "ROLL", "BOX", "PCS"];
 const paymentMethodOptions = [
   "Cash",

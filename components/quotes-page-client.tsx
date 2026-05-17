@@ -14,9 +14,10 @@ import {
   Trash2
 } from "lucide-react";
 import { useQuoteStore } from "@/lib/quote-store";
+import { DEFAULT_TAX_RATE } from "@/lib/tax";
 import { formatCurrency } from "@/lib/utils";
 
-const taxRate = 0.0825;
+const taxRate = DEFAULT_TAX_RATE;
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",

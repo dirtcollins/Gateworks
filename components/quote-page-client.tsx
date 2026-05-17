@@ -23,8 +23,9 @@ import type { Product } from "@/lib/types";
 import { useQuoteStore } from "@/lib/quote-store";
 import { cn, formatCurrency } from "@/lib/utils";
 import { customerDirectory, getCustomerById } from "@/lib/customers";
+import { DEFAULT_TAX_RATE } from "@/lib/tax";
 
-const taxRate = 0.0825;
+const taxRate = DEFAULT_TAX_RATE;
 
 type QuotePageClientProps = {
   quoteId: string;
