@@ -66,10 +66,28 @@ export default async function Home({ searchParams }: HomePageProps) {
           ]}
         />
       }
-      description="Search and order gate hardware, metal supply, ornamental iron, welding supplies, fence materials, and contractor-ready stock."
+      description="Gate hardware, steel tubing, ornamental iron, fence materials, and welding supply — priced for contractors and ready for same-day pickup."
       eyebrow="Gateworks Supply"
-      title="What are you sourcing today?"
+      title="Everything your crew needs to frame, hang, and finish the job."
     >
+      <div className="mb-5 flex flex-col gap-2.5 sm:flex-row sm:items-center">
+        <Link
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-industrial-ink bg-industrial-ink px-5 text-sm font-black uppercase tracking-[0.08em] text-white transition hover:bg-industrial-pine active:translate-y-px"
+          href="/quote"
+        >
+          Request a contractor quote
+        </Link>
+        <Link
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-industrial-rail bg-white px-5 text-sm font-black uppercase tracking-[0.08em] text-industrial-ink transition hover:border-industrial-ink active:translate-y-px"
+          href="/search"
+        >
+          Browse the full catalog
+        </Link>
+        <p className="text-xs font-semibold text-industrial-muted sm:ml-1">
+          Volume pricing for shops &amp; crews — retail welcome.
+        </p>
+      </div>
+
       <SearchBar action="/" categories={categories} category={category} query={query} />
 
       <div className="mt-5 flex items-center justify-between border-b border-black/10 pb-3">

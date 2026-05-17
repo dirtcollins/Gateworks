@@ -78,41 +78,12 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
   const [focusToken, setFocusToken] = useState(0);
   const quoteItemQtyRef = useRef<HTMLInputElement>(null);
 
-  if (!quote) {
-    return (
-      <main className="grid min-h-[520px] place-items-center px-4 py-12 text-center">
-        <div className="rounded-lg border border-black/10 bg-white/85 p-10 shadow-sm">
-          <h1 className="text-3xl font-semibold text-industrial-ink">Quote not found</h1>
-          <p className="mt-2 text-sm text-industrial-muted">
-            This quote may have been deleted or created in another browser.
-          </p>
-          <Link
-            className="mt-5 inline-flex h-11 items-center justify-center rounded-lg bg-industrial-ink px-5 text-sm font-semibold text-white"
-            href="/quotes"
-          >
-            View all quotes
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
-  const currentQuote = quote;
-  const selectedCustomerId = currentQuote.customerId || "";
   useEffect(() => {
-    setActiveQuote(currentQuote.id);
-  }, [currentQuote.id, setActiveQuote]);
-  const items = currentQuote.items;
-  const subtotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
-  const estimatedTax = subtotal * taxRate;
-  const deliveryFee = subtotal >= 100 || subtotal === 0 ? 0 : 14.95;
-  const total = subtotal + estimatedTax + deliveryFee;
-  const amountPaid = 0;
-  const balanceDue = total - amountPaid;
-  const totalQuantity = items.reduce((totalItems, item) => totalItems + item.quantity, 0);
-  const quoteNumber = currentQuote.quoteNumber || currentQuote.id.toUpperCase();
-  const invoiceNumber = currentQuote.invoiceNumber || quoteNumber.replace("Q-", "INV-");
-  const status = currentQuote.status || "draft";
+    if (!quote) return;
+
+    setActiveQuote(quote.id);
+  }, [quote, setActiveQuote]);
+
   const quickAddResults = useMemo(() => {
     const normalized = quickAddQuery.trim().toLowerCase();
 
@@ -149,6 +120,39 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
 
     return () => window.clearTimeout(handle);
   }, [focusTargetVariantId, focusToken]);
+
+  if (!quote) {
+    return (
+      <main className="grid min-h-[520px] place-items-center px-4 py-12 text-center">
+        <div className="rounded-lg border border-black/10 bg-white/85 p-10 shadow-sm">
+          <h1 className="text-3xl font-semibold text-industrial-ink">Quote not found</h1>
+          <p className="mt-2 text-sm text-industrial-muted">
+            This quote may have been deleted or created in another browser.
+          </p>
+          <Link
+            className="mt-5 inline-flex h-11 items-center justify-center rounded-lg bg-industrial-ink px-5 text-sm font-semibold text-white"
+            href="/quotes"
+          >
+            View all quotes
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  const currentQuote = quote;
+  const selectedCustomerId = currentQuote.customerId || "";
+  const items = currentQuote.items;
+  const subtotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
+  const estimatedTax = subtotal * taxRate;
+  const deliveryFee = subtotal >= 100 || subtotal === 0 ? 0 : 14.95;
+  const total = subtotal + estimatedTax + deliveryFee;
+  const amountPaid = 0;
+  const balanceDue = total - amountPaid;
+  const totalQuantity = items.reduce((totalItems, item) => totalItems + item.quantity, 0);
+  const quoteNumber = currentQuote.quoteNumber || currentQuote.id.toUpperCase();
+  const invoiceNumber = currentQuote.invoiceNumber || quoteNumber.replace("Q-", "INV-");
+  const status = currentQuote.status || "draft";
 
   function showActionMessage(message: string) {
     setActionMessage(message);
