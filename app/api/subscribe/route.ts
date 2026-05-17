@@ -4,12 +4,13 @@ import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(request: NextRequest) {
-  const body = (await request.json().catch(() => null)) as {
-    email?: string;
-    source?: string;
-  } | null;
+  const body = await request.json().catch(() => null);
+  const emailInput =
+    body && typeof body === "object" && "email" in body ? body.email : undefined;
+  const sourceInput =
+    body && typeof body === "object" && "source" in body ? body.source : undefined;
 
-  const email = body?.email?.trim().toLowerCase();
+  const email = typeof emailInput === "string" ? emailInput.trim().toLowerCase() : "";
 
   if (!email || email.length > 254 || !emailPattern.test(email)) {
     return NextResponse.json(
@@ -18,17 +19,20 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const source = body?.source?.trim().slice(0, 60) || "footer";
+  const source =
+    typeof sourceInput === "string" && sourceInput.trim()
+      ? sourceInput.trim().slice(0, 60)
+      : "footer";
   const admin = getSupabaseAdminClient();
 
   if (!admin) {
     return NextResponse.json(
       {
-        ok: true,
+        ok: false,
         persisted: false,
-        reason: "Subscription noted; storage is not configured."
+        reason: "Email subscriptions are not configured."
       },
-      { status: 200 }
+      { status: 503 }
     );
   }
 
@@ -37,7 +41,11 @@ export async function POST(request: NextRequest) {
     .upsert({ email, source }, { onConflict: "email", ignoreDuplicates: true });
 
   if (error) {
-    return NextResponse.json({ ok: false, reason: error.message }, { status: 500 });
+    console.error("Marketing subscription failed", error);
+    return NextResponse.json(
+      { ok: false, reason: "Subscription could not be saved." },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ ok: true, persisted: true });
