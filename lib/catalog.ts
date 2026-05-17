@@ -593,18 +593,22 @@ export const products: Product[] = displayProductEntries
 export const categories = uniqueCategories(rawProducts);
 
 function mergeProductData(fallback: Product, primary: Product): Product {
-  // The local seed catalog is only a fallback for offline development. When a
-  // product also exists in Supabase, trust the database for variants and
-  // images — merging both sources duplicated gallery photos and variants
-  // because each source formats image URLs and SKUs differently. The seed is
-  // used only when the database genuinely has no variants/images of its own.
-  const variants = (primary.variants.length ? primary.variants : fallback.variants)
-    .slice()
-    .sort((a, b) => sizeSortValue(a.options.length) - sizeSortValue(b.options.length));
+  const variantMap = new Map<string, ProductVariant>();
 
-  const baseImages = primary.images.length ? primary.images : fallback.images;
+  fallback.variants.forEach((variant) => {
+    variantMap.set(variant.sku, variant);
+  });
+  primary.variants.forEach((variant) => {
+    variantMap.set(variant.sku, variant);
+  });
+
+  const variants = Array.from(variantMap.values()).sort(
+    (a, b) => sizeSortValue(a.options.length) - sizeSortValue(b.options.length)
+  );
+
   const imageMap = new Map<string, Product["images"][number]>();
-  baseImages.forEach((image) => imageMap.set(image.url, image));
+  fallback.images.forEach((image) => imageMap.set(image.url, image));
+  primary.images.forEach((image) => imageMap.set(image.url, image));
   variants.forEach((variant, index) => {
     if (!imageMap.has(variant.image)) {
       const imageSet = getImageSet(variant.image);

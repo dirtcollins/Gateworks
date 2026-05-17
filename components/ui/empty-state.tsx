@@ -7,12 +7,10 @@ type EmptyStateProps = {
   description?: string;
   action?: ReactNode;
   className?: string;
-  bordered?: boolean;
 };
 
 export function EmptyState({
   action,
-  bordered = true,
   className,
   description,
   title
@@ -20,10 +18,7 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "grid place-items-center gap-3 text-center",
-        bordered
-          ? "border border-dashed border-industrial-rail bg-industrial-paper p-6"
-          : "py-4",
+        "grid place-items-center gap-3 border border-dashed border-industrial-rail bg-industrial-paper p-6 text-center",
         className
       )}
     >

@@ -33,7 +33,6 @@ const dedicatedAdminRoutes = new Set([
   "inventory",
   "orders",
   "quotes",
-  "reports",
   "warehouse"
 ]);
 

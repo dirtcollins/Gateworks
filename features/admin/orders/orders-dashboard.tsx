@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -10,14 +10,11 @@ import {
   Search,
   SlidersHorizontal,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { PageShell } from "@/components/ui/page-shell";
 import { useOrderStore, type OrderRecord } from "@/lib/order-store";
-import { getOrderStatusTone } from "@/lib/order-status";
 import { formatCurrency } from "@/lib/utils";
 import { type OrderStatus, type PaymentStatus } from "@/lib/platform-backend";
 
@@ -55,6 +52,17 @@ const paymentLabels: Record<PaymentStatus, string> = {
   overpaid: "Overpaid",
   refunded: "Refunded",
   failed: "Failed"
+};
+
+const statusPillClasses: Record<OrderStatus, string> = {
+  draft: "bg-slate-100 text-slate-700 border-slate-200",
+  submitted: "bg-amber-50 text-amber-800 border-amber-200",
+  confirmed: "bg-blue-50 text-blue-800 border-blue-200",
+  picking: "bg-indigo-50 text-indigo-800 border-indigo-200",
+  ready_for_pickup: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  out_for_delivery: "bg-violet-50 text-violet-800 border-violet-200",
+  completed: "bg-slate-100 text-slate-700 border-slate-200",
+  cancelled: "bg-rose-50 text-rose-700 border-rose-200"
 };
 
 const statusFilters: Array<{ id: OrderStatusTab; label: string }> = [
@@ -221,13 +229,19 @@ export function OrdersDashboard() {
   const [query, setQuery] = useState("");
   const [statusTab, setStatusTab] = useState<OrderStatusTab>("all");
   const [fulfillmentFilter, setFulfillmentFilter] = useState<"all" | "pickup" | "delivery">("all");
+  const [selectedOrderId, setSelectedOrderId] = useState("");
   const [isControlsOpen, setIsControlsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const controlsRef = useRef<HTMLDivElement>(null);
 
   const orders = useMemo(() => {
     return storedOrders.length ? storedOrders : sampleOrders;
   }, [storedOrders]);
+
+  useEffect(() => {
+    if (orders.length === 0) return;
+    if (!selectedOrderId || !orders.find((order) => order.id === selectedOrderId)) {
+      setSelectedOrderId(orders[0].id);
+    }
+  }, [orders, selectedOrderId]);
 
   const filteredOrders = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -352,161 +366,21 @@ export function OrdersDashboard() {
 
   useEffect(() => {
     async function loadOrders() {
-      try {
-        const response = await fetch("/api/orders?limit=250&includeItems=false", {
-          cache: "no-store"
-        });
-        if (!response.ok) return;
+      const response = await fetch("/api/orders?limit=250&includeItems=false", { cache: "no-store" });
+      if (!response.ok) return;
 
-        const payload = (await response.json()) as {
-          orders?: OrderRecord[];
-          persisted?: boolean;
-        };
+      const payload = (await response.json()) as {
+        orders?: OrderRecord[];
+        persisted?: boolean;
+      };
 
-        if (payload.persisted && payload.orders) {
-          setOrders(payload.orders);
-        }
-      } finally {
-        setIsLoading(false);
+      if (payload.persisted && payload.orders) {
+        setOrders(payload.orders);
       }
     }
 
     void loadOrders();
   }, [setOrders]);
-
-  useEffect(() => {
-    if (!isControlsOpen) return;
-
-    function handlePointerDown(event: MouseEvent) {
-      if (controlsRef.current && !controlsRef.current.contains(event.target as Node)) {
-        setIsControlsOpen(false);
-      }
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setIsControlsOpen(false);
-        controlsRef.current
-          ?.querySelector<HTMLElement>("[data-controls-trigger]")
-          ?.focus();
-      }
-    }
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isControlsOpen]);
-
-  const columns: DataTableColumn<OrderRecord>[] = [
-    {
-      key: "status",
-      header: "Status",
-      sortable: true,
-      sortValue: (order) => statusLabels[order.status],
-      render: (order) => (
-        <Badge tone={getOrderStatusTone(order.status)}>{statusLabels[order.status]}</Badge>
-      )
-    },
-    {
-      key: "createdAt",
-      header: "Order date",
-      sortable: true,
-      sortValue: (order) => order.createdAt,
-      render: (order) => (
-        <div className="min-w-0">
-          <p className="font-semibold text-industrial-ink">{formatDate(order.createdAt)}</p>
-          <p className="text-xs text-industrial-muted">{formatTime(order.createdAt)}</p>
-        </div>
-      )
-    },
-    {
-      key: "customer",
-      header: "Customer",
-      sortable: true,
-      sortValue: (order) => (order.customerName || "").toLowerCase(),
-      render: (order) => (
-        <div className="min-w-0">
-          <p className="truncate font-black text-industrial-ink">
-            {order.customerName || "Unknown customer"}
-          </p>
-          <p className="truncate text-xs text-industrial-muted">
-            {order.companyName || order.email || order.fulfillmentMethod}
-          </p>
-        </div>
-      )
-    },
-    {
-      key: "orderNumber",
-      header: "Order number",
-      sortable: true,
-      sortValue: (order) => order.orderNumber,
-      render: (order) => (
-        <div className="min-w-0">
-          <p className="truncate font-black text-industrial-ink">{order.orderNumber}</p>
-          <p className="text-xs font-black uppercase tracking-[0.06em] text-industrial-muted">
-            {order.fulfillmentMethod}
-          </p>
-        </div>
-      )
-    },
-    {
-      key: "total",
-      header: "Total",
-      className: "text-right",
-      sortable: true,
-      sortValue: (order) => order.total,
-      render: (order) => (
-        <span className="font-semibold text-industrial-ink">{formatCurrency(order.total)}</span>
-      )
-    },
-    {
-      key: "amountDue",
-      header: (
-        <span title="Remaining balance; $0 when the order is fully paid or refunded.">
-          Amount due
-        </span>
-      ),
-      className: "text-right",
-      sortable: true,
-      sortValue: (order) => getAmountDue(order),
-      render: (order) => (
-        <span className="font-semibold text-industrial-ink">
-          {formatCurrency(getAmountDue(order))}
-        </span>
-      )
-    },
-    {
-      key: "actions",
-      header: "Actions",
-      className: "text-right",
-      render: (order) => {
-        const nextAction = getNextWorkflowAction(order);
-        return (
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              className="h-7 px-2 text-[10px]"
-              onClick={() => persistOrderStatus(order.id, nextAction.next, nextAction.detail)}
-              size="sm"
-              type="button"
-              variant={nextAction.tone}
-            >
-              {nextAction.label}
-            </Button>
-            <Link
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-industrial-rail bg-white px-2 text-[10px] font-black uppercase tracking-[0.08em] text-industrial-ink transition hover:border-industrial-ink"
-              href={`/admin/orders/${order.id}`}
-            >
-              <Eye size={13} />
-              Open
-            </Link>
-          </div>
-        );
-      }
-    }
-  ];
 
   return (
     <PageShell
@@ -529,12 +403,9 @@ export function OrdersDashboard() {
                   value={query}
                 />
             </label>
-            <div className="relative" ref={controlsRef}>
+            <div className="relative">
               <Button
-                aria-expanded={isControlsOpen}
-                aria-haspopup="true"
                 className="h-9 w-full px-3 text-[11px] md:w-auto"
-                data-controls-trigger
                 onClick={() => setIsControlsOpen((isOpen) => !isOpen)}
                 size="sm"
                 type="button"
@@ -580,49 +451,137 @@ export function OrdersDashboard() {
           </CardBody>
         </Card>
 
-        <Card className="p-0">
-          <CardBody className="grid gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="grid gap-1">
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">Orders</p>
-                <p className="text-sm text-industrial-steel">{filteredOrders.length} active orders</p>
-              </div>
-              <Button className="h-8 px-3 text-[10px]" onClick={handleCreateOrder} size="sm" type="button" variant="primary">
-                <Plus size={13} />
-                Create new order
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {statusFilters.map((tab) => {
-                const isActive = statusTab === tab.id;
-                return (
-                  <button
-                    className={`inline-flex items-center rounded-full border px-2.5 py-1.5 text-[10px] font-black uppercase tracking-[0.06em] transition ${
-                      isActive
-                        ? "border-industrial-ink bg-industrial-ink text-white"
-                        : "border-industrial-rail bg-white text-industrial-ink hover:border-industrial-ink/70"
-                    }`}
-                    key={tab.id}
-                    onClick={() => setStatusTab(tab.id)}
-                    type="button"
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-            <DataTable
-              caption="Orders"
-              columns={columns}
-              emptyDescription="No orders match the current filters."
-              emptyTitle="No orders found"
-              getRowKey={(order) => order.id}
-              isLoading={isLoading}
-              pageSize={25}
-              rows={filteredOrders}
-            />
-          </CardBody>
-        </Card>
+        <div className="grid gap-4">
+          <section className="flex h-[62vh] flex-col gap-3">
+            <Card className="p-0">
+              <CardBody className="grid gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="grid gap-1">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">Orders</p>
+                    <p className="text-sm text-industrial-steel">{filteredOrders.length} active orders</p>
+                  </div>
+                  <Button className="h-8 px-3 text-[10px]" onClick={handleCreateOrder} size="sm" type="button" variant="primary">
+                    <Plus size={13} />
+                    Create new order
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {statusFilters.map((tab) => {
+                    const isActive = statusTab === tab.id;
+                    return (
+                      <button
+                        className={`inline-flex items-center rounded-full border px-2.5 py-1.5 text-[10px] font-black uppercase tracking-[0.06em] transition ${
+                          isActive
+                            ? "border-industrial-ink bg-industrial-ink text-white"
+                            : "border-industrial-rail bg-white text-industrial-ink hover:border-industrial-ink/70"
+                        }`}
+                        key={tab.id}
+                        onClick={() => setStatusTab(tab.id)}
+                        type="button"
+                      >
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="overflow-x-auto overflow-y-auto">
+                  {filteredOrders.length ? (
+                    <div className="min-w-[980px]">
+                      <div className="grid grid-cols-[110px_140px_minmax(170px,1fr)_150px_110px_120px_170px] border-b border-industrial-rail px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-industrial-muted">
+                        <div>Status</div>
+                        <div>Order date</div>
+                        <div>Customer</div>
+                        <div>Order number</div>
+                        <div className="text-right">Total</div>
+                        <div className="text-right">Amount due</div>
+                        <div className="text-right">Actions</div>
+                      </div>
+                      <div className="divide-y divide-industrial-rail">
+                        {filteredOrders.map((order) => {
+                          const isSelected = selectedOrderId === order.id;
+                          const nextAction = getNextWorkflowAction(order);
+                          return (
+                            <div
+                              className={`grid cursor-pointer grid-cols-[110px_140px_minmax(170px,1fr)_150px_110px_120px_170px] items-center px-3 py-2 text-sm transition ${
+                                isSelected
+                                  ? "bg-industrial-paper"
+                                  : "bg-white hover:bg-industrial-paper/60"
+                              }`}
+                              key={order.id}
+                              onClick={() => router.push(`/admin/orders/${order.id}`)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  router.push(`/admin/orders/${order.id}`);
+                                }
+                              }}
+                              role="button"
+                              tabIndex={0}
+                            >
+                              <div>
+                                <span
+                                  className={`inline-flex rounded px-2 py-1 text-[10px] font-black uppercase tracking-[0.06em] ${
+                                    statusPillClasses[order.status]
+                                  }`}
+                                >
+                                  {statusLabels[order.status]}
+                                </span>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-industrial-ink">{formatDate(order.createdAt)}</p>
+                                <p className="text-xs text-industrial-muted">{formatTime(order.createdAt)}</p>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate font-black text-industrial-ink">{order.customerName || "Unknown customer"}</p>
+                                <p className="truncate text-xs text-industrial-muted">{order.companyName || order.email || order.fulfillmentMethod}</p>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate font-black text-industrial-ink">{order.orderNumber}</p>
+                                <p className="text-xs font-black uppercase tracking-[0.06em] text-industrial-muted">{order.fulfillmentMethod}</p>
+                              </div>
+                              <div className="text-right font-semibold text-industrial-ink">{formatCurrency(order.total)}</div>
+                              <div className="text-right font-semibold text-industrial-ink">{formatCurrency(getAmountDue(order))}</div>
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  className="h-7 px-2 text-[10px]"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    persistOrderStatus(order.id, nextAction.next, nextAction.detail);
+                                  }}
+                                  size="sm"
+                                  type="button"
+                                  variant={nextAction.tone}
+                                >
+                                  {nextAction.label}
+                                </Button>
+                                <Link
+                                  className="inline-flex h-7 items-center gap-1 border border-industrial-rail bg-white px-2 text-[10px] font-black uppercase tracking-[0.08em] text-industrial-ink"
+                                  href={`/admin/orders/${order.id}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setSelectedOrderId(order.id);
+                                  }}
+                                >
+                                  <Eye size={13} />
+                                  Open
+                                </Link>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="rounded-lg border border-dashed border-industrial-rail p-3 text-sm text-industrial-muted">
+                      No orders matched the current filters.
+                    </p>
+                  )}
+                </div>
+              </CardBody>
+            </Card>
+          </section>
+
+        </div>
       </div>
     </PageShell>
   );

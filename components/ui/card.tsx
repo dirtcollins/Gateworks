@@ -5,19 +5,10 @@ type CardProps = HTMLAttributes<HTMLDivElement> & {
   children: ReactNode;
 };
 
-type RootCardProps = CardProps & {
-  interactive?: boolean;
-};
-
-export function Card({ children, className, interactive = false, ...props }: RootCardProps) {
+export function Card({ children, className, ...props }: CardProps) {
   return (
     <div
-      className={cn(
-        "rounded-card border border-industrial-rail bg-white shadow-sm",
-        interactive &&
-          "transition hover:-translate-y-px hover:border-industrial-ink/40 hover:shadow-toolbar",
-        className
-      )}
+      className={cn("rounded-lg border border-industrial-rail bg-white shadow-sm", className)}
       {...props}
     >
       {children}
