@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Inter } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { RootShell } from "@/components/layout/root-shell";
+import { GA_MEASUREMENT_ID } from "@/lib/analytics";
 import {
   SITE_DESCRIPTION,
   SITE_NAME,
@@ -38,6 +40,17 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: jsonLdScript(organizationJsonLd()) }}
           type="application/ld+json"
         />
+        {GA_MEASUREMENT_ID ? (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+              strategy="afterInteractive"
+            />
+            <Script id="ga-init" strategy="afterInteractive">
+              {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${GA_MEASUREMENT_ID}');`}
+            </Script>
+          </>
+        ) : null}
         <RootShell>{children}</RootShell>
       </body>
     </html>

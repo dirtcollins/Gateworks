@@ -44,6 +44,36 @@ export function productMetadata(product: Product): Metadata {
   };
 }
 
+export function categoryMetadata(
+  name: string,
+  slug: string,
+  productCount: number
+): Metadata {
+  const socialTitle = `${name} | ${SITE_NAME}`;
+  const description = truncate(
+    `Shop ${name.toLowerCase()} at ${SITE_NAME} — ${productCount} contractor-ready products for gate, fence, and metal fabrication work, stocked for same-day pickup.`
+  );
+  const url = `${SITE_URL}/categories/${slug}`;
+
+  return {
+    title: name,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title: socialTitle,
+      description,
+      url,
+      type: "website",
+      siteName: SITE_NAME
+    },
+    twitter: {
+      card: "summary",
+      title: socialTitle,
+      description
+    }
+  };
+}
+
 export function organizationJsonLd() {
   return {
     "@context": "https://schema.org",

@@ -29,6 +29,7 @@ import {
   isTubingProduct
 } from "@/lib/pricing";
 import type { Product, ProductVariant } from "@/lib/types";
+import { trackEvent } from "@/lib/analytics";
 import { getProductImageForSize } from "@/lib/product-image";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -282,6 +283,11 @@ export function ProductPageClient({
       pricingMethod: pricedSelectedVariant.pricing_method,
       quantity,
       options: pricedSelectedVariant.options
+    });
+    trackEvent("add_to_cart", {
+      sku: pricedSelectedVariant.sku,
+      value: pricedSelectedVariant.price,
+      quantity
     });
     setJustAdded(true);
     window.setTimeout(() => setJustAdded(false), 1200);

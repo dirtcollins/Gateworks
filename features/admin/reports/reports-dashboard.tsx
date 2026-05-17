@@ -25,6 +25,11 @@ export type ReportOrderRow = {
   margin: number | null;
 };
 
+export type ReportAgingBucket = {
+  bucket: string;
+  total: number;
+};
+
 export type ReportData = {
   configured: boolean;
   hasCostData: boolean;
@@ -37,6 +42,7 @@ export type ReportData = {
   collected: number;
   outstanding: number;
   paymentBreakdown: ReportPaymentBreakdown[];
+  aging: ReportAgingBucket[];
   recentOrders: ReportOrderRow[];
 };
 
@@ -142,7 +148,7 @@ export function ReportsDashboard({ data }: { data: ReportData }) {
         ]}
       />
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+      <div className="mt-5 grid gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
@@ -166,6 +172,24 @@ export function ReportsDashboard({ data }: { data: ReportData }) {
                 {formatCurrency(data.outstanding)}
               </span>
             </div>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
+              Outstanding by age
+            </p>
+          </CardHeader>
+          <CardBody className="grid gap-2 text-sm">
+            {data.aging.map((bucket) => (
+              <div className="flex items-center justify-between" key={bucket.bucket}>
+                <span className="text-industrial-steel">{bucket.bucket} days</span>
+                <span className="font-black text-industrial-ink">
+                  {formatCurrency(bucket.total)}
+                </span>
+              </div>
+            ))}
           </CardBody>
         </Card>
 

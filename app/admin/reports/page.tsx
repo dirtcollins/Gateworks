@@ -50,6 +50,7 @@ function emptyData(configured: boolean): ReportData {
     collected: 0,
     outstanding: 0,
     paymentBreakdown: [],
+    aging: [],
     recentOrders: []
   };
 }
@@ -121,8 +122,10 @@ export default async function ReportsPage() {
     return hasCost ? margin : null;
   }
 
-  const cutoff30 = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const cutoff30 = now - 30 * 24 * 60 * 60 * 1000;
   const paymentTotals = new Map<string, { count: number; total: number }>();
+  const aging = { current: 0, mid: 0, old: 0 };
 
   let revenue30 = 0;
   let orders30 = 0;
@@ -133,8 +136,17 @@ export default async function ReportsPage() {
 
   orders.forEach((order) => {
     const total = Number(order.total || 0);
+    const paid = paidByOrder.get(order.id) || 0;
     billed += total;
-    collected += paidByOrder.get(order.id) || 0;
+    collected += paid;
+
+    const outstanding = Math.max(0, total - paid);
+    if (outstanding > 0) {
+      const ageDays = (now - new Date(order.created_at).getTime()) / (24 * 60 * 60 * 1000);
+      if (ageDays <= 30) aging.current += outstanding;
+      else if (ageDays <= 60) aging.mid += outstanding;
+      else aging.old += outstanding;
+    }
 
     if (new Date(order.created_at).getTime() >= cutoff30) {
       revenue30 += total;
@@ -177,6 +189,11 @@ export default async function ReportsPage() {
         })
       )
       .sort((a, b) => b.total - a.total),
+    aging: [
+      { bucket: "0-30", total: aging.current },
+      { bucket: "31-60", total: aging.mid },
+      { bucket: "60+", total: aging.old }
+    ],
     recentOrders: orders.slice(0, 25).map(
       (order): ReportOrderRow => ({
         id: order.id,

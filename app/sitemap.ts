@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { products } from "@/lib/catalog";
+import { categories, products } from "@/lib/catalog";
 import { SITE_URL } from "@/lib/seo";
 
 export default function sitemap(): MetadataRoute.Sitemap {
@@ -12,6 +12,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: path === "" ? 1 : 0.6
   }));
 
+  const slugsWithProducts = new Set(products.map((product) => product.category.slug));
+  const categoryRoutes = categories
+    .filter((category) => slugsWithProducts.has(category.slug))
+    .map((category) => ({
+      url: `${SITE_URL}/categories/${category.slug}`,
+      lastModified,
+      changeFrequency: "weekly" as const,
+      priority: 0.7
+    }));
+
   const productRoutes = products.map((product) => ({
     url: `${SITE_URL}/products/${product.slug}`,
     lastModified,
@@ -19,5 +29,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8
   }));
 
-  return [...staticRoutes, ...productRoutes];
+  return [...staticRoutes, ...categoryRoutes, ...productRoutes];
 }
