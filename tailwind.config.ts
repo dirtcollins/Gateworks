@@ -34,6 +34,16 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--truewerk-font)"]
       },
+      // Named semantic type scale. Prefer these over raw text-xs/text-2xl so
+      // typography stays consistent: text-caption, text-label, text-body,
+      // text-heading, text-display.
+      fontSize: {
+        caption: ["0.6875rem", { lineHeight: "1rem" }],
+        label: ["0.75rem", { lineHeight: "1rem" }],
+        body: ["0.875rem", { lineHeight: "1.25rem" }],
+        heading: ["1.125rem", { lineHeight: "1.5rem" }],
+        display: ["1.875rem", { lineHeight: "2.25rem" }]
+      },
       borderRadius: {
         card: "0.5rem",
         chip: "0.25rem"

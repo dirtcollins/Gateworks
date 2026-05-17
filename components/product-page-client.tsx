@@ -97,6 +97,7 @@ export function ProductPageClient({
   );
   const [quantity, setQuantity] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
+  const [isImageZoomOpen, setIsImageZoomOpen] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
   const [shareCopied, setShareCopied] = useState(false);
   const [isListDrawerOpen, setIsListDrawerOpen] = useState(false);
@@ -126,6 +127,19 @@ export function ProductPageClient({
   useEffect(() => {
     setSelectedImage(selectedVariant.image);
   }, [selectedVariant]);
+
+  useEffect(() => {
+    if (!isImageZoomOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsImageZoomOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isImageZoomOpen]);
 
   const allImages = useMemo(() => {
     const urls = Array.from(
@@ -483,7 +497,12 @@ export function ProductPageClient({
 
       <section className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 lg:grid-cols-[minmax(0,1fr)_588px]">
         <div className="border border-jobsite-rail bg-white p-3">
-          <div className="relative aspect-[1.18/1] bg-white">
+          <button
+            aria-label="Zoom product image"
+            className="relative block aspect-[1.18/1] w-full cursor-zoom-in bg-white"
+            onClick={() => setIsImageZoomOpen(true)}
+            type="button"
+          >
             <Image
               priority
               alt={product.title}
@@ -494,9 +513,9 @@ export function ProductPageClient({
               sizes="(max-width: 1024px) 100vw, 44vw"
               src={selectedImageSource}
             />
-          </div>
+          </button>
           <p className="mt-1 text-center text-xs text-jobsite-steel">
-            Click thumbnails to change image
+            Click the image to zoom · click thumbnails to change image
           </p>
           <div className="mt-3 grid grid-cols-5 gap-2">
             {galleryImages.slice(0, 8).map((image) => (
@@ -1229,6 +1248,42 @@ export function ProductPageClient({
           </span>
         </button>
       </div>
+
+      {isImageZoomOpen ? (
+        <div
+          aria-label={`${product.title} image`}
+          aria-modal="true"
+          className="fixed inset-0 z-[80] grid place-items-center bg-black/80 p-6"
+          role="dialog"
+        >
+          <button
+            aria-label="Close image zoom"
+            className="absolute inset-0 cursor-zoom-out"
+            onClick={() => setIsImageZoomOpen(false)}
+            type="button"
+          />
+          <div className="relative z-10 w-full max-w-3xl">
+            <button
+              aria-label="Close image zoom"
+              className="absolute right-2 top-2 z-10 grid size-9 place-items-center rounded-md bg-white text-jobsite-ink shadow-lg transition hover:bg-jobsite-paper"
+              onClick={() => setIsImageZoomOpen(false)}
+              type="button"
+            >
+              <X size={20} />
+            </button>
+            <div className="relative aspect-square w-full bg-white">
+              <Image
+                alt={product.title}
+                className="object-contain p-6"
+                fill
+                quality={95}
+                sizes="(max-width: 768px) 100vw, 768px"
+                src={selectedImageSource}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

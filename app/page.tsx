@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { categories, searchProducts } from "@/lib/catalog";
 import { ProductGrid } from "@/components/product-grid";
+import { ProductRail } from "@/components/product-rail";
 import { SearchBar } from "@/components/search-bar";
 import { PageShell } from "@/components/ui/page-shell";
 import { StatGrid } from "@/components/ui/stat-grid";
+
+const metalCategoryPattern = /tubing|metal|steel|iron|bar|sheet/;
 
 const homeProductLimit = 24;
 
@@ -54,6 +57,13 @@ export default async function Home({ searchParams }: HomePageProps) {
     (total, product) => total + product.variants.length,
     0
   );
+  const isBrowsing = Boolean(normalized) || category !== "all";
+  const contractorFavorites = [...activeProducts]
+    .sort((left, right) => right.variants.length - left.variants.length)
+    .slice(0, 12);
+  const metalSupply = activeProducts
+    .filter((product) => metalCategoryPattern.test(product.category.slug))
+    .slice(0, 12);
 
   return (
     <PageShell
@@ -105,6 +115,13 @@ export default async function Home({ searchParams }: HomePageProps) {
       <div className="mt-4">
         <ProductGrid products={visibleProducts} />
       </div>
+
+      {!isBrowsing ? (
+        <div className="mt-6 border-t border-black/10">
+          <ProductRail products={contractorFavorites} title="Contractor favorites" />
+          <ProductRail products={metalSupply} title="Steel & metal supply" />
+        </div>
+      ) : null}
     </PageShell>
   );
 }
