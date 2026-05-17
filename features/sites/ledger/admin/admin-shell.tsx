@@ -6,12 +6,14 @@ import { useState, type ReactNode } from "react";
 import {
   BarChart3,
   Boxes,
+  ClipboardCheck,
   ClipboardList,
   FileText,
   LayoutDashboard,
   Menu,
   PackageSearch,
   Plus,
+  TrendingUp,
   Users,
   Warehouse,
   X
@@ -25,8 +27,8 @@ import { LEDGER } from "@/features/sites/ledger/kit";
  * institutional layout: fixed indigo-tinted sidebar, hairline borders,
  * generous whitespace — the same Ledger language as the storefront.
  * Wave 3 ships dashboard / orders / quotes / reports; Wave 4 ships
- * catalog / products / inventory. Customers / warehouse remain Wave 5
- * placeholders and resolve when those routes land.
+ * catalog / products / inventory; Wave 5 completes the workspace with
+ * customers / pick tickets / warehouse / demand.
  * ------------------------------------------------------------------ */
 
 type AdminNavItem = {
@@ -40,15 +42,20 @@ const PRIMARY_NAV: AdminNavItem[] = [
   { href: "/ledger/admin", label: "Dashboard", Icon: LayoutDashboard },
   { href: "/ledger/admin/orders", label: "Orders", Icon: ClipboardList },
   { href: "/ledger/admin/quotes", label: "Quotes", Icon: FileText },
+  { href: "/ledger/admin/customers", label: "Customers", Icon: Users },
   { href: "/ledger/admin/reports", label: "Reports", Icon: BarChart3 }
 ];
 
-const WAVE4_NAV: AdminNavItem[] = [
+const CATALOG_NAV: AdminNavItem[] = [
   { href: "/ledger/admin/catalog", label: "Catalog", Icon: Boxes },
   { href: "/ledger/admin/products", label: "Products", Icon: PackageSearch },
   { href: "/ledger/admin/inventory", label: "Inventory", Icon: Boxes },
-  { href: "/ledger/admin/customers", label: "Customers", Icon: Users, soon: true },
-  { href: "/ledger/admin/warehouse", label: "Warehouse", Icon: Warehouse, soon: true }
+  { href: "/ledger/admin/demand", label: "Demand", Icon: TrendingUp }
+];
+
+const FULFILLMENT_NAV: AdminNavItem[] = [
+  { href: "/ledger/admin/pick-tickets", label: "Pick tickets", Icon: ClipboardCheck },
+  { href: "/ledger/admin/warehouse", label: "Warehouse", Icon: Warehouse }
 ];
 
 function isActivePath(currentPath: string, itemPath: string) {
@@ -113,8 +120,9 @@ export function LedgerAdminShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const activeItem =
-    [...PRIMARY_NAV, ...WAVE4_NAV].find((item) => isActivePath(pathname, item.href)) ??
-    PRIMARY_NAV[0];
+    [...PRIMARY_NAV, ...CATALOG_NAV, ...FULFILLMENT_NAV].find((item) =>
+      isActivePath(pathname, item.href)
+    ) ?? PRIMARY_NAV[0];
 
   const sidebarBody = (
     <div className="flex h-full flex-col">
@@ -164,8 +172,14 @@ export function LedgerAdminShell({ children }: { children: ReactNode }) {
           onNavigate={() => setMobileOpen(false)}
         />
         <NavSection
-          heading="Catalog & fulfillment"
-          items={WAVE4_NAV}
+          heading="Catalog & demand"
+          items={CATALOG_NAV}
+          pathname={pathname}
+          onNavigate={() => setMobileOpen(false)}
+        />
+        <NavSection
+          heading="Fulfillment"
+          items={FULFILLMENT_NAV}
           pathname={pathname}
           onNavigate={() => setMobileOpen(false)}
         />

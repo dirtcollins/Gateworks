@@ -62,15 +62,25 @@ const NAV: NavGroup[] = [
         href: "/wayfinder/admin/customers",
         label: "Customers",
         code: "CUS",
-        icon: Ico.user,
-        soon: true
+        icon: Ico.user
+      },
+      {
+        href: "/wayfinder/admin/pick-tickets",
+        label: "Pick tickets",
+        code: "PTK",
+        icon: Ico.clipboard
       },
       {
         href: "/wayfinder/admin/warehouse",
         label: "Warehouse",
         code: "WHS",
-        icon: Ico.truck,
-        soon: true
+        icon: Ico.truck
+      },
+      {
+        href: "/wayfinder/admin/demand",
+        label: "Demand",
+        code: "DMD",
+        icon: Ico.map
       }
     ]
   }

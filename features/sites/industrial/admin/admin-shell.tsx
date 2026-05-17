@@ -6,12 +6,14 @@ import { useState, type ReactNode } from "react";
 import {
   BarChart3,
   Boxes,
+  ClipboardCheck,
   ClipboardList,
   FileText,
   LayoutDashboard,
   Menu,
   Package,
   ShoppingCart,
+  TrendingUp,
   Truck,
   Users,
   Warehouse,
@@ -53,8 +55,10 @@ const NAV_GROUPS: Array<{ heading: string; items: AdminNavItem[] }> = [
   {
     heading: "Network",
     items: [
-      { href: "/industrial/admin/customers", label: "Customers", Icon: Users, comingSoon: true },
-      { href: "/industrial/admin/warehouse", label: "Warehouse", Icon: Warehouse, comingSoon: true }
+      { href: "/industrial/admin/customers", label: "Customers", Icon: Users },
+      { href: "/industrial/admin/pick-tickets", label: "Pick tickets", Icon: ClipboardCheck },
+      { href: "/industrial/admin/warehouse", label: "Warehouse", Icon: Warehouse },
+      { href: "/industrial/admin/demand", label: "Demand", Icon: TrendingUp }
     ]
   }
 ];
