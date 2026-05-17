@@ -12,16 +12,11 @@ type RootShellProps = {
 export function RootShell({ children }: RootShellProps) {
   const pathname = usePathname() || "/";
   const isAdminRoute = pathname.startsWith("/admin");
-  // Design Lab concepts each render their own full chrome — keep the app
-  // sidebar and footer out of the demo (and out of the hub preview iframes).
-  const isDesignLab = pathname.startsWith("/design-lab");
-  // The standalone concept sites (Industrial Pro / Ledger / Wayfinder) each
-  // bring their own complete shell, so the app chrome stays out of them.
-  const isConceptSite = ["/industrial", "/ledger", "/wayfinder"].some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
-  );
+  // The Wayfinder storefront brings its own complete shell.
+  const isWayfinder =
+    pathname === "/wayfinder" || pathname.startsWith("/wayfinder/");
 
-  if (isAdminRoute || isDesignLab || isConceptSite) {
+  if (isAdminRoute || isWayfinder) {
     return <>{children}</>;
   }
 

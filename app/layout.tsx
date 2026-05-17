@@ -4,7 +4,6 @@ import { Inter } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { RootShell } from "@/components/layout/root-shell";
-import { SiteSwitcher } from "@/components/site-switcher";
 import { GA_MEASUREMENT_ID } from "@/lib/analytics";
 import {
   SITE_DESCRIPTION,
@@ -53,7 +52,6 @@ export default function RootLayout({
           </>
         ) : null}
         <RootShell>{children}</RootShell>
-        <SiteSwitcher />
       </body>
     </html>
   );
