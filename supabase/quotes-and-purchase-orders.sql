@@ -21,7 +21,10 @@ alter table public.quotes add column if not exists quote_number text;
 alter table public.quotes add column if not exists status text not null default 'draft';
 alter table public.quotes add column if not exists is_template boolean not null default false;
 alter table public.quotes add column if not exists template_name text;
-alter table public.quotes add column if not exists site_user_id uuid;
+-- site_user_id holds the text ids used by `site_users`, not a uuid.
+alter table public.quotes add column if not exists site_user_id text;
+alter table public.quotes
+  alter column site_user_id type text using site_user_id::text;
 alter table public.quotes add column if not exists customer_id text;
 alter table public.quotes add column if not exists customer_name text;
 alter table public.quotes add column if not exists customer_email text;
