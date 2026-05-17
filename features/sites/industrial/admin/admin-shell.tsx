@@ -45,9 +45,9 @@ const NAV_GROUPS: Array<{ heading: string; items: AdminNavItem[] }> = [
   {
     heading: "Merchandising",
     items: [
-      { href: "/industrial/admin/catalog", label: "Catalog", Icon: ShoppingCart, comingSoon: true },
-      { href: "/industrial/admin/products", label: "Products", Icon: Package, comingSoon: true },
-      { href: "/industrial/admin/inventory", label: "Inventory", Icon: Boxes, comingSoon: true }
+      { href: "/industrial/admin/catalog", label: "Catalog", Icon: ShoppingCart },
+      { href: "/industrial/admin/products", label: "Products", Icon: Package },
+      { href: "/industrial/admin/inventory", label: "Inventory", Icon: Boxes }
     ]
   },
   {

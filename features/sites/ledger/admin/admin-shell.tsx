@@ -24,16 +24,16 @@ import { LEDGER } from "@/features/sites/ledger/kit";
  * The procurement portal's operations workspace. A calm, paper-white
  * institutional layout: fixed indigo-tinted sidebar, hairline borders,
  * generous whitespace — the same Ledger language as the storefront.
- * Wave 3 ships dashboard / orders / quotes / reports; Wave 4 sections
- * (catalog / products / inventory / customers / warehouse) are linked
- * now and will resolve when those routes land.
+ * Wave 3 ships dashboard / orders / quotes / reports; Wave 4 ships
+ * catalog / products / inventory. Customers / warehouse remain Wave 5
+ * placeholders and resolve when those routes land.
  * ------------------------------------------------------------------ */
 
 type AdminNavItem = {
   href: string;
   label: string;
   Icon: LucideIcon;
-  wave4?: boolean;
+  soon?: boolean;
 };
 
 const PRIMARY_NAV: AdminNavItem[] = [
@@ -44,11 +44,11 @@ const PRIMARY_NAV: AdminNavItem[] = [
 ];
 
 const WAVE4_NAV: AdminNavItem[] = [
-  { href: "/ledger/admin/catalog", label: "Catalog", Icon: Boxes, wave4: true },
-  { href: "/ledger/admin/products", label: "Products", Icon: PackageSearch, wave4: true },
-  { href: "/ledger/admin/inventory", label: "Inventory", Icon: Boxes, wave4: true },
-  { href: "/ledger/admin/customers", label: "Customers", Icon: Users, wave4: true },
-  { href: "/ledger/admin/warehouse", label: "Warehouse", Icon: Warehouse, wave4: true }
+  { href: "/ledger/admin/catalog", label: "Catalog", Icon: Boxes },
+  { href: "/ledger/admin/products", label: "Products", Icon: PackageSearch },
+  { href: "/ledger/admin/inventory", label: "Inventory", Icon: Boxes },
+  { href: "/ledger/admin/customers", label: "Customers", Icon: Users, soon: true },
+  { href: "/ledger/admin/warehouse", label: "Warehouse", Icon: Warehouse, soon: true }
 ];
 
 function isActivePath(currentPath: string, itemPath: string) {
@@ -92,7 +92,7 @@ function NavSection({
             >
               <Icon className="h-4 w-4 shrink-0" />
               <span className="truncate">{item.label}</span>
-              {item.wave4 ? (
+              {item.soon ? (
                 <span
                   className="ml-auto rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em]"
                   style={{ backgroundColor: LEDGER.canvas, color: LEDGER.muted }}
