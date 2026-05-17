@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import {
   BarChart3,
@@ -117,12 +118,17 @@ function ProductThumb({ product, compact = false }: { product: Product; compact?
   const image = product.images[0]?.url ?? product.variants[0]?.image;
   return (
     <div
-      className={`overflow-hidden rounded-md border bg-[#f3f1ec] ${compact ? "h-14 w-14" : "h-36 w-full"}`}
+      className={`relative overflow-hidden rounded-md border bg-[#f3f1ec] ${compact ? "h-14 w-14" : "h-36 w-full"}`}
       style={{ borderColor: ui.border }}
     >
       {image ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img alt={product.title} className="h-full w-full object-contain p-3" src={image} />
+        <Image
+          alt={product.title}
+          className="object-contain p-3"
+          fill
+          sizes={compact ? "56px" : "(max-width: 768px) 100vw, 360px"}
+          src={image}
+        />
       ) : (
         <div className="grid h-full w-full place-items-center text-sm font-black" style={{ color: ui.muted }}>
           GW

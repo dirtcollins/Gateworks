@@ -1,3 +1,5 @@
+"use client";
+
 // d11 "Wayfinder" — Home landing.
 // The prototype is catalog-first with no landing; this builds a proper home
 // in the prototype's exact visual language: black context bar shell, the big
