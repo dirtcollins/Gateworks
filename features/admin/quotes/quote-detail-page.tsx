@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -8,12 +9,13 @@ import {
   PackagePlus,
   Plus,
   CheckCircle2,
+  Search,
+  Trash2,
   Truck,
-  AlertCircle
+  X
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Input, Select, Textarea } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/input";
 import { PageShell } from "@/components/ui/page-shell";
 import { products as fallbackCatalogProducts } from "@/lib/catalog";
 import { useOrderStore, type OrderRecord } from "@/lib/order-store";
@@ -355,6 +357,7 @@ export function QuoteDetailPage({
   const [quickAddQuantity, setQuickAddQuantity] = useState("1");
   const [quickAddUnit, setQuickAddUnit] = useState("EA");
   const [quickAddPrice, setQuickAddPrice] = useState("0");
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
 
   const [internalNotes, setInternalNotes] = useState(
     "Track stock availability before saving this quote to customer."
@@ -583,6 +586,55 @@ export function QuoteDetailPage({
     return "";
   }
 
+  function closeQuickAdd() {
+    setIsQuickAddOpen(false);
+    clearQuickAddForm();
+  }
+
+  function removeLineItem(variantId: string) {
+    if (!isValidQuote(quote)) return;
+    const nextItems = quote.items.filter((item) => item.variantId !== variantId);
+    const subtotalNext = getQuoteSubtotal(nextItems);
+    const deliveryFeeNext =
+      quote.fulfillmentMethod === "delivery" && subtotalNext < 500 ? 85 : quote.deliveryFee;
+    const taxNext = quote.status === "confirmed" ? subtotalNext * taxRate : 0;
+    const nextTotal = subtotalNext + taxNext + deliveryFeeNext;
+    const updatedQuote: OrderRecord = {
+      ...quote,
+      items: nextItems,
+      subtotal: subtotalNext,
+      tax: taxNext,
+      deliveryFee: deliveryFeeNext,
+      total: nextTotal,
+      updatedAt: new Date().toISOString()
+    };
+    upsertOrder(updatedQuote);
+    void fetch("/api/orders", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orderId: quote.id,
+        status: quote.status,
+        items: nextItems,
+        subtotal: subtotalNext,
+        tax: taxNext,
+        deliveryFee: deliveryFeeNext,
+        total: nextTotal
+      })
+    })
+      .then((response) => response.json())
+      .then(
+        (payload: { persisted?: boolean; reason?: string }) =>
+          !payload.persisted &&
+          setBackendNotice(
+            payload.reason || "Supabase is not configured. Changes saved locally."
+          )
+      )
+      .catch(() =>
+        setBackendNotice("Line item removal stored locally until backend sync is connected.")
+      );
+  }
+
   function addCatalogItemToQuote() {
     if (!isValidQuote(quote)) {
       setActionNotice("Quote not loaded.");
@@ -654,6 +706,7 @@ export function QuoteDetailPage({
 
     upsertOrder(updatedQuote);
     clearQuickAddForm();
+    setIsQuickAddOpen(false);
     setActionNotice(`Added ${product.title} to ${quote.orderNumber}.`);
 
     void fetch("/api/orders", {
@@ -818,152 +871,310 @@ export function QuoteDetailPage({
                 <h3 className="text-lg font-black text-industrial-ink">Line items</h3>
               </div>
             </CardHeader>
-            <CardBody>
-              <div className="grid gap-2 border-b border-industrial-rail pb-4">
-                <p className="text-xs font-black uppercase tracking-[0.12em] text-industrial-muted">
-                  Add from catalog
-                </p>
-                <div className="grid gap-2 md:grid-cols-[1.6fr_1.3fr_1fr_100px_110px_120px_auto]">
-                  <Input
-                    list="quote-product-suggestions"
-                    placeholder="Search product name or SKU"
-                    value={quickAddProductQuery}
-                    onChange={(event) => setProductBySearch(event.target.value)}
-                  />
-                  <Select
-                    onChange={(event) => selectQuickAddProduct(getCatalogProduct(catalogItems, event.target.value) || null)}
-                    value={quickAddProductId}
-                  >
-                    <option value="">Select product</option>
-                    {filteredCatalogProducts.slice(0, 160).map((product) => (
-                      <option key={product.id} value={product.id}>
-                        {product.title}
-                      </option>
-                    ))}
-                  </Select>
-                  <Select
-                    aria-label="Catalog variant"
-                    onChange={(event) => {
-                      const variant = activeCatalogProduct
-                        ? getCatalogVariant(activeCatalogProduct, event.target.value)
-                        : undefined;
-                      setQuickAddVariantId(event.target.value);
-                      setQuickAddPrice((variant?.price || 0).toFixed(2));
-                      setQuickAddUnit(unitFromVariant(variant || undefined));
-                    }}
-                    disabled={!activeCatalogProduct}
-                    value={quickAddVariantId}
-                  >
-                    <option value="">{activeCatalogProduct ? "Select variant" : "Select product first"}</option>
-                    {availableVariants.map((variant) => (
-                      <option key={variant.id} value={variant.id}>
-                        {variant.sku} · {formatVariantSummary(variant)}
-                      </option>
-                    ))}
-                  </Select>
-                  <Input
-                    inputMode="decimal"
-                    placeholder="Qty"
-                    value={quickAddQuantity}
-                    onChange={(event) => setQuickAddQuantity(event.target.value)}
-                  />
-                  <Select
-                    aria-label="Unit"
-                    onChange={(event) => setQuickAddUnit(event.target.value)}
-                    value={quickAddUnit}
-                  >
-                    {unitOptions.map((unit) => (
-                      <option key={unit} value={unit}>
-                        {unit}
-                      </option>
-                    ))}
-                  </Select>
-                  <Input
-                    inputMode="decimal"
-                    placeholder="Unit price"
-                    value={quickAddPrice}
-                    onChange={(event) => setQuickAddPrice(event.target.value)}
-                  />
-                  <Button onClick={addCatalogItemToQuote} type="button">
-                    <Plus size={14} />
-                    Add product
-                  </Button>
-                </div>
-                <p className="text-xs text-industrial-muted">
-                  {quickAddProductQuery || activeCatalogProduct ? (
-                    getQuickAddStatusNote() || `Using: ${quickAddVariantLabel || "Product variant"}`
-                  ) : (
-                    <span className="inline-flex items-center gap-1">
-                      <AlertCircle size={12} />
-                      Start typing to search catalog products.
-                    </span>
-                  )}
-                </p>
-                <datalist id="quote-product-suggestions">
-                  {filteredCatalogProducts.slice(0, 200).map((product) => (
-                    <option key={product.id} value={product.title} />
-                  ))}
-                  {filteredCatalogProducts.flatMap((product) =>
-                    product.variants
-                      .filter((variant) => variant.sku)
-                      .map((variant) => (
-                        <option key={`${product.id}-${variant.id}`} value={variant.sku} />
-                      ))
-                  )}
-                </datalist>
+            <div>
+              {/* Column header row — hidden on mobile, visible md+ */}
+              <div className="hidden grid-cols-[minmax(0,1fr)_140px_80px_80px_110px_120px_48px] gap-4 border-b border-black/10 bg-[#f7f7f4] px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted md:grid">
+                <span>Product / service</span>
+                <span className="text-right">Size / variant</span>
+                <span className="text-right">Qty</span>
+                <span className="text-right">Unit</span>
+                <span className="text-right">Unit price</span>
+                <span className="text-right">Line total</span>
+                <span className="sr-only">Actions</span>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="mt-4 w-full min-w-[1200px] text-left text-sm">
-                  <thead className="sticky top-0 z-10 border-b border-industrial-rail bg-white">
-                    <tr>
-                      <th className="px-3 py-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">Product</th>
-                      <th className="px-3 py-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">Size / Variant</th>
-                      <th className="px-3 py-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">Quantity</th>
-                      <th className="px-3 py-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">Unit</th>
-                      <th className="px-3 py-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">Unit Price</th>
-                      <th className="px-3 py-3 text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">Line Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lineItems.length ? (
-                      lineItems.map((item) => (
-                        <tr className="border-b border-industrial-rail/70" key={item.orderItemId || `${item.productId}-${item.variantId}`}>
-                          <td className="px-3 py-3">
-                            <p className="font-black text-industrial-ink">{item.title}</p>
-                            <p className="text-xs text-industrial-steel">{item.sku}</p>
-                          </td>
-                          <td className="px-3 py-3 text-industrial-steel">
-                            {Object.entries(item.options || {})
-                              .filter(([, value]) => Boolean(value))
-                              .map((entry) => entry[1])
-                              .join(" · ") || "Standard"}
-                          </td>
-                          <td className="px-3 py-3 text-industrial-steel">
-                            {item.quantity}
-                          </td>
-                          <td className="px-3 py-3 text-industrial-steel">
-                            {(item.options as Record<string, string | undefined> | undefined)?.unit || "EA"}
-                          </td>
-                          <td className="px-3 py-3 text-industrial-steel">
-                            {formatCurrency(item.price)}
-                          </td>
-                          <td className="px-3 py-3 font-black text-industrial-ink">
-                            {formatCurrency(item.price * item.quantity)}
-                          </td>
-                        </tr>
-                      ))
+              {/* Line item rows */}
+              {lineItems.length ? (
+                <div className="divide-y divide-black/10">
+                  {lineItems.map((item) => {
+                    const itemTotal = item.price * item.quantity;
+                    const variantLabel =
+                      Object.entries(item.options || {})
+                        .filter(([key, value]) => key !== "unit" && Boolean(value))
+                        .map(([, value]) => value as string)
+                        .join(" · ") || "Standard";
+                    const unitLabel =
+                      (item.options as Record<string, string | undefined> | undefined)?.unit || "EA";
+
+                    return (
+                      <article
+                        className="group grid gap-3 px-4 py-4 transition hover:bg-[#fafaf8] md:grid-cols-[minmax(0,1fr)_140px_80px_80px_110px_120px_48px] md:items-center md:gap-4"
+                        key={item.orderItemId || `${item.productId}-${item.variantId}`}
+                      >
+                        {/* Product thumbnail + title + SKU */}
+                        <div className="grid min-w-0 grid-cols-[56px_1fr] items-center gap-3">
+                          <span className="relative size-14 shrink-0 rounded-md border border-black/10 bg-[#fafaf8]">
+                            <Image
+                              alt={item.title}
+                              className="object-contain p-1.5"
+                              fill
+                              quality={60}
+                              sizes="56px"
+                              src={item.image || "/assets/logo.svg"}
+                            />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-semibold text-industrial-ink">
+                              {item.title}
+                            </span>
+                            <span className="mt-0.5 block truncate text-xs text-industrial-muted">
+                              SKU {item.sku}
+                            </span>
+                          </span>
+                        </div>
+
+                        {/* Size / variant */}
+                        <p className="text-sm text-industrial-steel md:text-right">
+                          <span className="mr-1 text-xs font-semibold text-industrial-muted md:hidden">
+                            Variant
+                          </span>
+                          {variantLabel}
+                        </p>
+
+                        {/* Qty */}
+                        <p className="text-sm font-medium text-industrial-ink md:text-right">
+                          <span className="mr-1 text-xs font-semibold text-industrial-muted md:hidden">
+                            Qty
+                          </span>
+                          {item.quantity}
+                        </p>
+
+                        {/* Unit */}
+                        <p className="text-sm text-industrial-steel md:text-right">
+                          <span className="mr-1 text-xs font-semibold text-industrial-muted md:hidden">
+                            Unit
+                          </span>
+                          {unitLabel}
+                        </p>
+
+                        {/* Unit price */}
+                        <p className="text-sm font-medium text-industrial-ink md:text-right">
+                          <span className="mr-1 text-xs font-semibold text-industrial-muted md:hidden">
+                            Price
+                          </span>
+                          {formatCurrency(item.price)}
+                        </p>
+
+                        {/* Line total */}
+                        <p className="text-base font-semibold text-industrial-ink md:text-right">
+                          <span className="mr-1 text-xs font-semibold text-industrial-muted md:hidden">
+                            Total
+                          </span>
+                          {formatCurrency(itemTotal)}
+                        </p>
+
+                        {/* Delete button — hidden until row hover */}
+                        <button
+                          aria-label={`Remove ${item.title}`}
+                          className="grid size-9 place-items-center justify-self-start rounded-md text-industrial-muted opacity-50 transition hover:bg-red-50 hover:text-red-700 group-hover:opacity-100 md:justify-self-center"
+                          onClick={() => removeLineItem(item.variantId)}
+                          type="button"
+                        >
+                          <Trash2 size={17} />
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="grid place-items-center gap-1 px-4 py-10 text-center">
+                  <p className="text-sm font-semibold text-industrial-ink">No line items yet</p>
+                  <p className="text-xs text-industrial-muted">
+                    Add a product below to start building this quote.
+                  </p>
+                </div>
+              )}
+
+              {/* Inline add-item panel */}
+              {isQuickAddOpen ? (
+                <div className="border-t border-black/10">
+                  {/* Search bar + controls */}
+                  <div className="flex flex-wrap items-center gap-2 border-b border-black/10 bg-[#fafaf8] px-4 py-3">
+                    <Search className="text-industrial-steel" size={18} />
+                    <input
+                      autoFocus
+                      className="h-9 min-w-[200px] flex-1 rounded border border-black/10 bg-white px-3 text-sm outline-none focus:border-industrial-ink"
+                      onChange={(event) => setProductBySearch(event.target.value)}
+                      placeholder="Search product name or SKU"
+                      value={quickAddProductQuery}
+                      list="admin-quote-product-suggestions"
+                    />
+                    {/* Variant selector */}
+                    <select
+                      aria-label="Catalog variant"
+                      className="h-9 rounded border border-black/10 bg-white px-2 text-sm text-industrial-ink outline-none focus:border-industrial-ink disabled:opacity-50"
+                      disabled={!activeCatalogProduct}
+                      onChange={(event) => {
+                        const variant = activeCatalogProduct
+                          ? getCatalogVariant(activeCatalogProduct, event.target.value)
+                          : undefined;
+                        setQuickAddVariantId(event.target.value);
+                        setQuickAddPrice((variant?.price || 0).toFixed(2));
+                        setQuickAddUnit(unitFromVariant(variant || undefined));
+                      }}
+                      value={quickAddVariantId}
+                    >
+                      <option value="">{activeCatalogProduct ? "Select variant" : "Select product first"}</option>
+                      {availableVariants.map((variant) => (
+                        <option key={variant.id} value={variant.id}>
+                          {variant.sku} · {formatVariantSummary(variant)}
+                        </option>
+                      ))}
+                    </select>
+                    {/* Qty */}
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-industrial-muted">
+                      Qty
+                      <input
+                        className="h-9 w-16 rounded border border-black/10 bg-white px-2 text-sm outline-none focus:border-industrial-ink"
+                        inputMode="decimal"
+                        min={1}
+                        onChange={(event) => setQuickAddQuantity(event.target.value)}
+                        type="number"
+                        value={quickAddQuantity}
+                      />
+                    </label>
+                    {/* Unit */}
+                    <select
+                      aria-label="Unit"
+                      className="h-9 rounded border border-black/10 bg-white px-2 text-sm text-industrial-ink outline-none focus:border-industrial-ink"
+                      onChange={(event) => setQuickAddUnit(event.target.value)}
+                      value={quickAddUnit}
+                    >
+                      {unitOptions.map((unit) => (
+                        <option key={unit} value={unit}>
+                          {unit}
+                        </option>
+                      ))}
+                    </select>
+                    {/* Unit price */}
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-industrial-muted">
+                      Price
+                      <input
+                        className="h-9 w-24 rounded border border-black/10 bg-white px-2 text-sm outline-none focus:border-industrial-ink"
+                        inputMode="decimal"
+                        onChange={(event) => setQuickAddPrice(event.target.value)}
+                        placeholder="0.00"
+                        value={quickAddPrice}
+                      />
+                    </label>
+                    {/* Close */}
+                    <button
+                      aria-label="Close add item"
+                      className="grid size-9 place-items-center rounded-md border border-black/10 bg-white text-industrial-ink transition hover:border-industrial-ink"
+                      onClick={closeQuickAdd}
+                      type="button"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  {/* Status hint */}
+                  {(quickAddProductQuery || activeCatalogProduct) && (
+                    <p className="border-b border-black/10 px-4 py-2 text-xs text-industrial-muted">
+                      {getQuickAddStatusNote() || `Using: ${quickAddVariantLabel || "Product variant"}`}
+                    </p>
+                  )}
+
+                  {/* Search result rows */}
+                  <div className="max-h-72 overflow-y-auto">
+                    {!filteredCatalogProducts.length ? (
+                      <p className="px-4 py-6 text-center text-sm text-industrial-muted">
+                        No products match your search.
+                      </p>
                     ) : (
-                      <tr>
-                        <td className="px-3 py-6 text-sm text-industrial-steel" colSpan={6}>
-                          No products added yet. Use the form above to add catalog products.
-                        </td>
-                      </tr>
+                      <div className="divide-y divide-black/10">
+                        {filteredCatalogProducts.slice(0, 10).map((product) => {
+                          const variant = product.variants[0];
+                          if (!variant) return null;
+                          const resultImage =
+                            variant.image || product.images[0]?.url || "/assets/logo.svg";
+                          const isSelected = product.id === quickAddProductId;
+
+                          return (
+                            <button
+                              className={`group grid w-full grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition hover:bg-[#fafaf8] ${isSelected ? "bg-[#fafaf8]" : ""}`}
+                              key={product.id}
+                              onClick={() => selectQuickAddProduct(product)}
+                              type="button"
+                            >
+                              <span className="relative size-14 shrink-0 rounded-md border border-black/10 bg-[#fafaf8]">
+                                <Image
+                                  alt={product.title}
+                                  className="object-contain p-1.5"
+                                  fill
+                                  quality={45}
+                                  sizes="56px"
+                                  src={resultImage}
+                                />
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-semibold text-industrial-ink">
+                                  {product.title}
+                                </span>
+                                <span className="mt-0.5 block truncate text-xs text-industrial-muted">
+                                  SKU {variant.sku}
+                                </span>
+                              </span>
+                              <span className="flex items-center gap-3">
+                                <span className="text-right">
+                                  <span className="block text-sm font-semibold text-industrial-ink">
+                                    {formatCurrency(variant.price)}
+                                  </span>
+                                  <span className={`block text-xs font-semibold ${variant.inventory === "in_stock" ? "text-jobsite-pine" : "text-red-700"}`}>
+                                    {variant.inventory === "in_stock" ? "In stock" : "Out of stock"}
+                                  </span>
+                                </span>
+                                <span className="grid size-8 place-items-center rounded-md border border-black/10 text-industrial-muted transition group-hover:border-industrial-ink group-hover:bg-industrial-ink group-hover:text-white">
+                                  <Plus size={16} />
+                                </span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     )}
-                  </tbody>
-                </table>
-              </div>
-            </CardBody>
+                  </div>
+
+                  {/* Add product confirm button */}
+                  {activeCatalogProduct && (
+                    <div className="border-t border-black/10 px-4 py-3">
+                      <button
+                        className="inline-flex h-10 items-center gap-2 rounded-lg bg-industrial-ink px-4 text-sm font-semibold text-white transition hover:bg-jobsite-pine"
+                        onClick={addCatalogItemToQuote}
+                        type="button"
+                      >
+                        <Plus size={14} />
+                        Add {activeCatalogProduct.title} to quote
+                      </button>
+                    </div>
+                  )}
+
+                  <datalist id="admin-quote-product-suggestions">
+                    {filteredCatalogProducts.slice(0, 200).map((product) => (
+                      <option key={product.id} value={product.title} />
+                    ))}
+                    {filteredCatalogProducts.flatMap((product) =>
+                      product.variants
+                        .filter((variant) => variant.sku)
+                        .map((variant) => (
+                          <option key={`${product.id}-${variant.id}`} value={variant.sku} />
+                        ))
+                    )}
+                  </datalist>
+                </div>
+              ) : (
+                <div className="border-t border-black/10 p-3">
+                  <button
+                    className="inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-industrial-steel transition hover:bg-[#f7f7f4] hover:text-industrial-ink"
+                    onClick={() => setIsQuickAddOpen(true)}
+                    type="button"
+                  >
+                    <Plus size={16} />
+                    Add an item
+                  </button>
+                </div>
+              )}
+            </div>
           </Card>
 
           <div className="grid content-start gap-4">
