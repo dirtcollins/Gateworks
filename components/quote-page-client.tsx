@@ -79,6 +79,50 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
   const [focusToken, setFocusToken] = useState(0);
   const quoteItemQtyRef = useRef<HTMLInputElement>(null);
 
+  const quickAddResults = useMemo(() => {
+    const normalized = quickAddQuery.trim().toLowerCase();
+
+    if (!normalized) {
+      return products.slice(0, 8);
+    }
+
+    return products.filter((product) => {
+      if (product.title.toLowerCase().includes(normalized)) {
+        return true;
+      }
+
+      if (product.category.name.toLowerCase().includes(normalized)) {
+        return true;
+      }
+
+      return product.variants.some((variant) => variant.sku.toLowerCase().includes(normalized));
+    });
+  }, [quickAddQuery]);
+
+  const sortedCustomers = useMemo(
+    () => [...customerDirectory].sort((left, right) => left.name.localeCompare(right.name)),
+    []
+  );
+
+  useEffect(() => {
+    if (quote) {
+      setActiveQuote(quote.id);
+    }
+  }, [quote, setActiveQuote]);
+
+  useEffect(() => {
+    if (!focusTargetVariantId || !focusToken) return;
+
+    const handle = window.setTimeout(() => {
+      if (!quoteItemQtyRef.current) return;
+
+      quoteItemQtyRef.current.focus();
+      quoteItemQtyRef.current.select();
+    }, 0);
+
+    return () => window.clearTimeout(handle);
+  }, [focusTargetVariantId, focusToken]);
+
   if (!quote) {
     return (
       <main className="grid min-h-[520px] place-items-center px-4 py-12 text-center">
@@ -100,9 +144,6 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
 
   const currentQuote = quote;
   const selectedCustomerId = currentQuote.customerId || "";
-  useEffect(() => {
-    setActiveQuote(currentQuote.id);
-  }, [currentQuote.id, setActiveQuote]);
   const items = currentQuote.items;
   const subtotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
   const estimatedTax = subtotal * taxRate;
@@ -114,42 +155,6 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
   const quoteNumber = currentQuote.quoteNumber || currentQuote.id.toUpperCase();
   const invoiceNumber = currentQuote.invoiceNumber || quoteNumber.replace("Q-", "INV-");
   const status = currentQuote.status || "draft";
-  const quickAddResults = useMemo(() => {
-    const normalized = quickAddQuery.trim().toLowerCase();
-
-    if (!normalized) {
-      return products.slice(0, 8);
-    }
-
-    return products.filter((product) => {
-      if (product.title.toLowerCase().includes(normalized)) {
-        return true;
-      }
-
-      if (product.category.name.toLowerCase().includes(normalized)) {
-        return true;
-      }
-
-      return product.variants.some((variant) => variant.sku.toLowerCase().includes(normalized));
-    });
-  }, [quickAddQuery]);
-  const sortedCustomers = useMemo(
-    () => [...customerDirectory].sort((left, right) => left.name.localeCompare(right.name)),
-    []
-  );
-
-  useEffect(() => {
-    if (!focusTargetVariantId || !focusToken) return;
-
-    const handle = window.setTimeout(() => {
-      if (!quoteItemQtyRef.current) return;
-
-      quoteItemQtyRef.current.focus();
-      quoteItemQtyRef.current.select();
-    }, 0);
-
-    return () => window.clearTimeout(handle);
-  }, [focusTargetVariantId, focusToken]);
 
   function showActionMessage(message: string) {
     setActionMessage(message);
