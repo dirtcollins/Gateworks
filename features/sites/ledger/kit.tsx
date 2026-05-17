@@ -48,7 +48,8 @@ export const LEDGER_NAV = [
   { label: "Overview", href: "/ledger" },
   { label: "Catalog", href: "/ledger/search" },
   { label: "Purchase order", href: "/ledger/cart" },
-  { label: "Order ledger", href: "/ledger/orders" }
+  { label: "Quotes", href: "/ledger/quotes" },
+  { label: "Account", href: "/ledger/account" }
 ];
 
 export function formatUsd(value: number): string {
@@ -410,16 +411,16 @@ export function LedgerFooter() {
               { label: "Browse catalog", href: "/ledger/search" },
               { label: "Current PO", href: "/ledger/cart" },
               { label: "Request a quote", href: "/ledger/quote" },
-              { label: "Reorder lists", href: "/ledger/lists" }
+              { label: "All quotes", href: "/ledger/quotes" }
             ]
           },
           {
             head: "Account",
             links: [
               { label: "My account", href: "/ledger/account" },
-              { label: "Order ledger", href: "/ledger/orders" },
-              { label: "Spend reports", href: "/ledger/reports" },
-              { label: "Net-30 terms", href: "/ledger/account" }
+              { label: "Order ledger", href: "/ledger/account" },
+              { label: "Saved purchase orders", href: "/ledger/account" },
+              { label: "Reorder lists", href: "/ledger/account" }
             ]
           },
           {

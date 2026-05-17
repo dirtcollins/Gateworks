@@ -503,7 +503,7 @@ export function Btn({
   const merged = { ...btnStyle(variant, size, block), ...style };
   if (href && !disabled) {
     return (
-      <Link href={href} style={merged} title={title}>
+      <Link href={href} style={merged} title={title} onClick={onClick}>
         {children}
       </Link>
     );
