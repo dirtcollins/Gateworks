@@ -26,7 +26,8 @@ const sqlFiles = [
   "supabase/marketing-subscribers.sql",
   "supabase/pricing-tiers.sql",
   "supabase/ar-aging.sql",
-  "supabase/design-lab-ratings.sql"
+  "supabase/design-lab-ratings.sql",
+  "supabase/quotes-and-purchase-orders.sql"
 ];
 
 async function runSql(filePath, query) {

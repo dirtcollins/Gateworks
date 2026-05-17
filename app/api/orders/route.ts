@@ -48,6 +48,9 @@ type OrderPayload = {
   status: OrderStatus;
   paymentStatus: PaymentStatus;
   isQuoteRequest: boolean;
+  poNumber?: string;
+  poStatus?: string;
+  sourceQuoteId?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -73,6 +76,9 @@ type OrderRow = {
   status: OrderStatus;
   payment_status: PaymentStatus;
   is_quote_request: boolean;
+  po_number?: string | null;
+  po_status?: string | null;
+  source_quote_id?: string | null;
   created_at: string;
   updated_at: string;
   order_items?: OrderItemRow[];
@@ -132,6 +138,9 @@ type PatchOrderPayload = {
   status?: OrderStatus;
   paymentStatus?: PaymentStatus;
   convertToOrder?: boolean;
+  poNumber?: string;
+  poStatus?: string;
+  sourceQuoteId?: string;
   payment?: {
     amount?: number;
     method?: string;
@@ -286,6 +295,9 @@ function toClientOrder(row: OrderRow) {
     status: row.status,
     paymentStatus: row.payment_status,
     isQuoteRequest: row.is_quote_request,
+    poNumber: row.po_number || "",
+    poStatus: row.po_status || "none",
+    sourceQuoteId: row.source_quote_id || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     activity: [
@@ -483,6 +495,9 @@ export async function GET(request: NextRequest) {
     "status",
     "payment_status",
     "is_quote_request",
+    "po_number",
+    "po_status",
+    "source_quote_id",
     "notes",
     "created_at",
     "updated_at"
@@ -660,6 +675,9 @@ export async function POST(request: NextRequest) {
         status: payload.status,
         payment_status: payload.paymentStatus,
         is_quote_request: payload.isQuoteRequest,
+        po_number: payload.poNumber || null,
+        po_status: payload.poNumber ? payload.poStatus || "submitted" : "none",
+        source_quote_id: payload.sourceQuoteId || null,
         notes: payload.jobsiteAddress?.notes || null
       })
       .select("id, order_number")
@@ -867,6 +885,9 @@ export async function PATCH(request: NextRequest) {
   const updates: Record<string, string | boolean> = {};
   if (payload.status) updates.status = payload.status;
   if (payload.paymentStatus) updates.payment_status = payload.paymentStatus;
+  if (payload.poNumber !== undefined) updates.po_number = payload.poNumber;
+  if (payload.poStatus !== undefined) updates.po_status = payload.poStatus;
+  if (payload.sourceQuoteId !== undefined) updates.source_quote_id = payload.sourceQuoteId;
   if (payload.convertToOrder) {
     updates.is_quote_request = false;
     updates.status = payload.status || "submitted";
