@@ -74,7 +74,6 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
   const quote = quotes.find((quoteRecord) => quoteRecord.id === quoteId);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [quickAddQuery, setQuickAddQuery] = useState("");
-  const [quickAddQuantity, setQuickAddQuantity] = useState("1");
   const [focusTargetVariantId, setFocusTargetVariantId] = useState<string | null>(null);
   const [focusToken, setFocusToken] = useState(0);
   const quoteItemQtyRef = useRef<HTMLInputElement>(null);
@@ -130,8 +129,19 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
       }
     }
 
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsQuickAddOpen(false);
+        setQuickAddQuery("");
+      }
+    }
+
     document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [isQuickAddOpen]);
 
   useEffect(() => {
@@ -319,7 +329,6 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
       return;
     }
 
-    const parsedQuantity = Math.max(1, Number.parseInt(quickAddQuantity, 10) || 1);
     addItem(
       {
         productId: product.id,
@@ -331,7 +340,7 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
         weightLbs: variant.calculated_weight_lb,
         cwtPrice: variant.steel_cwt_price,
         pricingMethod: variant.pricing_method,
-        quantity: parsedQuantity,
+        quantity: 1,
         options: variant.options
       },
       currentQuote.id
@@ -339,7 +348,6 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
 
     setFocusTargetVariantId(variant.id);
     setFocusToken((value) => value + 1);
-    setQuickAddQuantity("1");
     setQuickAddQuery("");
     setIsQuickAddOpen(false);
     showActionMessage(`Added ${product.title} to invoice.`);
@@ -552,33 +560,34 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
                 </div>
               )}
 
+            </section>
+
+            <div className="relative mt-3" ref={addItemRef}>
+              <button
+                aria-expanded={isQuickAddOpen}
+                aria-haspopup="true"
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-sm font-semibold text-industrial-steel shadow-sm transition hover:border-industrial-ink hover:text-industrial-ink"
+                onClick={() => setIsQuickAddOpen((current) => !current)}
+                type="button"
+              >
+                <Plus size={16} />
+                Add an item
+              </button>
+
               {isQuickAddOpen ? (
-                <div className="border-t border-black/10" ref={addItemRef}>
-                  <div className="flex flex-wrap items-center gap-2 border-b border-black/10 bg-[#fafaf8] px-4 py-3">
+                <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-lg border border-black/10 bg-white shadow-xl">
+                  <div className="flex items-center gap-2 border-b border-black/10 px-3 py-2.5">
                     <Search className="text-jobsite-steel" size={18} />
                     <input
-                      className="h-9 min-w-[200px] flex-1 rounded border border-black/10 bg-white px-3 text-sm outline-none focus:border-industrial-ink"
-                      id="quote-product-search"
+                      className="h-9 flex-1 rounded border border-black/10 bg-white px-3 text-sm outline-none focus:border-industrial-ink"
                       onChange={(event) => setQuickAddQuery(event.target.value)}
-                      placeholder="Search product title, SKU, or category"
+                      placeholder="Search products by name or SKU"
                       ref={searchInputRef}
                       value={quickAddQuery}
                     />
-                    <label className="flex items-center gap-1.5 text-xs font-semibold text-industrial-muted">
-                      Qty
-                      <input
-                        className="h-9 w-16 rounded border border-black/10 bg-white px-2 text-sm outline-none focus:border-industrial-ink"
-                        min={1}
-                        onChange={(event) =>
-                          setQuickAddQuantity(String(Math.max(1, Number(event.target.value) || 1)))
-                        }
-                        type="number"
-                        value={quickAddQuantity}
-                      />
-                    </label>
                   </div>
                   <div
-                    className="h-60 cursor-grab touch-pan-y select-none overflow-y-auto overscroll-contain active:cursor-grabbing [-webkit-overflow-scrolling:touch]"
+                    className="h-80 cursor-grab touch-pan-y select-none overflow-y-auto overscroll-contain active:cursor-grabbing [-webkit-overflow-scrolling:touch]"
                     ref={resultsScrollRef}
                   >
                     {!quickAddResults.length ? (
@@ -587,7 +596,7 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
                       </p>
                     ) : (
                       <div className="divide-y divide-black/10">
-                        {quickAddResults.slice(0, 10).map((product) => {
+                        {quickAddResults.slice(0, 30).map((product) => {
                           const variant = pickDefaultQuoteVariant(product);
 
                           if (!variant) {
@@ -596,10 +605,11 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
 
                           const resultImage =
                             variant.image || product.images[0]?.url || "/assets/logo.svg";
+                          const variantSize = variant.options.length;
 
                           return (
                             <button
-                              className="group grid w-full grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition hover:bg-[#fafaf8]"
+                              className="group grid w-full grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 text-left transition hover:bg-[#fafaf8]"
                               key={product.id}
                               onClick={() => addCatalogItem(product)}
                               type="button"
@@ -619,24 +629,12 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
                                   {product.title}
                                 </span>
                                 <span className="mt-0.5 block truncate text-xs text-industrial-muted">
-                                  SKU {variant.sku}
+                                  {variantSize ? `${variantSize} · ` : ""}SKU {variant.sku}
                                 </span>
                               </span>
                               <span className="flex items-center gap-3">
-                                <span className="text-right">
-                                  <span className="block text-sm font-semibold text-industrial-ink">
-                                    {formatCurrency(variant.price)}
-                                  </span>
-                                  <span
-                                    className={cn(
-                                      "block text-xs font-semibold",
-                                      variant.inventory === "in_stock"
-                                        ? "text-jobsite-pine"
-                                        : "text-red-700"
-                                    )}
-                                  >
-                                    {variant.inventory === "in_stock" ? "In stock" : "Out of stock"}
-                                  </span>
+                                <span className="text-sm font-semibold text-industrial-ink">
+                                  {formatCurrency(variant.price)}
                                 </span>
                                 <span className="grid size-8 place-items-center rounded-md border border-black/10 text-industrial-muted transition group-hover:border-industrial-ink group-hover:bg-industrial-ink group-hover:text-white">
                                   <Plus size={16} />
@@ -649,19 +647,8 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
                     )}
                   </div>
                 </div>
-              ) : (
-                <div className="border-t border-black/10 p-3">
-                  <button
-                    className="inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-industrial-steel transition hover:bg-[#f7f7f4] hover:text-industrial-ink"
-                    onClick={() => setIsQuickAddOpen(true)}
-                    type="button"
-                  >
-                    <Plus size={16} />
-                    Add an item
-                  </button>
-                </div>
-              )}
-            </section>
+              ) : null}
+            </div>
 
             <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_340px]">
               <section className="rounded-lg border border-black/10 bg-white p-4">
