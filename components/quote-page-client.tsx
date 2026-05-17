@@ -380,11 +380,7 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
               </button>
               <button className="inline-flex h-10 items-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-sm font-medium text-industrial-ink shadow-sm transition hover:bg-[#f7f7f4]" type="button" onClick={printQuote}>
                 <Printer size={16} />
-                Print
-              </button>
-              <button className="inline-flex h-10 items-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-sm font-medium text-industrial-ink shadow-sm transition hover:bg-[#f7f7f4]" type="button" onClick={printQuote}>
-                <Download size={16} />
-                PDF
+                Print / PDF
               </button>
               <button className="inline-flex h-10 items-center gap-2 rounded-lg bg-industrial-ink px-3 text-sm font-semibold text-white transition hover:bg-jobsite-pine" type="button" onClick={emailQuote}>
                 <Send size={16} />

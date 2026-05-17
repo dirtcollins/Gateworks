@@ -191,6 +191,7 @@ export function QuotesPageClient() {
               })}
             </div>
             <label className="relative block lg:w-80">
+              <span className="sr-only">Search quotes</span>
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-industrial-muted"
                 size={16}
