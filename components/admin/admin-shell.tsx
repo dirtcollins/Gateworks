@@ -12,9 +12,11 @@ import {
   LayoutDashboard,
   FileText,
   Menu,
+  Moon,
   Package,
   PlusCircle,
   Search,
+  Sun,
   Warehouse,
   ShoppingCart,
   X
@@ -81,6 +83,8 @@ type AdminShellProps = {
   children: ReactNode;
 };
 
+type SidebarColorMode = "light" | "dark";
+
 function isActivePath(currentPath: string, itemPath: string) {
   if (itemPath === "/admin") {
     return currentPath === "/admin";
@@ -93,8 +97,10 @@ export function AdminShell({ children }: AdminShellProps) {
   const pathname = usePathname() || "/admin";
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
+  const [sidebarColorMode, setSidebarColorMode] = useState<SidebarColorMode>("light");
   const createButtonRef = useRef<HTMLButtonElement>(null);
   const createMenuRef = useRef<HTMLDivElement>(null);
+  const isDarkSidebar = sidebarColorMode === "dark";
 
   const isAuthAdminRoute = useMemo(() => {
     return [
@@ -107,6 +113,18 @@ export function AdminShell({ children }: AdminShellProps) {
     () => adminNavigationItems.find((item) => isActivePath(pathname, item.href)),
     [pathname]
   );
+
+  useEffect(() => {
+    const savedMode = window.localStorage.getItem("gateworks-admin-sidebar-mode");
+
+    if (savedMode === "light" || savedMode === "dark") {
+      setSidebarColorMode(savedMode);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("gateworks-admin-sidebar-mode", sidebarColorMode);
+  }, [sidebarColorMode]);
 
   useEffect(() => {
     if (!isCreateMenuOpen) return;
@@ -161,26 +179,36 @@ export function AdminShell({ children }: AdminShellProps) {
       </button>
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-[264px] flex-col border-r border-black/10 bg-[#f7f7f4] px-2 py-2 text-industrial-ink transition-transform duration-150 md:static md:inset-auto md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-[248px] flex-col border-r px-2 py-2 transition-transform duration-150 md:static md:inset-auto md:translate-x-0 ${
+          isDarkSidebar
+            ? "border-white/10 bg-[#171b1c] text-white"
+            : "border-black/10 bg-[#f7f7f4] text-industrial-ink"
+        } ${
           isMobileNavOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         aria-label="Admin navigation"
       >
-        <div className="flex h-12 items-center justify-between px-2">
+        <div className="flex h-11 items-center justify-between px-2">
           <Link
-            className="flex min-w-0 items-center rounded-md px-1 py-1 transition hover:bg-[#efeee9]"
+            className={`flex min-w-0 items-center rounded-md px-1 py-1 transition ${
+              isDarkSidebar ? "hover:bg-white/10" : "hover:bg-[#efeee9]"
+            }`}
             href="/admin"
             onClick={() => setIsMobileNavOpen(false)}
             aria-label="Gateworks admin dashboard"
           >
             <img
               alt="Gateworks"
-              className="block h-7 w-[168px] object-contain object-left"
+              className="block h-7 w-[156px] object-contain object-left"
               src="/assets/logo.svg"
             />
           </Link>
           <button
-            className="rounded-lg border border-black/10 bg-white p-2 text-industrial-ink transition hover:bg-[#efeee9] md:hidden"
+            className={`rounded-lg border p-2 transition md:hidden ${
+              isDarkSidebar
+                ? "border-white/10 bg-white/5 text-white hover:bg-white/10"
+                : "border-black/10 bg-white text-industrial-ink hover:bg-[#efeee9]"
+            }`}
             onClick={() => setIsMobileNavOpen(false)}
             type="button"
             aria-label="Close navigation"
@@ -189,12 +217,16 @@ export function AdminShell({ children }: AdminShellProps) {
           </button>
         </div>
 
-        <div className="mt-2 grid gap-2 px-1">
+        <div className="mt-1 grid gap-1.5 px-1">
           <button
             ref={createButtonRef}
             aria-controls="admin-create-menu"
             aria-expanded={isCreateMenuOpen}
-            className="flex h-10 items-center gap-2 rounded-lg border border-black/10 bg-white px-2.5 text-sm font-medium text-industrial-ink shadow-sm transition hover:bg-[#fbfbf8] focus:outline-none focus:ring-2 focus:ring-[#235b4b]/20"
+            className={`flex h-10 items-center gap-2 rounded-lg border px-2.5 text-sm font-medium shadow-sm transition focus:outline-none focus:ring-2 focus:ring-[#235b4b]/20 ${
+              isDarkSidebar
+                ? "border-white/10 bg-white/[0.08] text-white hover:bg-white/[0.12]"
+                : "border-black/10 bg-white text-industrial-ink hover:bg-[#fbfbf8]"
+            }`}
             onClick={() => setIsCreateMenuOpen((value) => !value)}
             type="button"
           >
@@ -205,16 +237,29 @@ export function AdminShell({ children }: AdminShellProps) {
           </button>
 
           <label className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-industrial-muted" size={15} />
+            <Search
+              className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 ${
+                isDarkSidebar ? "text-white/45" : "text-industrial-muted"
+              }`}
+              size={15}
+            />
             <input
-              className="h-10 w-full rounded-lg border border-black/10 bg-white pl-9 pr-3 text-sm text-industrial-ink outline-none transition placeholder:text-industrial-muted focus:border-black/20"
+              className={`h-10 w-full rounded-lg border pl-9 pr-3 text-sm outline-none transition ${
+                isDarkSidebar
+                  ? "border-white/10 bg-white/[0.08] text-white placeholder:text-white/45 focus:border-white/25"
+                  : "border-black/10 bg-white text-industrial-ink placeholder:text-industrial-muted focus:border-black/20"
+              }`}
               placeholder="Search operations"
               type="search"
             />
           </label>
         </div>
 
-        <p className="mb-2 mt-5 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-industrial-muted">
+        <p
+          className={`mb-1.5 mt-4 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] ${
+            isDarkSidebar ? "text-white/45" : "text-industrial-muted"
+          }`}
+        >
           Workspace
         </p>
         <nav className="space-y-0.5 px-1">
@@ -228,7 +273,13 @@ export function AdminShell({ children }: AdminShellProps) {
                 {isDisabled ? (
                 <div
                     className={`flex h-9 items-center gap-2.5 rounded-lg border border-transparent px-2.5 text-sm text-industrial-muted ${
-                      isActive ? "border-black/10 bg-white text-industrial-ink" : ""
+                      isActive
+                        ? isDarkSidebar
+                          ? "border-white/10 bg-white/10 text-white"
+                          : "border-black/10 bg-white text-industrial-ink"
+                        : isDarkSidebar
+                          ? "text-white/45"
+                          : "text-industrial-muted"
                     }`}
                     aria-disabled="true"
                   >
@@ -239,8 +290,12 @@ export function AdminShell({ children }: AdminShellProps) {
                   <Link
                     className={`group flex h-9 items-center gap-2.5 rounded-lg border px-2.5 text-sm font-medium transition ${
                       isActive
-                        ? "border-black/10 bg-white text-industrial-ink shadow-sm"
-                        : "border-transparent text-industrial-steel hover:bg-[#efeee9] hover:text-industrial-ink"
+                        ? isDarkSidebar
+                          ? "border-white/10 bg-white/[0.12] text-white shadow-sm"
+                          : "border-black/10 bg-white text-industrial-ink shadow-sm"
+                        : isDarkSidebar
+                          ? "border-transparent text-white/70 hover:bg-white/[0.08] hover:text-white"
+                          : "border-transparent text-industrial-steel hover:bg-[#efeee9] hover:text-industrial-ink"
                     }`}
                     href={item.href}
                     onClick={() => setIsMobileNavOpen(false)}
@@ -255,8 +310,47 @@ export function AdminShell({ children }: AdminShellProps) {
         </nav>
 
         <div className="mt-auto px-3 py-3">
-          <p className="text-xs font-medium text-industrial-ink">Gateworks Operations</p>
-          <p className="mt-1 text-xs leading-5 text-industrial-muted">Orders, quotes, inventory, and fulfillment.</p>
+          <div
+            className={`grid grid-cols-2 rounded-lg border p-1 ${
+              isDarkSidebar ? "border-white/10 bg-black/20" : "border-black/10 bg-white"
+            }`}
+            aria-label="Sidebar color mode"
+          >
+            <button
+              className={`grid h-8 place-items-center rounded-md transition ${
+                !isDarkSidebar
+                  ? "bg-[#235b4b] text-white shadow-sm"
+                  : "text-white/65 hover:bg-white/10 hover:text-white"
+              }`}
+              onClick={() => setSidebarColorMode("light")}
+              title="Light sidebar"
+              type="button"
+              aria-label="Use light sidebar"
+              aria-pressed={!isDarkSidebar}
+            >
+              <Sun size={16} aria-hidden="true" />
+            </button>
+            <button
+              className={`grid h-8 place-items-center rounded-md transition ${
+                isDarkSidebar
+                  ? "bg-white text-[#171b1c] shadow-sm"
+                  : "text-industrial-muted hover:bg-[#efeee9] hover:text-industrial-ink"
+              }`}
+              onClick={() => setSidebarColorMode("dark")}
+              title="Dark sidebar"
+              type="button"
+              aria-label="Use dark sidebar"
+              aria-pressed={isDarkSidebar}
+            >
+              <Moon size={16} aria-hidden="true" />
+            </button>
+          </div>
+          <p className={`mt-3 text-xs font-medium ${isDarkSidebar ? "text-white" : "text-industrial-ink"}`}>
+            Gateworks Operations
+          </p>
+          <p className={`mt-1 text-xs leading-5 ${isDarkSidebar ? "text-white/50" : "text-industrial-muted"}`}>
+            Orders, quotes, inventory, and fulfillment.
+          </p>
         </div>
       </aside>
 
@@ -272,7 +366,7 @@ export function AdminShell({ children }: AdminShellProps) {
       {isCreateMenuOpen ? (
         <div
           ref={createMenuRef}
-          className="fixed left-3 right-3 top-[104px] z-50 rounded-xl border border-black/10 bg-white p-4 shadow-[0_18px_48px_rgba(15,23,42,0.16)] md:left-[276px] md:right-auto md:top-[72px] md:w-[min(820px,calc(100vw-300px))] md:p-5"
+          className="fixed left-3 right-3 top-[104px] z-50 rounded-lg border border-black/10 bg-white p-3 shadow-[0_18px_48px_rgba(15,23,42,0.16)] md:left-[260px] md:right-auto md:top-[64px] md:w-[min(760px,calc(100vw-284px))] md:p-4"
           id="admin-create-menu"
           role="menu"
           aria-label="Create menu"
@@ -307,7 +401,7 @@ export function AdminShell({ children }: AdminShellProps) {
 
       <div className="min-h-[100dvh] flex-1 overflow-y-auto bg-white">
         <header className="sticky top-0 z-10 border-b border-black/10 bg-white">
-          <div className="flex h-14 items-center justify-between px-5">
+          <div className="flex h-11 items-center justify-between px-4">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-industrial-ink">
                 {activeItem ? activeItem.label : "Operations"}
@@ -319,7 +413,7 @@ export function AdminShell({ children }: AdminShellProps) {
           </div>
         </header>
 
-        <main className="w-full bg-[#fbfbf8] px-5 py-5">{children}</main>
+        <main className="w-full bg-[#fbfbf8] px-3 py-3 md:px-4 md:py-4">{children}</main>
         <AdminOrderBootstrap />
       </div>
     </div>

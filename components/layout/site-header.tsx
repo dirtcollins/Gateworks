@@ -108,13 +108,13 @@ export function SiteHeader() {
   }, [cartQuantity]);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-black/10 bg-[#f7f7f4] px-3 py-3 text-industrial-ink lg:h-screen lg:border-b-0 lg:border-r lg:px-2">
+    <header className="sticky top-0 z-40 border-b border-black/10 bg-[#f7f7f4] px-2 py-2 text-industrial-ink lg:h-screen lg:border-b-0 lg:border-r">
       <div className="mx-auto flex max-w-[1500px] items-center gap-3 lg:h-full lg:flex-col lg:items-stretch">
         <Link
           className="flex h-11 shrink-0 items-center rounded-lg px-2 transition hover:bg-[#efeee9] lg:mb-1"
           href="/"
         >
-          <GateworksLogo className="h-7 w-[168px]" height={28} width={168} priority />
+          <GateworksLogo className="h-7 w-[156px]" height={28} width={156} priority />
         </Link>
 
         <button
@@ -249,7 +249,7 @@ export function SiteHeader() {
       {isCreateMenuOpen ? (
         <div
           ref={createMenuRef}
-          className="fixed left-3 right-3 top-[76px] z-50 rounded-xl border border-black/10 bg-white p-4 shadow-[0_18px_48px_rgba(15,23,42,0.16)] lg:left-[286px] lg:right-auto lg:top-[76px] lg:w-[min(820px,calc(100vw-306px))] lg:p-5"
+          className="fixed left-3 right-3 top-[68px] z-50 rounded-lg border border-black/10 bg-white p-3 shadow-[0_18px_48px_rgba(15,23,42,0.16)] lg:left-[260px] lg:right-auto lg:top-[68px] lg:w-[min(760px,calc(100vw-284px))] lg:p-4"
           id="site-create-menu"
           role="menu"
           aria-label="Create menu"

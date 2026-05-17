@@ -24,12 +24,12 @@ export function DataTable<T>({
   rows
 }: DataTableProps<T>) {
   return (
-    <div className={cn("overflow-x-auto border border-industrial-rail", className)}>
+    <div className={cn("overflow-x-auto rounded-lg border border-industrial-rail", className)}>
       <table className="w-full min-w-[760px] text-left text-sm">
         <thead className="bg-industrial-paper text-xs font-black uppercase tracking-[0.1em] text-industrial-muted">
           <tr>
             {columns.map((column) => (
-              <th className={cn("px-3 py-3", column.className)} key={column.key}>
+              <th className={cn("px-3 py-2.5", column.className)} key={column.key}>
                 {column.header}
               </th>
             ))}
@@ -40,7 +40,7 @@ export function DataTable<T>({
             rows.map((row) => (
               <tr className="border-t border-industrial-rail" key={getRowKey(row)}>
                 {columns.map((column) => (
-                  <td className={cn("px-3 py-3", column.className)} key={column.key}>
+                  <td className={cn("px-3 py-2.5", column.className)} key={column.key}>
                     {column.render(row)}
                   </td>
                 ))}

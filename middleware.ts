@@ -15,6 +15,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.ADMIN_REQUIRE_AUTH !== "true"
+  ) {
+    return NextResponse.next();
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 

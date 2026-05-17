@@ -49,6 +49,7 @@ const paymentLabels: Record<PaymentStatus, string> = {
   unpaid: "Unpaid",
   partial: "Partial",
   paid: "Paid",
+  overpaid: "Overpaid",
   refunded: "Refunded",
   failed: "Failed"
 };

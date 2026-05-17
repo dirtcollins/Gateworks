@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { Heart, Plus, Trash2 } from "lucide-react";
+import { PageShell } from "@/components/ui/page-shell";
 import { products } from "@/lib/catalog";
 import { useListStore } from "@/lib/list-store";
 import { formatCurrency } from "@/lib/utils";
@@ -52,47 +53,37 @@ export function ListsPageClient() {
   }
 
   return (
-    <main className="min-h-full bg-[#fbfbf8] px-4 py-5 md:px-6">
-      <section className="mx-auto max-w-[1180px]">
-        <div className="flex flex-col gap-4 rounded-xl border border-black/10 bg-white p-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-industrial-muted">
-              Shopping workspace
-            </p>
-            <h1 className="mt-1 text-2xl font-semibold text-industrial-ink">
-              Saved lists
-            </h1>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-industrial-steel">
-              Keep repeat materials, job carts, and favorites ready for ordering.
-            </p>
-          </div>
-          <form
-            className="flex w-full gap-2 rounded-lg border border-black/10 bg-[#f7f7f4] p-2 md:max-w-md"
-            onSubmit={handleCreateList}
+    <PageShell
+      actions={
+        <form
+          className="flex w-full gap-2 rounded-lg border border-black/10 bg-[#f7f7f4] p-1.5 md:w-[420px]"
+          onSubmit={handleCreateList}
+        >
+          <label className="sr-only" htmlFor="new-list-name">
+            New saved list name
+          </label>
+          <input
+            className="h-9 min-w-0 flex-1 rounded-md border border-transparent bg-white px-3 text-sm text-industrial-ink outline-none focus:border-black/10"
+            id="new-list-name"
+            placeholder="New list name"
+            value={listName}
+            onChange={(event) => setListName(event.target.value)}
+          />
+          <button
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-industrial-ink px-3 text-sm font-semibold text-white transition hover:bg-jobsite-pine disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!listName.trim()}
+            type="submit"
           >
-            <label className="sr-only" htmlFor="new-list-name">
-              New saved list name
-            </label>
-            <input
-              className="h-10 min-w-0 flex-1 rounded-md border border-transparent bg-white px-3 text-sm text-industrial-ink outline-none focus:border-black/10"
-              id="new-list-name"
-              placeholder="New list name"
-              value={listName}
-              onChange={(event) => setListName(event.target.value)}
-            />
-            <button
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-industrial-ink px-3 text-sm font-semibold text-white transition hover:bg-jobsite-pine disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!listName.trim()}
-              type="submit"
-            >
-              <Plus size={17} />
-              Create list
-            </button>
-          </form>
-        </div>
-      </section>
-
-      <section className="mx-auto grid max-w-[1180px] gap-3 py-4">
+            <Plus size={16} />
+            Create
+          </button>
+        </form>
+      }
+      description="Keep repeat materials, job carts, and favorites ready for ordering."
+      eyebrow="Shopping workspace"
+      title="Saved lists"
+    >
+      <section className="grid gap-3">
         {lists.map((list) => {
           const itemCount = list.items.reduce(
             (total, item) => total + item.quantity,
@@ -102,11 +93,11 @@ export function ListsPageClient() {
           return (
             <article
               key={list.id}
-              className={`overflow-hidden rounded-xl border bg-white ${
+              className={`overflow-hidden rounded-lg border bg-white ${
                 createdListId === list.id ? "border-jobsite-pine" : "border-black/10"
               }`}
             >
-              <div className="flex flex-col gap-3 border-b border-black/10 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 border-b border-black/10 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-industrial-muted">
                     <Heart size={15} className="text-red-700" />
@@ -135,11 +126,11 @@ export function ListsPageClient() {
                     return (
                       <div
                         key={item.variantId}
-                        className="grid gap-4 p-4 transition hover:bg-[#f7f7f4] sm:grid-cols-[72px_1fr_auto]"
+                        className="grid gap-3 p-3 transition hover:bg-[#f7f7f4] sm:grid-cols-[64px_1fr_auto]"
                       >
                         <Link
                           aria-label={`Open ${item.title}`}
-                          className="relative aspect-square rounded-lg border border-black/10 bg-[#fafaf8]"
+                          className="relative aspect-square rounded-md border border-black/10 bg-[#fafaf8]"
                           href={`/products/${productSlug}`}
                         >
                           <Image
@@ -191,8 +182,8 @@ export function ListsPageClient() {
                   })}
                 </div>
               ) : (
-                <div className="grid place-items-center p-10 text-center">
-                  <div className="grid size-12 place-items-center rounded-xl border border-black/10 bg-[#f7f7f4] text-industrial-ink">
+                <div className="grid place-items-center p-8 text-center">
+                  <div className="grid size-11 place-items-center rounded-lg border border-black/10 bg-[#f7f7f4] text-industrial-ink">
                     <Heart size={22} />
                   </div>
                   <p className="mt-4 text-base font-semibold text-industrial-ink">
@@ -210,6 +201,6 @@ export function ListsPageClient() {
           );
         })}
       </section>
-    </main>
+    </PageShell>
   );
 }

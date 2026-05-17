@@ -8,7 +8,7 @@ type CardProps = HTMLAttributes<HTMLDivElement> & {
 export function Card({ children, className, ...props }: CardProps) {
   return (
     <div
-      className={cn("border border-industrial-rail bg-white shadow-sm", className)}
+      className={cn("rounded-lg border border-industrial-rail bg-white shadow-sm", className)}
       {...props}
     >
       {children}
@@ -20,7 +20,7 @@ export function CardHeader({ children, className, ...props }: CardProps) {
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 border-b border-industrial-rail p-4 sm:flex-row sm:items-center sm:justify-between",
+        "flex flex-col gap-2 border-b border-industrial-rail px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between",
         className
       )}
       {...props}
@@ -32,9 +32,8 @@ export function CardHeader({ children, className, ...props }: CardProps) {
 
 export function CardBody({ children, className, ...props }: CardProps) {
   return (
-    <div className={cn("p-4", className)} {...props}>
+    <div className={cn("p-3", className)} {...props}>
       {children}
     </div>
   );
 }
-

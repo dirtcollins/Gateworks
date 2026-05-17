@@ -10,14 +10,17 @@ import {
   Check,
   Copy,
   Download,
+  Ellipsis,
   FileText,
   Save,
   ImagePlus,
   Layers3,
   Pencil,
+  SlidersHorizontal,
   Settings,
   Plus,
   Search,
+  ArrowUpDown,
   Trash2
 } from "lucide-react";
 import { persistAdminChange } from "@/features/admin/catalog/api";
@@ -25,7 +28,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { PageShell } from "@/components/ui/page-shell";
-import { StatGrid } from "@/components/ui/stat-grid";
 import {
   DEFAULT_STEEL_CWT_PRICE,
   applyTubingPricing,
@@ -53,6 +55,15 @@ type QuickEditDraft = {
   quantityOnHand: string;
   reorderPoint: string;
 };
+
+type InlineEditableField = "price" | "stock" | "status";
+type ActiveInlineCell = {
+  productId: string;
+  field: InlineEditableField;
+} | null;
+type InlineDrafts = Record<string, Partial<Record<InlineEditableField, string>>>;
+type RowSaveStatus = "idle" | "unsaved" | "saving" | "saved" | "error";
+type RowSaveState = Record<string, { status: RowSaveStatus; message?: string }>;
 
 type CatalogAuditEvent = {
   id: string;
@@ -264,6 +275,7 @@ export function CatalogManager({
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<ProductStatusFilter>("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [activeTab, setActiveTab] = useState<CatalogTab>(
     () => (initialMode === "editor" ? "editor" : "overview")
   );
@@ -272,6 +284,10 @@ export function CatalogManager({
   const [message, setMessage] = useState("");
   const [inlineQuickEditProductId, setInlineQuickEditProductId] = useState<string | null>(null);
   const [inlineQuickEditDraft, setInlineQuickEditDraft] = useState<QuickEditDraft | null>(null);
+  const [isSpreadsheetQuickEdit, setIsSpreadsheetQuickEdit] = useState(false);
+  const [activeInlineCell, setActiveInlineCell] = useState<ActiveInlineCell>(null);
+  const [inlineDrafts, setInlineDrafts] = useState<InlineDrafts>({});
+  const [rowSaveState, setRowSaveState] = useState<RowSaveState>({});
   const [productPage, setProductPage] = useState(1);
   const [productsPerPage, setProductsPerPage] = useState<ProductsPerPage>(DEFAULT_PRODUCTS_PER_PAGE);
   const [steelCwtPrice, setSteelCwtPrice] = useState(() => {
@@ -301,6 +317,7 @@ export function CatalogManager({
       const matchesSearch =
         !normalized ||
         item.title.toLowerCase().includes(normalized) ||
+        item.description.toLowerCase().includes(normalized) ||
         item.category.name.toLowerCase().includes(normalized) ||
         item.supplier.toLowerCase().includes(normalized) ||
         item.variants.some((variant) => variant.sku.toLowerCase().includes(normalized));
@@ -308,10 +325,11 @@ export function CatalogManager({
         ? true
         : statusFilter === "all" ||
           (statusFilter === "low_stock" ? isLowStock(item) : item.status === statusFilter);
+      const matchesCategory = categoryFilter === "all" || item.category.slug === categoryFilter;
 
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesStatus && matchesCategory;
     });
-  }, [statusFilter, query, visibleCatalog, isDeletedView]);
+  }, [statusFilter, categoryFilter, query, visibleCatalog, isDeletedView]);
 
   const totalPages = productsPerPage === "all" ? 1 : Math.max(1, Math.ceil(filtered.length / productsPerPage));
   const pageStart = (productPage - 1) * (productsPerPage === "all" ? filtered.length : productsPerPage);
@@ -321,7 +339,7 @@ export function CatalogManager({
 
   useEffect(() => {
     setProductPage(1);
-  }, [statusFilter, query, isDeletedView, productsPerPage]);
+  }, [statusFilter, categoryFilter, query, isDeletedView, productsPerPage]);
 
   useEffect(() => {
     if (productPage > totalPages) {
@@ -1428,6 +1446,341 @@ export function CatalogManager({
       .catch(() => setMessage("Steel CWT saved locally only"));
   }
 
+  function getInlineCellValue(item: CatalogItem, field: InlineEditableField) {
+    const draft = inlineDrafts[item.id]?.[field];
+    if (draft !== undefined) return draft;
+
+    const primaryVariant = item.variants[0];
+    if (field === "status") {
+      return item.status;
+    }
+
+    if (field === "price") {
+      return String(item.final_price ?? primaryVariant?.price ?? item.price ?? 0);
+    }
+
+    return String(primaryVariant?.inventoryQuantity ?? getStock(item));
+  }
+
+  function getPersistedInlineCellValue(item: CatalogItem, field: InlineEditableField) {
+    const primaryVariant = item.variants[0];
+    if (field === "status") {
+      return item.status;
+    }
+
+    if (field === "price") {
+      return Number(item.final_price ?? primaryVariant?.price ?? item.price ?? 0);
+    }
+
+    return Number(primaryVariant?.inventoryQuantity ?? getStock(item));
+  }
+
+  function setRowStatus(productId: string, status: RowSaveStatus, message?: string) {
+    setRowSaveState((current) => ({
+      ...current,
+      [productId]: { status, message }
+    }));
+  }
+
+  function setInlineDraft(productId: string, field: InlineEditableField, value: string) {
+    setInlineDrafts((current) => ({
+      ...current,
+      [productId]: {
+        ...current[productId],
+        [field]: value
+      }
+    }));
+    setRowStatus(productId, "unsaved");
+  }
+
+  function saveInlineStatus(item: CatalogItem, nextStatus: CatalogStatus) {
+    if (!statuses.includes(nextStatus)) return;
+
+    setInlineDrafts((current) => ({
+      ...current,
+      [item.id]: {
+        ...current[item.id],
+        status: nextStatus
+      }
+    }));
+    setRowStatus(item.id, "unsaved");
+    void saveInlineStatusValue(item, nextStatus);
+  }
+
+  async function saveInlineStatusValue(item: CatalogItem, nextStatus: CatalogStatus) {
+    if (nextStatus === item.status) {
+      clearInlineDraft(item.id, "status");
+      setRowStatus(item.id, "saved");
+      setActiveInlineCell((current) =>
+        current?.productId === item.id && current.field === "status" ? null : current
+      );
+      return;
+    }
+
+    setRowStatus(item.id, "saving");
+    const result = await persistAdminChange(
+      {
+        action: "update_product",
+        productId: item.id,
+        changes: { status: nextStatus }
+      },
+      "Status quick edit"
+    );
+
+    if (!result.ok) {
+      clearInlineDraft(item.id, "status");
+      setRowStatus(item.id, "error", result.message);
+      setMessage(result.message);
+      return;
+    }
+
+    setCatalog((current) =>
+      current.map((product) =>
+        product.id === item.id ? { ...product, status: nextStatus } : product
+      )
+    );
+    clearInlineDraft(item.id, "status");
+    setRowStatus(item.id, "saved");
+    setMessage(result.message);
+    setActiveInlineCell((current) =>
+      current?.productId === item.id && current.field === "status" ? null : current
+    );
+  }
+
+  function clearInlineDraft(productId: string, field: InlineEditableField) {
+    setInlineDrafts((current) => {
+      const nextProductDraft = { ...(current[productId] || {}) };
+      delete nextProductDraft[field];
+
+      if (!Object.keys(nextProductDraft).length) {
+        const { [productId]: _removed, ...rest } = current;
+        return rest;
+      }
+
+      return {
+        ...current,
+        [productId]: nextProductDraft
+      };
+    });
+  }
+
+  function startInlineCellEdit(item: CatalogItem, field: InlineEditableField) {
+    setInlineQuickEditProductId(null);
+    setInlineQuickEditDraft(null);
+    setActiveInlineCell({ productId: item.id, field });
+    setInlineDrafts((current) => ({
+      ...current,
+      [item.id]: {
+        ...current[item.id],
+        [field]: current[item.id]?.[field] ?? String(getPersistedInlineCellValue(item, field))
+      }
+    }));
+    setSelectedId(item.id);
+  }
+
+  function cancelInlineCellEdit(item: CatalogItem, field: InlineEditableField) {
+    clearInlineDraft(item.id, field);
+    setActiveInlineCell((current) =>
+      current?.productId === item.id && current.field === field ? null : current
+    );
+    setRowStatus(item.id, "idle");
+  }
+
+  function focusEditableCell(productId: string, field: InlineEditableField) {
+    requestAnimationFrame(() => {
+      const input = document.querySelector<HTMLInputElement | HTMLSelectElement>(
+        `[data-inline-product-id="${productId}"][data-inline-field="${field}"]`
+      );
+      input?.focus();
+      if (input instanceof HTMLInputElement) {
+        input.select();
+      }
+    });
+  }
+
+  function focusRelativeEditableCell(
+    currentProductId: string,
+    field: InlineEditableField,
+    direction: "next" | "previous" | "down"
+  ) {
+    const fields: InlineEditableField[] = ["price", "stock", "status"];
+    const currentProductIndex = pagedProducts.findIndex((item) => item.id === currentProductId);
+    if (currentProductIndex < 0) return;
+
+    let nextProductIndex = currentProductIndex;
+    let nextField = field;
+
+    if (direction === "down") {
+      nextProductIndex = Math.min(pagedProducts.length - 1, currentProductIndex + 1);
+    } else {
+      const currentFieldIndex = fields.indexOf(field);
+      const offset = direction === "next" ? 1 : -1;
+      let nextFieldIndex = currentFieldIndex + offset;
+
+      if (nextFieldIndex >= fields.length) {
+        nextFieldIndex = 0;
+        nextProductIndex = Math.min(pagedProducts.length - 1, currentProductIndex + 1);
+      }
+
+      if (nextFieldIndex < 0) {
+        nextFieldIndex = fields.length - 1;
+        nextProductIndex = Math.max(0, currentProductIndex - 1);
+      }
+
+      nextField = fields[nextFieldIndex];
+    }
+
+    const nextProduct = pagedProducts[nextProductIndex];
+    if (!nextProduct) return;
+    setActiveInlineCell({ productId: nextProduct.id, field: nextField });
+    focusEditableCell(nextProduct.id, nextField);
+  }
+
+  async function saveInlineCell(item: CatalogItem, field: InlineEditableField, options?: { move?: "next" | "previous" | "down" }) {
+    if (field === "status") {
+      const draftValue = inlineDrafts[item.id]?.status as CatalogStatus | undefined;
+      if (draftValue) {
+        await saveInlineStatusValue(item, draftValue);
+      }
+      if (options?.move) focusRelativeEditableCell(item.id, field, options.move);
+      return;
+    }
+
+    const primaryVariant = item.variants[0];
+    if (!primaryVariant) {
+      setRowStatus(item.id, "error", "No SKU available.");
+      return;
+    }
+
+    const draftValue = inlineDrafts[item.id]?.[field];
+    if (draftValue === undefined) {
+      setActiveInlineCell((current) =>
+        current?.productId === item.id && current.field === field ? null : current
+      );
+      if (options?.move) focusRelativeEditableCell(item.id, field, options.move);
+      return;
+    }
+
+    const nextValue = field === "stock"
+      ? Number.parseInt(draftValue, 10)
+      : Number.parseFloat(draftValue);
+    const previousValue = getPersistedInlineCellValue(item, field);
+
+    if (!Number.isFinite(nextValue) || nextValue < 0) {
+      setRowStatus(item.id, "error", field === "stock" ? "Stock must be 0 or higher." : "Price must be 0 or higher.");
+      clearInlineDraft(item.id, field);
+      return;
+    }
+
+    if (nextValue === previousValue) {
+      clearInlineDraft(item.id, field);
+      setRowStatus(item.id, "saved");
+      setActiveInlineCell((current) =>
+        current?.productId === item.id && current.field === field ? null : current
+      );
+      if (options?.move) focusRelativeEditableCell(item.id, field, options.move);
+      return;
+    }
+
+    setRowStatus(item.id, "saving");
+
+    const backendChanges = field === "price"
+      ? {
+          price: Number(nextValue.toFixed(2)),
+          manual_price: Number(nextValue.toFixed(2)),
+          final_price: Number(nextValue.toFixed(2)),
+          pricing_method: "manual"
+        }
+      : {
+          inventory_quantity: Math.max(0, Math.round(nextValue)),
+          inventory_status: nextValue > 0 ? "in_stock" : "out_of_stock"
+        };
+
+    const result = await persistAdminChange(
+      {
+        action: "update_variant",
+        variantId: isUuid(primaryVariant.id) ? primaryVariant.id : undefined,
+        sku: primaryVariant.sku,
+        changes: backendChanges
+      },
+      field === "price" ? "Price quick edit" : "Stock quick edit"
+    );
+
+    if (!result.ok) {
+      clearInlineDraft(item.id, field);
+      setRowStatus(item.id, "error", result.message);
+      setMessage(result.message);
+      return;
+    }
+
+    setCatalog((current) =>
+      current.map((product) => {
+        if (product.id !== item.id) return product;
+
+        const variants = product.variants.map((variant, index) => {
+          if (index !== 0) return variant;
+
+          if (field === "price") {
+            return {
+              ...variant,
+              price: Number(nextValue.toFixed(2)),
+              manual_price: Number(nextValue.toFixed(2)),
+              final_price: Number(nextValue.toFixed(2)),
+              pricing_method: "manual" as const
+            };
+          }
+
+          const inventoryQuantity = Math.max(0, Math.round(nextValue));
+          return {
+            ...variant,
+            inventoryQuantity,
+            inventory: inventoryQuantity > 0 ? "in_stock" as const : "out_of_stock" as const
+          };
+        });
+
+        return {
+          ...product,
+          variants,
+          price: Math.min(...variants.map((variant) => variant.price))
+        };
+      })
+    );
+
+    clearInlineDraft(item.id, field);
+    setRowStatus(item.id, "saved");
+    setMessage(result.message);
+    setActiveInlineCell((current) =>
+      current?.productId === item.id && current.field === field ? null : current
+    );
+    if (options?.move) focusRelativeEditableCell(item.id, field, options.move);
+  }
+
+  function handleInlineCellKeyDown(
+    event: KeyboardEvent<HTMLInputElement | HTMLSelectElement>,
+    item: CatalogItem,
+    field: InlineEditableField
+  ) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelInlineCellEdit(item, field);
+      if (isSpreadsheetQuickEdit) {
+        setIsSpreadsheetQuickEdit(false);
+      }
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void saveInlineCell(item, field, { move: isSpreadsheetQuickEdit ? "down" : undefined });
+      return;
+    }
+
+    if (event.key === "Tab") {
+      event.preventDefault();
+      void saveInlineCell(item, field, { move: event.shiftKey ? "previous" : "next" });
+    }
+  }
+
   return (
     <>
       <PageShell
@@ -1436,362 +1789,414 @@ export function CatalogManager({
             <Button onClick={() => router.push("/admin/products")} size="sm" variant="secondary">
               Back to Products
             </Button>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={() => router.push("/admin/products/new")} size="sm" variant="primary">
-                <Plus size={15} />
-                Add Product
-              </Button>
-              <Button onClick={() => router.push(isDeletedView ? "/admin/products" : "/admin/products?view=deleted")} size="sm" variant="secondary">
-                {isDeletedView ? "Back to Products" : "Deleted Products"}
-              </Button>
-            </div>
-          )
+          ) : undefined
         }
-        description={
-          isEditorMode
-            ? "Dedicated full editor for product setup, pricing, inventory, and publishing controls."
-            : "Manage product records, prices, inventory, and publishing state from one operational workspace."
-        }
-        eyebrow="Gateworks Operations"
-        title={isEditorMode ? `Edit ${selected?.title || "Product"}` : "Products"}
+        className={!isEditorMode ? "px-0 py-0 md:px-0 md:py-0" : undefined}
+        contentClassName={!isEditorMode ? "mx-0 max-w-none" : undefined}
+        description={isEditorMode ? "Dedicated full editor for product setup, pricing, inventory, and publishing controls." : undefined}
+        eyebrow={isEditorMode ? "Gateworks Operations" : undefined}
+        title={isEditorMode ? `Edit ${selected?.title || "Product"}` : undefined}
       >
-        <div className="grid gap-5">
+        <div className={cn("grid gap-5", !isEditorMode && "mx-0 max-w-none gap-0")}>
           {!isEditorMode && (
-          <Card className="grid gap-5">
-          <CardHeader>
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
-                  Gateworks Operations
-                </p>
-                <h2 className="text-xl font-black text-industrial-ink">{isDeletedView ? "Deleted Products" : "Products"}</h2>
+            <section className="min-h-[calc(100dvh-57px)] overflow-hidden bg-white px-5 py-5 text-industrial-ink">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <h1 className="text-3xl font-semibold tracking-normal text-industrial-ink">
+                  {isDeletedView ? "Deleted Products" : "Products"}
+                </h1>
+                <div className="flex flex-wrap items-center gap-3 [&>*]:shrink-0">
+                  <Button
+                    className={cn(
+                      "h-10 rounded-md normal-case tracking-normal",
+                      isSpreadsheetQuickEdit && "border-industrial-ink bg-industrial-ink text-white"
+                    )}
+                    onClick={() => {
+                      setIsSpreadsheetQuickEdit((current) => !current);
+                      setActiveInlineCell(null);
+                    }}
+                    size="sm"
+                    variant={isSpreadsheetQuickEdit ? "primary" : "secondary"}
+                  >
+                    <Pencil size={15} />
+                    Quick Edit
+                  </Button>
+                  <Button className="h-10 rounded-md normal-case tracking-normal" onClick={exportCsv} size="sm" variant="secondary">
+                    <Download size={15} />
+                    Export
+                  </Button>
+                  <Button className="h-10 rounded-md normal-case tracking-normal" onClick={() => router.push("/admin/products/new")} size="sm" variant="primary">
+                    <Plus size={15} />
+                    Add Product
+                  </Button>
+                </div>
               </div>
-              <label className="relative block w-full max-w-xl">
-                <span className="sr-only">Search products</span>
-                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-industrial-muted" size={16} />
-                <Input
-                  className="pl-9"
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search products, SKU, category, supplier"
-                  value={query}
-                />
-              </label>
-            </div>
-          </CardHeader>
-          <CardBody className="grid gap-4">
-            <div className="flex flex-wrap gap-2 text-xs">
-              {(isDeletedView
-                ? [{ id: "all", label: "All Deleted" }]
-                : [
-                { id: "all", label: "All" },
-                { id: "active", label: "Active" },
-                { id: "draft", label: "Draft" },
-                { id: "archived", label: "Archived" },
-                { id: "low_stock", label: "Low Stock" }
-              ]).map((filter) => (
-                <button
-                  className={cn(
-                    "h-8 rounded-full border border-industrial-rail px-3 font-black uppercase tracking-[0.08em]",
-                    statusFilter === filter.id
-                      ? "border-industrial-ink bg-industrial-ink text-white"
-                      : "text-industrial-ink hover:bg-industrial-paper"
-                  )}
-                  key={filter.id}
-                  onClick={() => setStatusFilter(filter.id as ProductStatusFilter)}
-                  type="button"
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
 
-            <div className="overflow-x-auto border border-industrial-rail">
-              <table className="min-w-[1300px] w-full text-left text-sm">
-                <thead className="bg-industrial-paper text-xs font-black uppercase tracking-[0.08em] text-industrial-muted">
-                  <tr>
-                    <th className="px-3 py-3">Product image</th>
-                    <th className="px-3 py-3">Product name</th>
-                    <th className="px-3 py-3">SKU</th>
-                    <th className="px-3 py-3">Category</th>
-                    <th className="px-3 py-3">Size</th>
-                    <th className="w-28 px-3 py-3">Price</th>
-                    <th className="w-36 px-3 py-3">CWT Price</th>
-                    <th className="w-36 px-3 py-3">Stock</th>
-                    <th className="px-3 py-3">Reorder pt</th>
-                    <th className="px-3 py-3">Status</th>
-                    {isDeletedView && <th className="px-3 py-3">Deleted</th>}
-                    <th className="w-80 whitespace-nowrap px-3 py-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody onKeyDownCapture={handleQuickEditBodyKeyDown}>
-                {pagedProducts.map((item) => {
+              <div className="mt-6 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="grid w-full gap-3 md:grid-cols-[minmax(280px,640px)_240px] xl:w-auto">
+                  <label className="relative block">
+                    <span className="sr-only">Search products</span>
+                    <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-industrial-muted" size={18} />
+                    <Input
+                      className="h-11 rounded-md border-black/10 bg-white pl-12 text-sm shadow-sm"
+                      onChange={(event) => setQuery(event.target.value)}
+                      placeholder="Search products by name, SKU, or description..."
+                      value={query}
+                    />
+                  </label>
+                  <Select
+                    aria-label="Filter products by category"
+                    className="h-11 rounded-md border-black/10 bg-white px-4 text-sm font-medium shadow-sm"
+                    onChange={(event) => setCategoryFilter(event.target.value)}
+                    value={categoryFilter}
+                  >
+                    <option value="all">All categories</option>
+                    {categories.map((category) => (
+                      <option key={category.slug} value={category.slug}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    className="h-10 rounded-md normal-case tracking-normal"
+                    onClick={() => setStatusFilter(statusFilter === "all" ? "active" : "all")}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    <SlidersHorizontal size={15} />
+                    Filters
+                  </Button>
+                  <Button className="h-10 rounded-md normal-case tracking-normal" onClick={() => setProductPage(1)} size="sm" variant="secondary">
+                    <ArrowUpDown size={15} />
+                    Sort
+                  </Button>
+                  <label className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-industrial-ink">
+                    <span>Rows per page</span>
+                    <Select
+                      aria-label="Products per page"
+                      className="h-10 w-20 rounded-md border-black/10"
+                      value={productsPerPage}
+                      onChange={(event) => {
+                        const nextValue = event.target.value === "all" ? "all" : (Number(event.target.value) as ProductsPerPage);
+                        setProductsPerPage(nextValue);
+                      }}
+                    >
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                      <option value="all">All</option>
+                    </Select>
+                  </label>
+                  <span className="text-sm text-industrial-ink">
+                    {filtered.length ? `${pageRange} of ${filtered.length}` : "0 of 0"}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      className="h-9 w-9 rounded-md px-0"
+                      onClick={() => setProductPage((current) => Math.max(1, current - 1))}
+                      disabled={productPage === 1}
+                      size="sm"
+                      variant="secondary"
+                      aria-label="Previous page"
+                    >
+                      ‹
+                    </Button>
+                    <Button
+                      className="h-9 w-9 rounded-md px-0"
+                      onClick={() => setProductPage((current) => Math.min(totalPages, current + 1))}
+                      disabled={productPage === totalPages}
+                      size="sm"
+                      variant="secondary"
+                      aria-label="Next page"
+                    >
+                      ›
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {message ? (
+                <p className="mt-4 rounded-md border border-black/10 bg-[#f7f7f4] px-3 py-2 text-sm font-semibold text-industrial-pine">
+                  {message}
+                </p>
+              ) : null}
+
+              <div className="mt-5 overflow-hidden rounded-md border border-black/10 bg-white">
+                <div className="overflow-auto" onKeyDownCapture={handleQuickEditBodyKeyDown}>
+                  <div className="min-w-[1050px]">
+                    <div className="grid grid-cols-[44px_minmax(340px,1.6fr)_150px_150px_160px_180px_150px] items-center border-b border-black/10 bg-white px-4 py-3 text-sm font-medium text-industrial-ink">
+                      <span className="flex items-center">
+                        <input className="size-4 rounded border-black/20" type="checkbox" aria-label="Select all products" />
+                      </span>
+                      <span>Product</span>
+                      <span>SKU</span>
+                      <span>Price</span>
+                      <span>Stock</span>
+                      <span>Status</span>
+                      <span>Actions</span>
+                    </div>
+
+                      {pagedProducts.map((item) => {
                     const primaryVariant = item.variants[0];
                     const stockValue = getStock(item);
                     const isEditing = inlineQuickEditProductId === item.id;
+                    const rowStatus = rowSaveState[item.id]?.status || "idle";
+                    const rowStatusMessage = rowSaveState[item.id]?.message;
+                    const isPriceEditing = isSpreadsheetQuickEdit || (activeInlineCell?.productId === item.id && activeInlineCell.field === "price");
+                    const isStockEditing = isSpreadsheetQuickEdit || (activeInlineCell?.productId === item.id && activeInlineCell.field === "stock");
+                    const isStatusEditing = activeInlineCell?.productId === item.id && activeInlineCell.field === "status";
                     const reorderPoint = Number.parseInt(item.specifications["Reorder Point"] || "0", 10) || 0;
 
-                    return (
-                      <tr
-                        className={cn("group border-t border-industrial-rail hover:bg-industrial-paper", selected?.id === item.id && "bg-industrial-paper")}
-                        onKeyDown={(event) => handleQuickEditKeyDown(event as unknown as KeyboardEvent<HTMLInputElement | HTMLSelectElement>, item)}
-                        data-quick-edit-row={item.id}
-                        key={item.id}
-                      >
-                        <td className="px-3 py-3">
-                          <div className="relative size-12 overflow-hidden rounded border border-industrial-rail bg-white">
-                            <Image
-                              alt={item.title}
-                              className="object-contain p-1"
-                              fill
-                              sizes="48px"
-                              src={item.images[0]?.url || primaryVariant?.image || "/assets/logo.svg"}
-                            />
-                          </div>
-                        </td>
-                        <td className="px-3 py-3">
-                          <button
-                            className="text-left font-bold text-industrial-ink transition hover:text-industrial-ink"
+	                    return (
+	                      <div
+	                        className={cn(
+	                          "grid grid-cols-[44px_minmax(340px,1.6fr)_150px_150px_160px_180px_150px] items-center border-b border-black/10 px-4 py-3 text-sm transition hover:bg-[#fbfbf8]",
+	                          selected?.id === item.id && "bg-[#fbfbf8]"
+	                        )}
+	                        onKeyDown={(event) => handleQuickEditKeyDown(event as unknown as KeyboardEvent<HTMLInputElement | HTMLSelectElement>, item)}
+	                        data-quick-edit-row={item.id}
+	                        key={item.id}
+	                      >
+                          <span className="flex items-center">
+                            <input className="size-4 rounded border-black/20" type="checkbox" aria-label={`Select ${item.title}`} />
+                          </span>
+	                        <div className="grid min-w-0 grid-cols-[56px_1fr] items-center gap-4">
+	                          <div className="relative size-12 overflow-hidden rounded-md border border-black/10 bg-white">
+	                            <Image alt={item.title} className="object-contain p-1.5" fill sizes="48px" src={item.images[0]?.url || primaryVariant?.image || "/assets/logo.svg"} />
+	                          </div>
+	                          <button
+                            className="min-w-0 text-left"
                             onClick={() => {
                               setSelectedId(item.id);
                               setSelectedVariantId(item.variants[0]?.id || "");
                               setActiveTab("overview");
                             }}
                             type="button"
-                          >
-                            {item.title}
-                          </button>
-                          <p className="text-xs text-industrial-steel">Supplier: {item.supplier}</p>
-                        </td>
-                        <td className="px-3 py-3 font-mono text-xs text-industrial-steel">
-                          {primaryVariant?.sku || "—"}
-                        </td>
-                        <td className="px-3 py-3 text-industrial-steel">{item.category.name}</td>
-                        <td className="px-3 py-3 text-industrial-steel">{getPrimarySize(item)}</td>
-                      <td className="min-w-[7rem] px-3 py-3 font-semibold text-industrial-ink">
-                          {isEditing && inlineQuickEditDraft ? (
-                            <Input
-                              className="h-8 w-28"
-                              type="number"
-                              value={inlineQuickEditDraft.price}
-                              onKeyDown={(event) => {
-                                if (isEnterKey(event)) {
-                                  event.preventDefault();
-                                  applyQuickEditChanges(item);
-                                }
-                              }}
-                              onChange={(event) => setQuickEditField(item.id, "price", event.target.value)}
-                            />
-                          ) : (
-                            formatCurrency(item.final_price || primaryVariant?.price || item.price)
-                          )}
-                        </td>
-                        <td className="min-w-[8rem] px-3 py-3 font-semibold text-industrial-ink">
-                          {isEditing && inlineQuickEditDraft ? (
-                            <Input
-                              className="h-8 w-28"
-                              type="number"
-                              value={inlineQuickEditDraft.cwtPrice}
-                              onKeyDown={(event) => {
-                                if (isEnterKey(event)) {
-                                  event.preventDefault();
-                                  applyQuickEditChanges(item);
-                                }
-                              }}
-                              onChange={(event) => setQuickEditField(item.id, "cwtPrice", event.target.value)}
-                            />
-                          ) : (
-                            formatCurrency(primaryVariant?.steel_cwt_price || 0)
-                          )}
-                        </td>
-                        <td className="min-w-[8rem] px-3 py-3 text-industrial-steel">
-                          {isEditing && inlineQuickEditDraft ? (
-                            <Input
-                              className="h-8 w-28"
-                              type="number"
-                              value={inlineQuickEditDraft.quantityOnHand}
-                              onKeyDown={(event) => {
-                                if (isEnterKey(event)) {
-                                  event.preventDefault();
-                                  applyQuickEditChanges(item);
-                                }
-                              }}
-                              onChange={(event) => setQuickEditField(item.id, "quantityOnHand", event.target.value)}
-                            />
-                          ) : (
-                            `${formatNumber(stockValue)} / ${formatNumber(primaryVariant?.inventoryQuantity || 0)}`
-                          )}
-                        </td>
-                        <td className="px-3 py-3 text-industrial-steel">
-                          {isEditing && inlineQuickEditDraft ? (
-                            <Input
-                              className="h-8 w-24"
-                              type="number"
-                              value={inlineQuickEditDraft.reorderPoint}
-                              onKeyDown={(event) => {
-                                if (isEnterKey(event)) {
-                                  event.preventDefault();
-                                  applyQuickEditChanges(item);
-                                }
-                              }}
-                              onChange={(event) => setQuickEditField(item.id, "reorderPoint", event.target.value)}
-                            />
-                          ) : (
-                            formatNumber(reorderPoint)
-                          )}
-                        </td>
-                        <td className="px-3 py-3">
-                          {isDeletedView ? (
-                            "—"
-                          ) : isEditing && inlineQuickEditDraft ? (
-                            <Select
-                              value={inlineQuickEditDraft.status}
-                              onKeyDown={(event) => {
-                                if (isEnterKey(event)) {
-                                  event.preventDefault();
-                                  applyQuickEditChanges(item);
-                                }
-                              }}
-                              onChange={(event) => setQuickEditField(item.id, "status", event.target.value)}
-                            >
-                              {statuses.map((status) => (
-                                <option key={status} value={status}>
-                                  {statusLabels[status]}
-                                </option>
-                              ))}
-                            </Select>
-                          ) : (
-                            <Select
-                              className="h-8 w-40"
-                              value={item.status}
-                              onChange={(event) => updateRowStatus(item.id, event.target.value as CatalogStatus)}
-                            >
-                              {statuses.map((status) => (
-                                <option key={status} value={status}>
-                                  {statusLabels[status]}
-                                </option>
-                              ))}
-                            </Select>
-                          )}
-                        </td>
-                        {isDeletedView && <td className="px-3 py-3 text-xs text-industrial-steel">{item.deletedAt ? formatDate(item.deletedAt) : "—"}</td>}
-                        <td className="sticky right-0 z-10 w-80 bg-white px-3 py-3">
-                          <div className="flex items-center gap-2 whitespace-nowrap">
+	                          >
+	                            <span className="block truncate font-semibold text-industrial-ink">{item.title}</span>
+	                            <span className="mt-1 block truncate text-xs text-industrial-muted">
+	                              {item.category.name}
+	                            </span>
+	                            {isDeletedView && (
+	                              <span className="mt-1 block text-xs text-industrial-muted">
+                                Deleted {item.deletedAt ? formatDate(item.deletedAt) : "date unavailable"}
+                              </span>
+                            )}
+	                          </button>
+	                        </div>
+                          <span className="font-mono text-sm text-industrial-ink">{primaryVariant?.sku || "—"}</span>
+	                        <div className="font-semibold text-industrial-ink">
+	                          {isPriceEditing ? (
+                              <Input
+                                className={cn(
+                                  "h-9 w-28 rounded-md border-black/10",
+                                  inlineDrafts[item.id]?.price !== undefined && "border-amber-300 bg-amber-50/60"
+                                )}
+                                data-inline-field="price"
+                                data-inline-product-id={item.id}
+                                min="0"
+                                step="0.01"
+                                type="number"
+                                value={getInlineCellValue(item, "price")}
+                                onBlur={() => void saveInlineCell(item, "price")}
+                                onChange={(event) => setInlineDraft(item.id, "price", event.target.value)}
+                                onFocus={() => startInlineCellEdit(item, "price")}
+                                onKeyDown={(event) => handleInlineCellKeyDown(event, item, "price")}
+                              />
+                            ) : (
+                              <button
+                                className="rounded-md px-1 py-0.5 text-left font-semibold text-industrial-ink transition hover:bg-[#f7f7f4]"
+                                onClick={() => startInlineCellEdit(item, "price")}
+                                type="button"
+                              >
+                                <span className="block">{formatCurrency(item.final_price || primaryVariant?.price || item.price)}</span>
+                                <span className="block text-xs font-medium text-industrial-muted">
+                                  CWT {formatCurrency(primaryVariant?.steel_cwt_price || 0)}
+                                </span>
+                              </button>
+                            )}
+	                        </div>
+	                        <div className="text-industrial-steel">
+	                          {isStockEditing ? (
+                              <Input
+                                className={cn(
+                                  "h-9 w-24 rounded-md border-black/10",
+                                  inlineDrafts[item.id]?.stock !== undefined && "border-amber-300 bg-amber-50/60"
+                                )}
+                                data-inline-field="stock"
+                                data-inline-product-id={item.id}
+                                min="0"
+                                step="1"
+                                type="number"
+                                value={getInlineCellValue(item, "stock")}
+                                onBlur={() => void saveInlineCell(item, "stock")}
+                                onChange={(event) => setInlineDraft(item.id, "stock", event.target.value)}
+                                onFocus={() => startInlineCellEdit(item, "stock")}
+                                onKeyDown={(event) => handleInlineCellKeyDown(event, item, "stock")}
+                              />
+                            ) : (
+                              <button
+                                className="rounded-md px-1 py-0.5 text-left text-industrial-steel transition hover:bg-[#f7f7f4]"
+                                onClick={() => startInlineCellEdit(item, "stock")}
+                                type="button"
+                              >
+                                <span className="block">{formatNumber(stockValue)}</span>
+                                <span className="block text-xs text-industrial-muted">Reorder {formatNumber(reorderPoint)}</span>
+                              </button>
+                            )}
+                        </div>
+	                        <div>
+	                          {isDeletedView ? (
+	                            "—"
+	                          ) : isStatusEditing ? (
+                              <Select
+                                className="h-8 w-40 rounded-md border-black/10"
+                                data-inline-field="status"
+                                data-inline-product-id={item.id}
+                                value={getInlineCellValue(item, "status")}
+                                onBlur={() => void saveInlineCell(item, "status")}
+                                onChange={(event) => saveInlineStatus(item, event.target.value as CatalogStatus)}
+                                onKeyDown={(event) => handleInlineCellKeyDown(event, item, "status")}
+                              >
+                                {statuses.map((status) => (
+                                  <option key={status} value={status}>
+                                    {statusLabels[status]}
+                                  </option>
+                                ))}
+                              </Select>
+	                          ) : (
+                              <button
+                                className={cn(
+                                  "inline-flex h-6 items-center rounded-full px-3 text-xs font-medium transition hover:ring-2 hover:ring-black/10",
+                                  item.status === "active"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : item.status === "draft"
+                                      ? "bg-neutral-100 text-neutral-700"
+                                      : "bg-amber-100 text-amber-800"
+                                )}
+                                onClick={() => startInlineCellEdit(item, "status")}
+                                type="button"
+                              >
+                                {statusLabels[item.status]}
+                              </button>
+	                          )}
+                            {rowStatus !== "idle" ? (
+                              <span
+                                className={cn(
+                                  "mt-1 block text-xs font-medium",
+                                  rowStatus === "saved" && "text-emerald-700",
+                                  rowStatus === "saving" && "text-industrial-muted",
+                                  rowStatus === "unsaved" && "text-amber-700",
+                                  rowStatus === "error" && "text-red-700"
+                                )}
+                                title={rowStatusMessage}
+                              >
+                                {rowStatus === "saved" && "Saved"}
+                                {rowStatus === "saving" && "Saving..."}
+                                {rowStatus === "unsaved" && "Unsaved"}
+                                {rowStatus === "error" && "Error"}
+                              </span>
+                            ) : null}
+	                        </div>
+	                        <div className="flex items-center gap-1.5 whitespace-nowrap">
                             {isDeletedView ? (
                               <Button onClick={() => restoreProduct(item.id)} size="sm" variant="secondary">
                                 <Archive size={14} />
                                 Restore
                               </Button>
-                            ) : isEditing ? (
-                              <>
-                                <Button onClick={() => applyQuickEditChanges(item)} size="sm" variant="primary">
+	                            ) : isEditing ? (
+	                              <>
+	                                <Button className="h-9 w-9 rounded-lg px-0" onClick={() => applyQuickEditChanges(item)} size="sm" variant="primary" aria-label={`Save quick edit for ${item.title}`} title="Save">
                                   <Check size={14} />
-                                  Save
                                 </Button>
-                                <Button onClick={cancelQuickEdit} size="sm">
-                                  Cancel
+                                <Button className="rounded-lg normal-case tracking-normal" onClick={cancelQuickEdit} size="sm">
+                                  Done
                                 </Button>
                               </>
-                            ) : (
-                              <Button
-                                className="normal-case tracking-normal text-sm font-bold"
-                                onClick={() => startQuickEdit(item)}
-                                size="sm"
-                              >
+	                            ) : (
+	                              <Button
+	                                className="h-9 w-9 rounded-md px-0"
+	                                onClick={() => startInlineCellEdit(item, "price")}
+	                                size="sm"
+                                  variant="secondary"
+	                                aria-label={`Edit price for ${item.title}`}
+	                                title="Edit price"
+	                              >
                                 <Pencil size={14} />
-                                Quick Edit
                               </Button>
-                            )}
-                            <Button
-                              className="normal-case tracking-normal text-sm font-bold"
-                              onClick={() => openFullEditor(item)}
-                              size="sm"
-                              variant="secondary"
-                            >
-                              <Settings size={14} />
-                              Full Edit
-                            </Button>
-                            <Button
-                              className="normal-case tracking-normal text-sm font-bold"
-                              onClick={() => duplicateProduct(item)}
-                              size="sm"
-                              variant="secondary"
-                              aria-label={`Duplicate ${item.title}`}
-                              title={`Duplicate ${item.title}`}
-                            >
-                              <Copy size={14} />
-                            </Button>
-                            {!isDeletedView && (
-                              <button
-                                aria-label={`Delete ${item.title}`}
-                                className="grid h-8 w-8 place-items-center rounded border border-industrial-rail text-industrial-muted transition hover:bg-industrial-paper hover:text-industrial-ink"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  deleteProduct(item.id);
-                                }}
-                                title="Delete"
-                                type="button"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+	                            )}
+	                            <Button
+	                              className="h-9 w-9 rounded-md px-0"
+	                              onClick={() => openFullEditor(item)}
+	                              size="sm"
+	                              variant="secondary"
+                              aria-label={`Full edit ${item.title}`}
+                              title="Full edit"
+	                            >
+	                              <Ellipsis size={16} />
+	                            </Button>
+	                        </div>
+	                      </div>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex flex-col gap-3 border-t border-industrial-rail px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-industrial-steel">
-                {filtered.length ? `Showing ${pageRange} of ${filtered.length} products` : "No products match this view."}
-              </p>
-              <label className="mx-auto inline-flex items-center gap-2 text-sm text-industrial-steel whitespace-nowrap sm:relative sm:left-12">
-                <span className="text-industrial-muted">Show per page</span>
-                <Select
-                  aria-label="Products per page"
-                  className="inline-flex w-20"
-                  value={productsPerPage}
-                  onChange={(event) => {
-                    const nextValue = event.target.value === "all" ? "all" : (Number(event.target.value) as ProductsPerPage);
-                    setProductsPerPage(nextValue);
-                  }}
-                >
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                  <option value="all">All</option>
-                </Select>
-              </label>
-              <div className="ml-auto flex flex-nowrap items-center gap-2">
-                {totalPages > 1 && (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      onClick={() => setProductPage((current) => Math.max(1, current - 1))}
-                      disabled={productPage === 1}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      Previous
-                    </Button>
-                    <span className="text-sm font-black text-industrial-ink">
-                      Page {productPage} / {totalPages}
-                    </span>
-                    <Button
-                      onClick={() => setProductPage((current) => Math.min(totalPages, current + 1))}
-                      disabled={productPage === totalPages}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      Next
-                    </Button>
+
+                      {!pagedProducts.length ? (
+                        <div className="grid place-items-center gap-2 px-6 py-16 text-center text-industrial-muted">
+                          <Boxes size={28} />
+                          <p className="text-sm font-semibold">No products found.</p>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
-                )}
-              </div>
-            </div>
-            </CardBody>
-          </Card>
-          )}
+
+                    <div className="flex items-center justify-between px-4 py-3 text-sm text-industrial-ink">
+                      <span>{filtered.length ? `Showing ${pageStart + 1} to ${Math.min(pageEnd, filtered.length)} of ${filtered.length} products` : "No products match this view"}</span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          className="h-9 w-9 rounded-md px-0"
+                          onClick={() => setProductPage((current) => Math.max(1, current - 1))}
+                          disabled={productPage === 1}
+                          size="sm"
+                          variant="secondary"
+                          aria-label="Previous page"
+                        >
+                          ‹
+                        </Button>
+                        <span className="grid h-9 min-w-9 place-items-center rounded-md bg-industrial-ink px-3 text-white">
+                          {productPage}
+                        </span>
+                        <Button
+                          className="h-9 w-9 rounded-md px-0"
+                          onClick={() => setProductPage((current) => Math.min(totalPages, current + 1))}
+                          disabled={productPage === totalPages}
+                          size="sm"
+                          variant="secondary"
+                          aria-label="Next page"
+                        >
+                          ›
+                        </Button>
+                      </div>
+                      <label className="inline-flex items-center gap-2 whitespace-nowrap">
+                        <span>Rows per page</span>
+                        <Select
+                          aria-label="Products per page"
+                          className="h-9 w-20 rounded-md border-black/10"
+                          value={productsPerPage}
+                          onChange={(event) => {
+                            const nextValue = event.target.value === "all" ? "all" : (Number(event.target.value) as ProductsPerPage);
+                            setProductsPerPage(nextValue);
+                          }}
+                        >
+                          <option value={50}>50</option>
+                          <option value={100}>100</option>
+                          <option value="all">All</option>
+                        </Select>
+	                      </label>
+	                    </div>
+	                  </div>
+	            </section>
+	          )}
 
           {isEditorMode && !selected && (
             <section className="rounded-md border border-industrial-rail bg-industrial-paper px-4 py-3 text-sm text-industrial-pine">

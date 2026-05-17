@@ -310,6 +310,29 @@ function isValidQuote(quote: OrderRecord | null): quote is OrderRecord {
   return Boolean(quote);
 }
 
+function parseTemporaryOrderTimestamp(value: string) {
+  const match = /^order-(\d{12,})$/i.exec(value);
+  if (!match) return null;
+  const timestamp = Number(match[1]);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function findQuoteByTemporaryTimestamp(orders: OrderRecord[], temporaryId: string) {
+  const timestamp = parseTemporaryOrderTimestamp(temporaryId);
+  if (!timestamp) return null;
+
+  const matches = orders
+    .filter((order) => order.isQuoteRequest)
+    .map((order) => ({
+      order,
+      distance: Math.abs(new Date(order.createdAt).getTime() - timestamp)
+    }))
+    .filter((entry) => Number.isFinite(entry.distance) && entry.distance <= 15 * 60 * 1000)
+    .sort((left, right) => left.distance - right.distance);
+
+  return matches[0]?.order || null;
+}
+
 export function QuoteDetailPage({
   quoteId,
   backHref,
@@ -432,7 +455,7 @@ export function QuoteDetailPage({
           setOrders(payload.orders);
           const backendMatch = payload.orders.find(
             (item) => item.id === normalizedQuoteId || item.orderNumber === normalizedQuoteId
-          );
+          ) || findQuoteByTemporaryTimestamp(payload.orders, normalizedQuoteId);
           setRemoteMatchedQuote(backendMatch || null);
           setBackendNotice("");
         } else {
@@ -593,8 +616,7 @@ export function QuoteDetailPage({
       price: addedPrice,
       options: {
         ...variant.options,
-        length: variantSummary || "default",
-        unit: quickAddUnit || "EA"
+        length: variantSummary || quickAddUnit || "default"
       },
       pickNotes: ""
     });
@@ -702,7 +724,7 @@ export function QuoteDetailPage({
   const deliveryFee = quote.fulfillmentMethod === "delivery" && subtotal < 500 ? 85 : quote.deliveryFee;
   const tax = quote.status === "confirmed" ? subtotal * taxRate : quote.tax;
   const total = subtotal + tax + deliveryFee;
-  const quickAddVariantLabel = formatVariantSummary(activeCatalogVariant);
+  const quickAddVariantLabel = formatVariantSummary(activeCatalogVariant || undefined);
 
   return (
     <PageShell

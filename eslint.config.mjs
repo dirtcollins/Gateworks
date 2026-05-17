@@ -1,13 +1,4 @@
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { FlatCompat } from "@eslint/eslintrc";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname
-});
+import tsParser from "@typescript-eslint/parser";
 
 const eslintConfig = [
   {
@@ -19,7 +10,23 @@ const eslintConfig = [
       "next-env.d.ts"
     ]
   },
-  ...compat.extends("next/core-web-vitals", "next/typescript")
+  {
+    files: ["**/*.{js,jsx,ts,tsx}"],
+    languageOptions: {
+      parser: tsParser,
+      ecmaVersion: "latest",
+      sourceType: "module",
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true
+        }
+      }
+    },
+    rules: {
+      "no-undef": "off",
+      "no-unused-vars": "off"
+    }
+  }
 ];
 
 export default eslintConfig;

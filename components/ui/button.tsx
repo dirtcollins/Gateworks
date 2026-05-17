@@ -18,9 +18,9 @@ const variants: Record<ButtonVariant, string> = {
 };
 
 const sizes: Record<ButtonSize, string> = {
-  sm: "h-9 px-3 text-xs",
-  md: "h-11 px-4 text-sm",
-  icon: "size-10 p-0"
+  sm: "h-8 px-2.5 text-xs",
+  md: "h-10 px-3 text-sm",
+  icon: "size-9 p-0"
 };
 
 export function Button({
@@ -34,7 +34,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex shrink-0 items-center justify-center gap-2 border font-black uppercase tracking-[0.08em] transition disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex shrink-0 items-center justify-center gap-2 rounded-md border font-black uppercase tracking-[0.08em] transition disabled:cursor-not-allowed disabled:opacity-50",
         variants[variant],
         sizes[size],
         className
@@ -46,4 +46,3 @@ export function Button({
     </button>
   );
 }
-

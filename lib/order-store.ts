@@ -39,6 +39,7 @@ export type OrderPayment = {
   paidAt: string;
   reference: string;
   note: string;
+  createdBy: string;
   createdAt: string;
 };
 
@@ -93,6 +94,8 @@ type OrderState = {
 };
 
 const orderStoreName = "gateworks-orders";
+const documentSequenceMin = 10000;
+const documentSequenceMax = 99999;
 
 function orderDefaults() {
   return { orders: [] };
@@ -102,24 +105,31 @@ function getNextDocumentNumber(orders: OrderRecord[], prefix: "Order" | "Quote")
   const highest = orders.reduce((currentHighest, order) => {
     const expectedQuote = prefix === "Quote";
     if (Boolean(order.isQuoteRequest) !== expectedQuote) return currentHighest;
-    const number = Number(order.orderNumber.replace(/\D/g, ""));
+    const rawNumber = Number(order.orderNumber.replace(/\D/g, ""));
+    const number = rawNumber > documentSequenceMax ? rawNumber % 100000 : rawNumber;
     return Number.isFinite(number) ? Math.max(currentHighest, number) : currentHighest;
   }, 10026);
 
-  return `${prefix}-${highest + 1}`;
+  const nextSequence = highest >= documentSequenceMax ? documentSequenceMin : highest + 1;
+  return `${prefix}-${String(nextSequence).padStart(5, "0")}`;
 }
 
 function normalizeDocumentNumber(orderNumber: string, isQuoteRequest: boolean) {
-  if (orderNumber.startsWith("Order-") || orderNumber.startsWith("Quote-")) return orderNumber;
-  const sequence = Number(orderNumber.replace(/\D/g, ""));
+  const rawSequence = Number(orderNumber.replace(/\D/g, ""));
+  const sequence =
+    rawSequence > documentSequenceMax ? rawSequence % 100000 : rawSequence;
   if (!Number.isFinite(sequence) || sequence <= 0) return orderNumber;
-  return `${isQuoteRequest ? "Quote" : "Order"}-${sequence}`;
+  return `${isQuoteRequest ? "Quote" : "Order"}-${String(sequence).padStart(5, "0")}`;
 }
 
 function normalizeOrderRecord(order: OrderRecord): OrderRecord {
   return {
     ...order,
-    orderNumber: normalizeDocumentNumber(order.orderNumber, Boolean(order.isQuoteRequest))
+    orderNumber: normalizeDocumentNumber(order.orderNumber, Boolean(order.isQuoteRequest)),
+    payments: (order.payments || []).map((payment) => ({
+      ...payment,
+      createdBy: payment.createdBy || "Admin"
+    }))
   };
 }
 

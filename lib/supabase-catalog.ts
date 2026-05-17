@@ -58,10 +58,10 @@ type ProductRow = {
     url: string;
     alt: string;
     sort_order: number;
-    thumb_url: string | null;
-    card_url: string | null;
-    medium_url: string | null;
-    full_url: string | null;
+    thumb_url?: string | null;
+    card_url?: string | null;
+    medium_url?: string | null;
+    full_url?: string | null;
   }>;
 };
 
@@ -206,11 +206,7 @@ export async function fetchSupabaseProducts() {
         variant_id,
         url,
         alt,
-        sort_order,
-        thumb_url,
-        card_url,
-        medium_url,
-        full_url
+        sort_order
       )
     `
     )
@@ -282,11 +278,7 @@ export async function fetchSupabaseProduct(slug: string) {
         variant_id,
         url,
         alt,
-        sort_order,
-        thumb_url,
-        card_url,
-        medium_url,
-        full_url
+        sort_order
       )
     `
     )

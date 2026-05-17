@@ -37,7 +37,7 @@ end $$;
 
 do $$
 begin
-  create type public.payment_status as enum ('unpaid', 'partial', 'paid', 'refunded', 'failed');
+  create type public.payment_status as enum ('unpaid', 'partial', 'paid', 'overpaid', 'refunded', 'failed');
 exception when duplicate_object then null;
 end $$;
 
@@ -361,6 +361,19 @@ create table if not exists public.payments (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.order_payments (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.orders(id) on delete cascade,
+  payment_date timestamptz not null default now(),
+  payment_method text not null check (payment_method in ('Cash', 'Check', 'Credit Card', 'Debit Card', 'ACH', 'Wire Transfer', 'Financing', 'Other')),
+  amount numeric(12, 2) not null check (amount > 0),
+  reference_number text,
+  notes text,
+  created_by text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.purchase_orders (
   id uuid primary key default gen_random_uuid(),
   po_number text not null unique default ('PO-' || nextval('public.purchase_order_number_sequence')),
@@ -617,6 +630,7 @@ create index if not exists order_items_order_id_idx on public.order_items(order_
 create index if not exists quotes_status_created_idx on public.quotes(status, created_at desc);
 create index if not exists invoices_payment_status_idx on public.invoices(payment_status, created_at desc);
 create index if not exists payments_invoice_id_idx on public.payments(invoice_id);
+create index if not exists order_payments_order_id_idx on public.order_payments(order_id, payment_date desc);
 create index if not exists purchase_orders_supplier_status_idx on public.purchase_orders(supplier_id, status);
 create index if not exists deliveries_status_scheduled_idx on public.deliveries(status, scheduled_for);
 create index if not exists notifications_user_read_idx on public.notifications(user_id, read_at);
@@ -640,6 +654,7 @@ alter table public.quote_items enable row level security;
 alter table public.invoices enable row level security;
 alter table public.invoice_items enable row level security;
 alter table public.payments enable row level security;
+alter table public.order_payments enable row level security;
 alter table public.purchase_orders enable row level security;
 alter table public.purchase_order_items enable row level security;
 alter table public.receipts enable row level security;
@@ -737,6 +752,10 @@ for all to authenticated using (public.is_staff()) with check (public.is_staff()
 
 drop policy if exists "Staff can manage payments" on public.payments;
 create policy "Staff can manage payments" on public.payments
+for all to authenticated using (public.is_staff()) with check (public.is_staff());
+
+drop policy if exists "Staff can manage order payments" on public.order_payments;
+create policy "Staff can manage order payments" on public.order_payments
 for all to authenticated using (public.is_staff()) with check (public.is_staff());
 
 drop policy if exists "Company users can read their invoices" on public.invoices;

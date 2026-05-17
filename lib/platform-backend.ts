@@ -31,6 +31,7 @@ export const paymentStatuses = [
   "unpaid",
   "partial",
   "paid",
+  "overpaid",
   "refunded",
   "failed"
 ] as const;

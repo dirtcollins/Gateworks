@@ -22,6 +22,7 @@ const checks = [
   ["site_users", "id"],
   ["orders", "id"],
   ["order_items", "id"],
+  ["order_payments", "id"],
   ["saved_carts", "id"],
   ["saved_cart_items", "id"],
   ["customer_drawing_uploads", "id"],

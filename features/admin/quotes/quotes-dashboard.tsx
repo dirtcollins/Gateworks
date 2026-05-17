@@ -333,7 +333,6 @@ export function QuotesDashboard() {
 
     setSelectedQuoteId(createdQuote.id);
     setActionMessage("New quote created. Add products and build details from this workspace.");
-    router.push(`/admin/quotes/${createdQuote.id}`);
 
     try {
       const response = await fetch("/api/orders", {
@@ -346,18 +345,35 @@ export function QuotesDashboard() {
         ok?: boolean;
         persisted?: boolean;
         orderId?: string;
+        orderNumber?: string;
         reason?: string;
       };
 
-      if (payload.persisted) {
+      if (payload.persisted && payload.orderId) {
+        const persistedQuote: OrderRecord = {
+          ...createdQuote,
+          id: payload.orderId,
+          orderNumber: payload.orderNumber || createdQuote.orderNumber,
+          updatedAt: new Date().toISOString()
+        };
+        setOrders(
+          useOrderStore
+            .getState()
+            .orders.map((order) => (order.id === createdQuote.id ? persistedQuote : order))
+        );
+        setSelectedQuoteId(payload.orderId);
         setActionMessage(
           "Quote saved to backend. Add products and build details from this workspace."
         );
+        router.push(`/admin/quotes/${payload.orderId}`);
       } else if (payload.persisted === false) {
         setBackendNotice(
           payload.reason ||
             "Supabase is not configured. New quote was created locally and saved only in this browser."
         );
+        router.push(`/admin/quotes/${createdQuote.id}`);
+      } else {
+        router.push(`/admin/quotes/${createdQuote.id}`);
       }
     } catch (error) {
       setBackendNotice(
@@ -365,6 +381,7 @@ export function QuotesDashboard() {
           ? error.message
           : "Unable to persist new quote right now; it remains in your local workspace."
       );
+      router.push(`/admin/quotes/${createdQuote.id}`);
     }
 
     window.setTimeout(() => {

@@ -6,6 +6,7 @@ import { CalendarDays, CheckCircle2, FileUp, MapPin, PackageCheck, Trash2, Truck
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input, Select, Textarea } from "@/components/ui/input";
+import { PageShell } from "@/components/ui/page-shell";
 import { useCartStore } from "@/lib/cart-store";
 import { useOrderStore, type CustomerDrawing, type OrderAddress } from "@/lib/order-store";
 import { useUserStore } from "@/lib/user-store";
@@ -230,11 +231,11 @@ export function CheckoutPageClient() {
 
   if (submittedOrderNumber) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-8">
+      <PageShell contentClassName="max-w-4xl">
         <Card>
-          <CardBody className="grid gap-4 p-8 text-center">
+          <CardBody className="grid gap-4 p-6 text-center">
             <CheckCircle2 className="mx-auto text-industrial-pine" size={44} />
-            <h1 className="text-3xl font-black text-industrial-ink">
+            <h1 className="text-2xl font-black text-industrial-ink">
               {isQuoteRequest ? "Quote request submitted" : "Order submitted"}
             </h1>
             <p className="text-sm leading-6 text-industrial-steel">
@@ -250,24 +251,19 @@ export function CheckoutPageClient() {
             </div>
           </CardBody>
         </Card>
-      </main>
+      </PageShell>
     );
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8">
-      <div className="mb-6 border-b border-jobsite-rail pb-5">
-        <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-jobsite-pine">
-          Contractor checkout
-        </p>
-        <h1 className="text-3xl font-bold text-jobsite-ink md:text-4xl">
-          Schedule pickup or delivery
-        </h1>
-      </div>
-
+    <PageShell
+      description="Schedule pickup, delivery, drawings, and order review without leaving the purchasing workflow."
+      eyebrow="Contractor checkout"
+      title="Schedule pickup or delivery"
+    >
       {!items.length ? (
         <Card>
-          <CardBody className="p-8 text-center">
+          <CardBody className="p-6 text-center">
             <p className="text-lg font-semibold text-industrial-ink">Your cart is empty.</p>
             <Link href="/" className="mt-5 inline-flex">
               <Button variant="primary">Browse products</Button>
@@ -275,24 +271,24 @@ export function CheckoutPageClient() {
           </CardBody>
         </Card>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-          <section className="grid gap-5">
+        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+          <section className="grid gap-4">
             <Card>
               <CardHeader>
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
                     Fulfillment
                   </p>
-                  <h2 className="text-xl font-black text-industrial-ink">
+                  <h2 className="text-lg font-black text-industrial-ink">
                     Pickup or delivery scheduling
                   </h2>
                 </div>
               </CardHeader>
-              <CardBody className="grid gap-4">
+              <CardBody className="grid gap-3">
                 <div className="grid gap-3 sm:grid-cols-2">
                   {(["pickup", "delivery"] as FulfillmentMethod[]).map((method) => (
                     <button
-                      className={`grid gap-2 border p-4 text-left transition ${
+                      className={`grid gap-2 rounded-lg border p-3 text-left transition ${
                         fulfillmentMethod === method
                           ? "border-industrial-ink bg-industrial-paper"
                           : "border-industrial-rail bg-white hover:border-industrial-ink"
@@ -344,12 +340,12 @@ export function CheckoutPageClient() {
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
                     Customer
                   </p>
-                  <h2 className="text-xl font-black text-industrial-ink">
+                  <h2 className="text-lg font-black text-industrial-ink">
                     Account and jobsite details
                   </h2>
                 </div>
               </CardHeader>
-              <CardBody className="grid gap-4">
+              <CardBody className="grid gap-3">
                 <div className="grid gap-3 md:grid-cols-2">
                   <Input placeholder="Contact name" value={address.name} onChange={(event) => updateAddress("name", event.target.value)} />
                   <Input placeholder="Company" value={address.company} onChange={(event) => updateAddress("company", event.target.value)} />
@@ -382,14 +378,14 @@ export function CheckoutPageClient() {
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
                     Drawings
                   </p>
-                  <h2 className="text-xl font-black text-industrial-ink">
+                  <h2 className="text-lg font-black text-industrial-ink">
                     Customer drawing uploads
                   </h2>
                 </div>
                 <FileUp size={20} />
               </CardHeader>
-              <CardBody className="grid gap-4">
-                <label className="grid cursor-pointer place-items-center border border-dashed border-industrial-rail bg-white p-6 text-center hover:border-industrial-ink">
+              <CardBody className="grid gap-3">
+                <label className="grid cursor-pointer place-items-center rounded-lg border border-dashed border-industrial-rail bg-white p-4 text-center hover:border-industrial-ink">
                   <FileUp className="text-industrial-muted" size={26} />
                   <span className="mt-3 text-sm font-black text-industrial-ink">
                     Upload drawings, field sketches, cut lists, or reference photos
@@ -443,11 +439,11 @@ export function CheckoutPageClient() {
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">
                     Review
                   </p>
-                  <h2 className="text-xl font-black text-industrial-ink">Order summary</h2>
+                  <h2 className="text-lg font-black text-industrial-ink">Order summary</h2>
                 </div>
                 <CalendarDays size={20} />
               </CardHeader>
-              <CardBody className="grid gap-4">
+              <CardBody className="grid gap-3">
                 <div className="grid gap-3">
                   {items.map((item) => (
                     <div className="grid grid-cols-[1fr_auto] gap-3 border-b border-industrial-rail pb-3 text-sm" key={item.variantId}>
@@ -461,7 +457,7 @@ export function CheckoutPageClient() {
                     </div>
                   ))}
                 </div>
-                <label className="flex items-start gap-3 border border-industrial-rail p-3 text-sm">
+                <label className="flex items-start gap-3 rounded-lg border border-industrial-rail p-3 text-sm">
                   <input
                     checked={isQuoteRequest}
                     className="mt-1"
@@ -498,6 +494,6 @@ export function CheckoutPageClient() {
           </aside>
         </div>
       )}
-    </main>
+    </PageShell>
   );
 }

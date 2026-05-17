@@ -18,6 +18,8 @@ const sqlFiles = [
   "supabase/schema.sql",
   "supabase/operating-system-schema.sql",
   "supabase/phase-1-2-supabase-completion.sql",
+  "supabase/document-number-format.sql",
+  "supabase/order-payments-ledger.sql",
   "supabase/pick-ticket-line-progress.sql",
   "supabase/demand-reorder-intelligence.sql",
   "supabase/website-production-readiness.sql"

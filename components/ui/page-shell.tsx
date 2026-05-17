@@ -5,6 +5,7 @@ type PageShellProps = {
   children: ReactNode;
   className?: string;
   headerClassName?: string;
+  contentClassName?: string;
   titleClassName?: string;
   descriptionClassName?: string;
   eyebrow?: string;
@@ -17,6 +18,7 @@ export function PageShell({
   children,
   className,
   headerClassName,
+  contentClassName,
   titleClassName,
   descriptionClassName,
   eyebrow,
@@ -25,23 +27,23 @@ export function PageShell({
   actions
 }: PageShellProps) {
   return (
-    <main className={cn("w-full px-3 py-4 md:px-6 md:py-6", className)}>
+    <main className={cn("w-full px-3 py-3 md:px-4 md:py-4", className)}>
       {(title || eyebrow || description || actions) && (
-        <section className={cn("mx-auto mb-4 max-w-[1280px] rounded-lg border border-black/10 bg-white p-4 md:p-5", headerClassName)}>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="w-full">
+        <section className={cn("mb-3 w-full max-w-[1440px] border-b border-black/10 pb-3", headerClassName)}>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
               {eyebrow && (
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-industrial-muted">
                   {eyebrow}
                 </p>
               )}
               {title && (
-                <h1 className={cn("mt-1 text-2xl font-semibold text-industrial-ink md:text-[2rem]", titleClassName)}>
+                <h1 className={cn("mt-0.5 text-xl font-semibold leading-tight text-industrial-ink md:text-2xl", titleClassName)}>
                   {title}
                 </h1>
               )}
               {description && (
-                <p className={cn("mt-2 text-sm leading-6 text-industrial-steel", descriptionClassName)}>
+                <p className={cn("mt-1 max-w-3xl text-sm leading-5 text-industrial-steel", descriptionClassName)}>
                   {description}
                 </p>
               )}
@@ -50,7 +52,7 @@ export function PageShell({
           </div>
         </section>
       )}
-      <div className="mx-auto max-w-[1280px]">{children}</div>
+      <div className={cn("w-full max-w-[1440px]", contentClassName)}>{children}</div>
     </main>
   );
 }

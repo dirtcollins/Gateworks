@@ -85,6 +85,16 @@ const staffRoster = ["Maya Ortiz", "Cody Lee", "Jordan Blake", "Priya Mehta"];
 
 const TAX_RATE = 0.0825;
 const unitOptions = ["EA", "FT", "SET", "ROLL", "BOX", "PCS"];
+const paymentMethodOptions = [
+  "Cash",
+  "Check",
+  "Credit Card",
+  "Debit Card",
+  "ACH",
+  "Wire Transfer",
+  "Financing",
+  "Other"
+] as const;
 
 function getProductImageUrl(product: Product, variant?: ProductVariant | null) {
   return (
@@ -166,6 +176,7 @@ const paymentPillStyles: Record<PaymentStatus, string> = {
   unpaid: "border-rose-200 bg-rose-50 text-rose-700",
   partial: "border-amber-200 bg-amber-50 text-amber-800",
   paid: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  overpaid: "border-blue-200 bg-blue-50 text-blue-800",
   refunded: "border-slate-200 bg-slate-100 text-slate-700",
   failed: "border-red-200 bg-red-50 text-red-700"
 };
@@ -196,6 +207,7 @@ const paymentLabels: Record<PaymentStatus, string> = {
   unpaid: "Unpaid",
   partial: "Partial",
   paid: "Paid",
+  overpaid: "Overpaid",
   refunded: "Refunded",
   failed: "Failed"
 };
@@ -1152,6 +1164,7 @@ export function OrderDetailPage({
   const isCustomerPopupOpen = activePopup === "customer";
   const isBillingPopupOpen = activePopup === "billing";
   const isDeliveryPopupOpen = activePopup === "delivery";
+  const isPaymentPopupOpen = activePopup === "payment";
 
   const availableCustomers = useMemo(
     () =>
@@ -1388,6 +1401,7 @@ export function OrderDetailPage({
   const recordedPayments = order.payments || [];
   const recordedPaymentTotal = recordedPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
   const balanceDue = Math.max(0, summaryTotal - recordedPaymentTotal);
+  const overpaidAmount = Math.max(0, recordedPaymentTotal - summaryTotal);
   const timelineEvents = toStatusTimeline(order);
   const isReadyStatus = order.status === "ready_for_pickup" || order.status === "out_for_delivery";
   const canToggleReady =
@@ -1519,7 +1533,8 @@ export function OrderDetailPage({
 
   function getPaymentStatusForPaidAmount(paidAmount: number, orderTotal: number): PaymentStatus {
     if (paidAmount <= 0) return "unpaid";
-    if (paidAmount >= orderTotal) return "paid";
+    if (paidAmount > orderTotal) return "overpaid";
+    if (paidAmount === orderTotal) return "paid";
     return "partial";
   }
 
@@ -1543,6 +1558,7 @@ export function OrderDetailPage({
       paidAt: paymentDate ? new Date(`${paymentDate}T12:00:00`).toISOString() : now,
       reference: paymentReference.trim(),
       note: paymentNote.trim(),
+      createdBy: "Admin",
       createdAt: now
     };
     const nextPayments = [localPayment, ...recordedPayments];
@@ -1569,6 +1585,7 @@ export function OrderDetailPage({
     setPaymentAmount("");
     setPaymentReference("");
     setPaymentNote("");
+    setActivePopup(null);
     setActionNotice(`Recorded ${formatCurrency(amount)} payment.`);
 
     void fetch("/api/orders", {
@@ -1581,7 +1598,8 @@ export function OrderDetailPage({
           method: localPayment.method,
           paidAt: localPayment.paidAt,
           reference: localPayment.reference,
-          note: localPayment.note
+          note: localPayment.note,
+          createdBy: localPayment.createdBy
         }
       })
     })
@@ -2710,64 +2728,25 @@ export function OrderDetailPage({
                         <p className="mt-1 text-lg font-black text-industrial-ink">{formatCurrency(balanceDue)}</p>
                       </div>
                     </div>
-                    <div className="mt-4 grid gap-2">
-                      <div className="grid grid-cols-[1fr_120px] gap-2">
-                        <Input
-                          className="h-9 rounded border-black/10 bg-[#f7f7f4] text-sm normal-case"
-                          inputMode="decimal"
-                          onChange={(event) => setPaymentAmount(event.target.value)}
-                          placeholder="Payment amount"
-                          value={paymentAmount}
-                        />
-                        <Input
-                          className="h-9 rounded border-black/10 bg-[#f7f7f4] text-sm normal-case"
-                          onChange={(event) => setPaymentDate(event.target.value)}
-                          type="date"
-                          value={paymentDate}
-                        />
-                      </div>
-                      <div className="grid grid-cols-[1fr_1fr] gap-2">
-                        <Select
-                          aria-label="Payment method"
-                          className="h-9 rounded border-black/10 bg-[#f7f7f4] text-sm"
-                          onChange={(event) => setPaymentMethod(event.target.value)}
-                          value={paymentMethod}
-                        >
-                          <option value="Cash">Cash</option>
-                          <option value="Check">Check</option>
-                          <option value="Credit card">Credit card</option>
-                          <option value="ACH">ACH</option>
-                          <option value="Wire">Wire</option>
-                          <option value="Other">Other</option>
-                        </Select>
-                        <Input
-                          className="h-9 rounded border-black/10 bg-[#f7f7f4] text-sm normal-case"
-                          onChange={(event) => setPaymentReference(event.target.value)}
-                          placeholder="Reference #"
-                          value={paymentReference}
-                        />
-                      </div>
-                      <Input
-                        className="h-9 rounded border-black/10 bg-[#f7f7f4] text-sm normal-case"
-                        onChange={(event) => setPaymentNote(event.target.value)}
-                        placeholder="Payment note"
-                        value={paymentNote}
-                      />
-                      <button
-                        className="inline-flex h-9 items-center justify-center rounded-lg bg-industrial-ink px-3 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:bg-jobsite-pine disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={createMode}
-                        onClick={() => void recordPayment()}
-                        type="button"
-                      >
-                        Record payment
-                      </button>
-                    </div>
+                    {overpaidAmount > 0 ? (
+                      <p className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800">
+                        This order is overpaid by {formatCurrency(overpaidAmount)}.
+                      </p>
+                    ) : null}
+                    <button
+                      className="mt-4 inline-flex h-9 w-full items-center justify-center rounded-lg bg-industrial-ink px-3 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:bg-jobsite-pine disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={createMode}
+                      onClick={() => setActivePopup("payment")}
+                      type="button"
+                    >
+                      Record payment
+                    </button>
                     <div className="mt-4 border-t border-black/10 pt-3">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-industrial-muted">Payments recorded</span>
+                        <span className="text-industrial-muted">Payment history</span>
                         <span className="font-black text-industrial-ink">{formatCurrency(recordedPaymentTotal)}</span>
                       </div>
-                      <div className="mt-2 grid max-h-32 gap-2 overflow-y-auto">
+                      <div className="mt-2 grid max-h-52 gap-2 overflow-y-auto">
                         {recordedPayments.length ? (
                           recordedPayments.map((payment) => (
                             <div className="rounded-lg border border-black/10 bg-[#f7f7f4] px-3 py-2 text-xs" key={payment.id}>
@@ -2776,7 +2755,11 @@ export function OrderDetailPage({
                                 <span className="text-industrial-muted">{new Date(payment.paidAt).toLocaleDateString()}</span>
                               </div>
                               <p className="mt-1 truncate font-semibold text-industrial-steel">
-                                {payment.method}{payment.reference ? ` · ${payment.reference}` : ""}
+                                {payment.method}{payment.reference ? ` · Ref ${payment.reference}` : ""}
+                              </p>
+                              {payment.note ? <p className="mt-1 text-industrial-muted">{payment.note}</p> : null}
+                              <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-industrial-muted">
+                                Recorded by {payment.createdBy || "Admin"}
                               </p>
                             </div>
                           ))
@@ -2832,6 +2815,101 @@ export function OrderDetailPage({
 
         </div>
       </main>
+      {isPaymentPopupOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            aria-label="Close record payment popup"
+            className="absolute inset-0 bg-black/30"
+            onClick={closeOrderDraftPopups}
+            type="button"
+          />
+          <section className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-black/10 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-black/10 px-6 py-5">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-industrial-muted">Record payment</p>
+                <h2 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-industrial-ink">{order.orderNumber}</h2>
+                <p className="mt-1 text-sm text-industrial-steel">
+                  Invoice total {formatCurrency(invoiceTotal)} · Balance {formatCurrency(balanceDue)}
+                </p>
+              </div>
+              <button
+                aria-label="Close payment popup"
+                className="grid size-10 place-items-center rounded-lg text-industrial-muted transition hover:bg-[#f7f7f4] hover:text-industrial-ink"
+                onClick={closeOrderDraftPopups}
+                type="button"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="grid gap-4 px-6 py-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label>
+                  <span className="text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">Amount</span>
+                  <Input
+                    className="mt-1 h-10 rounded border-black/10 bg-[#f7f7f4] text-sm normal-case"
+                    inputMode="decimal"
+                    onChange={(event) => setPaymentAmount(event.target.value)}
+                    placeholder="0.00"
+                    value={paymentAmount}
+                  />
+                </label>
+                <label>
+                  <span className="text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">Payment date</span>
+                  <Input
+                    className="mt-1 h-10 rounded border-black/10 bg-[#f7f7f4] text-sm normal-case"
+                    onChange={(event) => setPaymentDate(event.target.value)}
+                    type="date"
+                    value={paymentDate}
+                  />
+                </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label>
+                  <span className="text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">Payment method</span>
+                  <Select
+                    aria-label="Payment method"
+                    className="mt-1 h-10 rounded border-black/10 bg-[#f7f7f4] text-sm"
+                    onChange={(event) => setPaymentMethod(event.target.value)}
+                    value={paymentMethod}
+                  >
+                    {paymentMethodOptions.map((method) => (
+                      <option key={method} value={method}>
+                        {method}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                <label>
+                  <span className="text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">Reference number</span>
+                  <Input
+                    className="mt-1 h-10 rounded border-black/10 bg-[#f7f7f4] text-sm normal-case"
+                    onChange={(event) => setPaymentReference(event.target.value)}
+                    placeholder="Check #, auth code, transaction id"
+                    value={paymentReference}
+                  />
+                </label>
+              </div>
+              <label>
+                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-industrial-muted">Notes</span>
+                <Textarea
+                  className="mt-1 min-h-24 rounded border-black/10 bg-[#f7f7f4] text-sm normal-case"
+                  onChange={(event) => setPaymentNote(event.target.value)}
+                  placeholder="Deposit, final payment, customer note..."
+                  value={paymentNote}
+                />
+              </label>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-black/10 bg-[#fafaf8] px-6 py-4">
+              <Button onClick={closeOrderDraftPopups} size="sm" type="button" variant="secondary">
+                Cancel
+              </Button>
+              <Button onClick={() => void recordPayment()} size="sm" type="button">
+                Save payment
+              </Button>
+            </div>
+          </section>
+        </div>
+      ) : null}
       {isCustomerPopupOpen ? (
         <AppModal
           focusReturnRef={popupTriggerRef}

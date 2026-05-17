@@ -250,6 +250,62 @@ async function writeAuditLog(
   });
 }
 
+async function writeStockAdjustmentRecord(
+  admin: SupabaseClient,
+  input: {
+    actorId: string | null;
+    productId: string | null;
+    variantId: string;
+    previousStock: number;
+    newStock: number;
+  }
+) {
+  const adjustmentAmount = input.newStock - input.previousStock;
+  if (adjustmentAmount === 0) return;
+
+  const createdAt = new Date().toISOString();
+  const adjustment = {
+    product_id: input.productId,
+    previous_stock: input.previousStock,
+    new_stock: input.newStock,
+    adjustment_amount: adjustmentAmount,
+    reason: "admin quick edit",
+    edited_by: input.actorId,
+    created_at: createdAt
+  };
+
+  const { data: inventoryItem } = await admin
+    .from("inventory_items")
+    .select("location_id, bin_id, quantity_reserved")
+    .eq("variant_id", input.variantId)
+    .maybeSingle();
+
+  const { error: eventError } = await admin.from("inventory_events").insert({
+    variant_id: input.variantId,
+    location_id: inventoryItem?.location_id || null,
+    bin_id: inventoryItem?.bin_id || null,
+    event_type: "adjust",
+    quantity_delta: adjustmentAmount,
+    quantity_on_hand_after: input.newStock,
+    quantity_reserved_after: Number(inventoryItem?.quantity_reserved || 0),
+    reference_type: "admin_quick_edit",
+    reference_id: input.productId,
+    notes: JSON.stringify(adjustment),
+    actor_id: input.actorId
+  });
+
+  if (eventError && eventError.code !== "42P01") {
+    throw eventError;
+  }
+
+  await writeAuditLog(
+    "stock_adjustment",
+    input.productId || input.variantId,
+    adjustment,
+    input.actorId
+  );
+}
+
 export async function PATCH(request: NextRequest) {
   const auth = await authorizeAdminRequest(request);
   if (!auth.ok) return auth.response;
@@ -294,6 +350,14 @@ export async function PATCH(request: NextRequest) {
         );
       }
 
+      const { data: previousVariant, error: previousVariantError } = await admin
+        .from("product_variants")
+        .select("id, product_id, inventory_quantity")
+        .eq("id", variantId)
+        .maybeSingle();
+
+      if (previousVariantError) throw previousVariantError;
+
       const { data: updatedVariant, error } = await admin
         .from("product_variants")
         .update(changes)
@@ -312,6 +376,21 @@ export async function PATCH(request: NextRequest) {
         );
       }
       let persistedChanges = changes;
+
+      if (Object.prototype.hasOwnProperty.call(changes, "inventory_quantity")) {
+        const previousStock = Number(previousVariant?.inventory_quantity ?? 0);
+        const newStock = Number(changes.inventory_quantity ?? previousStock);
+
+        if (Number.isFinite(newStock)) {
+          await writeStockAdjustmentRecord(admin, {
+            actorId: auth.actorId,
+            productId: previousVariant?.product_id || null,
+            variantId,
+            previousStock,
+            newStock
+          });
+        }
+      }
 
       if (needsCwtRecalculation(changes)) {
         const { data: variant, error: variantError } = await admin

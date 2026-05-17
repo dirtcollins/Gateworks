@@ -71,18 +71,19 @@ type OrderRow = {
   updated_at: string;
   order_items?: OrderItemRow[];
   customer_drawing_uploads?: CustomerDrawingRow[];
-  payments?: PaymentRow[];
+  order_payments?: OrderPaymentRow[];
 };
 
-type PaymentRow = {
+type OrderPaymentRow = {
   id: string;
-  status: PaymentStatus;
-  provider: string;
-  provider_payment_id: string | null;
-  method: string | null;
+  payment_date: string;
+  payment_method: string;
   amount: number | string;
-  paid_at: string | null;
+  reference_number: string | null;
+  notes: string | null;
+  created_by: string | null;
   created_at: string;
+  updated_at: string;
 };
 
 type OrderItemRow = {
@@ -131,23 +132,46 @@ type PatchOrderPayload = {
     paidAt?: string;
     reference?: string;
     note?: string;
+    createdBy?: string;
   };
 };
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const orderNumberFloor = 10026;
+const documentSequenceMin = 10000;
+const documentSequenceMax = 99999;
+const validPaymentMethods = new Set([
+  "Cash",
+  "Check",
+  "Credit Card",
+  "Debit Card",
+  "ACH",
+  "Wire Transfer",
+  "Financing",
+  "Other"
+]);
 
 function parseOrderSequence(orderNumber: string | null | undefined) {
   const value = Number(String(orderNumber || "").replace(/\D/g, ""));
-  return Number.isFinite(value) ? value : 0;
+  if (!Number.isFinite(value) || value <= 0) return 0;
+
+  return value > documentSequenceMax ? value % 100000 : value;
+}
+
+function formatDocumentSequence(sequence: number) {
+  const boundedSequence =
+    sequence > documentSequenceMax
+      ? documentSequenceMin
+      : sequence;
+
+  return String(boundedSequence).padStart(5, "0");
 }
 
 function normalizeDocumentNumber(orderNumber: string, isQuoteRequest: boolean) {
-  if (orderNumber.startsWith("Order-") || orderNumber.startsWith("Quote-")) return orderNumber;
   const sequence = parseOrderSequence(orderNumber);
   if (!sequence) return orderNumber;
-  return `${isQuoteRequest ? "Quote" : "Order"}-${sequence}`;
+  return `${isQuoteRequest ? "Quote" : "Order"}-${formatDocumentSequence(sequence)}`;
 }
 
 async function getNextDocumentNumber(
@@ -168,11 +192,19 @@ async function getNextDocumentNumber(
     return Math.max(currentHighest, parseOrderSequence(row.order_number));
   }, orderNumberFloor);
 
-  return `${prefix}-${highest + 1}`;
+  const nextSequence = highest >= documentSequenceMax ? documentSequenceMin : highest + 1;
+  return `${prefix}-${formatDocumentSequence(nextSequence)}`;
 }
 
 function asUuid(value: string) {
   return uuidPattern.test(value) ? value : null;
+}
+
+function getPaymentStatusForPaidAmount(totalPaid: number, totalAmount: number): PaymentStatus {
+  if (totalPaid <= 0) return "unpaid";
+  if (totalPaid > totalAmount) return "overpaid";
+  if (totalPaid === totalAmount) return "paid";
+  return "partial";
 }
 
 function toClientOrder(row: OrderRow) {
@@ -230,13 +262,14 @@ function toClientOrder(row: OrderRow) {
       publicUrl: drawing.public_url || undefined,
       uploadedAt: drawing.created_at
     })),
-    payments: (row.payments || []).map((payment): OrderPayment => ({
+    payments: (row.order_payments || []).map((payment): OrderPayment => ({
       id: payment.id,
       amount: Number(payment.amount),
-      method: payment.method || "Payment",
-      paidAt: payment.paid_at || payment.created_at,
-      reference: payment.provider_payment_id || "",
-      note: "",
+      method: payment.payment_method,
+      paidAt: payment.payment_date,
+      reference: payment.reference_number || "",
+      note: payment.notes || "",
+      createdBy: payment.created_by || "Admin",
       createdAt: payment.created_at
     })),
     pickupContact: row.customer_name || "",
@@ -265,7 +298,7 @@ type ResolvedOrderItem = OrderPayload["items"][number] & {
 };
 
 async function resolveOrderItemVariantIds(
-  admin: Awaited<ReturnType<typeof getSupabaseAdminClient>>,
+  admin: NonNullable<Awaited<ReturnType<typeof getSupabaseAdminClient>>>,
   items: OrderPayload["items"]
 ) {
   const variantResolutions = new Map<string, string>();
@@ -398,15 +431,16 @@ export async function GET(request: NextRequest) {
   }
 
   selectFields.push(
-    `payments (
+    `order_payments (
       id,
-      status,
-      provider,
-      provider_payment_id,
-      method,
+      payment_date,
+      payment_method,
       amount,
-      paid_at,
-      created_at
+      reference_number,
+      notes,
+      created_by,
+      created_at,
+      updated_at
     )`
   );
 
@@ -609,6 +643,13 @@ export async function PATCH(request: NextRequest) {
         { status: 400 }
       );
     }
+    const paymentMethod = payload.payment.method || "";
+    if (!validPaymentMethods.has(paymentMethod)) {
+      return NextResponse.json(
+        { ok: false, reason: "Payment method is required." },
+        { status: 400 }
+      );
+    }
 
     const { data: orderRow, error: orderReadError } = await admin
       .from("orders")
@@ -624,7 +665,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const { data: existingPayments, error: paymentReadError } = await admin
-      .from("payments")
+      .from("order_payments")
       .select("amount")
       .eq("order_id", payload.orderId);
 
@@ -641,20 +682,20 @@ export async function PATCH(request: NextRequest) {
     );
     const nextPaid = paidBefore + amount;
     const orderTotal = Number(orderRow?.total || 0);
-    const nextPaymentStatus: PaymentStatus = nextPaid <= 0 ? "unpaid" : nextPaid >= orderTotal ? "paid" : "partial";
+    const nextPaymentStatus = getPaymentStatusForPaidAmount(nextPaid, orderTotal);
 
     const { data: paymentRow, error: paymentInsertError } = await admin
-      .from("payments")
+      .from("order_payments")
       .insert({
         order_id: payload.orderId,
-        status: "paid",
-        provider: "manual",
-        provider_payment_id: payload.payment.reference || null,
-        method: payload.payment.method || "Manual payment",
+        payment_date: payload.payment.paidAt || new Date().toISOString(),
+        payment_method: paymentMethod,
         amount,
-        paid_at: payload.payment.paidAt || new Date().toISOString()
+        reference_number: payload.payment.reference || null,
+        notes: payload.payment.note || null,
+        created_by: payload.payment.createdBy || "Admin"
       })
-      .select("id,status,provider,provider_payment_id,method,amount,paid_at,created_at")
+      .select("id,payment_date,payment_method,amount,reference_number,notes,created_by,created_at,updated_at")
       .single();
 
     if (paymentInsertError) {
@@ -684,10 +725,11 @@ export async function PATCH(request: NextRequest) {
         ? {
             id: paymentRow.id,
             amount: Number(paymentRow.amount),
-            method: paymentRow.method || "Payment",
-            paidAt: paymentRow.paid_at || paymentRow.created_at,
-            reference: paymentRow.provider_payment_id || "",
-            note: "",
+            method: paymentRow.payment_method,
+            paidAt: paymentRow.payment_date,
+            reference: paymentRow.reference_number || "",
+            note: paymentRow.notes || "",
+            createdBy: paymentRow.created_by || "Admin",
             createdAt: paymentRow.created_at
           }
         : null
