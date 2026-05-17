@@ -15,8 +15,13 @@ export function RootShell({ children }: RootShellProps) {
   // Design Lab concepts each render their own full chrome — keep the app
   // sidebar and footer out of the demo (and out of the hub preview iframes).
   const isDesignLab = pathname.startsWith("/design-lab");
+  // The standalone concept sites (Industrial Pro / Ledger / Wayfinder) each
+  // bring their own complete shell, so the app chrome stays out of them.
+  const isConceptSite = ["/industrial", "/ledger", "/wayfinder"].some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
 
-  if (isAdminRoute || isDesignLab) {
+  if (isAdminRoute || isDesignLab || isConceptSite) {
     return <>{children}</>;
   }
 
