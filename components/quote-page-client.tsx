@@ -431,13 +431,13 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
                     <span>{quickAddResults.length} product{quickAddResults.length === 1 ? "" : "s"}</span>
                     <span>Press any result to add</span>
                   </div>
-                  <div className="mt-3 max-h-56 overflow-y-auto pr-1">
+                  <div className="mt-2 max-h-60 overflow-y-auto pr-1">
                     {!quickAddResults.length ? (
-                      <p className="rounded border border-dashed border-black/10 p-4 text-xs text-industrial-muted">
+                      <p className="rounded border border-dashed border-black/10 p-3 text-xs text-industrial-muted">
                         No products match your search.
                       </p>
                     ) : (
-                      <div className="grid gap-2">
+                      <div className="grid gap-1">
                         {quickAddResults.slice(0, 10).map((product) => {
                           const variant = pickDefaultQuoteVariant(product);
 
@@ -445,24 +445,46 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
                             return null;
                           }
 
+                          const resultImage =
+                            variant.image || product.images[0]?.url || "/assets/logo.svg";
+
                           return (
                             <button
                               key={product.id}
-                              className="grid min-h-12 grid-cols-[minmax(0,1fr)_94px_72px] items-center gap-2 rounded border border-black/10 bg-white px-3 py-2 text-left text-sm hover:border-industrial-ink hover:bg-white"
+                              className="grid grid-cols-[34px_minmax(0,1fr)_76px_52px] items-center gap-2 rounded border border-black/10 bg-white px-2 py-1.5 text-left text-sm transition hover:border-industrial-ink"
                               type="button"
                               onClick={() => addCatalogItem(product)}
                             >
-                              <span className="truncate text-industrial-ink">
-                                <span className="font-semibold">{product.title}</span>
-                                <span className="ml-1 block text-xs text-industrial-muted">
+                              <span className="relative size-[34px] overflow-hidden rounded border border-black/10 bg-[#fafaf8]">
+                                <Image
+                                  alt={product.title}
+                                  className="object-contain p-1"
+                                  fill
+                                  quality={45}
+                                  sizes="34px"
+                                  src={resultImage}
+                                />
+                              </span>
+                              <span className="min-w-0 text-industrial-ink">
+                                <span className="block truncate font-semibold leading-tight">
+                                  {product.title}
+                                </span>
+                                <span className="block truncate text-xs text-industrial-muted">
                                   SKU {variant.sku}
                                 </span>
                               </span>
                               <span className="text-right font-semibold text-industrial-ink">
                                 {formatCurrency(variant.price)}
                               </span>
-                              <span className={cn("text-right text-xs font-semibold", variant.inventory === "in_stock" ? "text-jobsite-pine" : "text-red-700")}>
-                                {variant.inventory === "in_stock" ? "In stock" : "Out of stock"}
+                              <span
+                                className={cn(
+                                  "text-right text-xs font-semibold",
+                                  variant.inventory === "in_stock"
+                                    ? "text-jobsite-pine"
+                                    : "text-red-700"
+                                )}
+                              >
+                                {variant.inventory === "in_stock" ? "Stock" : "Out"}
                               </span>
                             </button>
                           );
