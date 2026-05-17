@@ -12,8 +12,11 @@ type RootShellProps = {
 export function RootShell({ children }: RootShellProps) {
   const pathname = usePathname() || "/";
   const isAdminRoute = pathname.startsWith("/admin");
+  // Design Lab concepts each render their own full chrome — keep the app
+  // sidebar and footer out of the demo (and out of the hub preview iframes).
+  const isDesignLab = pathname.startsWith("/design-lab");
 
-  if (isAdminRoute) {
+  if (isAdminRoute || isDesignLab) {
     return <>{children}</>;
   }
 
