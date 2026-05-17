@@ -197,7 +197,12 @@ export function IndustrialAdminCustomers() {
       });
     }
 
-    return Array.from(byKey.values()).sort((a, b) =>
+    // A registry customer and an order/registered account can share an id;
+    // collapse to one row per id so table keys stay unique.
+    const byId = new Map(
+      Array.from(byKey.values()).map((account) => [account.id, account] as const)
+    );
+    return Array.from(byId.values()).sort((a, b) =>
       a.company.localeCompare(b.company)
     );
   }, [orders, siteUsers]);

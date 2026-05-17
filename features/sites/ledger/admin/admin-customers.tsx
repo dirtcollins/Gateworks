@@ -177,7 +177,12 @@ export function LedgerAdminCustomers() {
           !directoryNames.has(user.displayName.trim().toLowerCase())
       )
       .map(siteUserToCustomer);
-    return [...customerDirectory, ...extras];
+    // Collapse to one row per id so table keys stay unique when a registered
+    // account shares an id with a directory entry.
+    const byId = new Map(
+      [...customerDirectory, ...extras].map((entry) => [entry.id, entry] as const)
+    );
+    return Array.from(byId.values());
   }, [siteUsers]);
 
   const enriched = useMemo(
