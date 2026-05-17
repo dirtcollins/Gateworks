@@ -1,7 +1,7 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-export type BadgeTone = "neutral" | "success" | "warning" | "danger" | "info";
+type BadgeTone = "neutral" | "success" | "warning" | "danger" | "info";
 
 type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
   children: ReactNode;

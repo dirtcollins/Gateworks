@@ -83,11 +83,6 @@ export type InventorySummary = {
   stockValue: number;
 };
 
-// Offline-seed fallback only. The local product catalog ships no cost data, so
-// stock value is estimated from price for demo purposes. Real per-variant cost
-// comes from Supabase `product_variants.cost` (see lib/inventory-repository.ts).
-const ESTIMATED_COST_RATIO = 0.58;
-
 const locationByCategory: Record<string, string> = {
   "gate-hinges": "A-01",
   "gate-latches-locks": "A-02",
@@ -202,7 +197,7 @@ export function buildInventoryRows(products: Product[]): InventoryRow[] {
         quantityAvailable,
         reorderPoint,
         status,
-        unitCost: Number((variant.price * ESTIMATED_COST_RATIO).toFixed(2)),
+        unitCost: Number((variant.price * 0.58).toFixed(2)),
         unitPrice: variant.price,
         productImage: {
           id: `${product.id}-image-${variant.id}`,

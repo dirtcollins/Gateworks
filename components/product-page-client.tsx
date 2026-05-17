@@ -29,7 +29,6 @@ import {
   isTubingProduct
 } from "@/lib/pricing";
 import type { Product, ProductVariant } from "@/lib/types";
-import { trackEvent } from "@/lib/analytics";
 import { getProductImageForSize } from "@/lib/product-image";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -284,11 +283,6 @@ export function ProductPageClient({
       quantity,
       options: pricedSelectedVariant.options
     });
-    trackEvent("add_to_cart", {
-      sku: pricedSelectedVariant.sku,
-      value: pricedSelectedVariant.price,
-      quantity
-    });
     setJustAdded(true);
     window.setTimeout(() => setJustAdded(false), 1200);
   }
@@ -487,9 +481,8 @@ export function ProductPageClient({
             <Image
               priority
               alt={product.title}
-              className="animate-image-fade object-contain p-2"
+              className="object-contain p-2"
               fill
-              key={selectedImageSource}
               quality={90}
               sizes="(max-width: 1024px) 100vw, 44vw"
               src={selectedImageSource}

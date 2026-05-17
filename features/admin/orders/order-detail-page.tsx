@@ -28,7 +28,6 @@ import {
   X,
   Truck
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { OrderProgressBar } from "@/components/order-progress";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -36,7 +35,6 @@ import { Input, Select, Textarea } from "@/components/ui/input";
 import { PageShell } from "@/components/ui/page-shell";
 import { products as fallbackCatalogProducts } from "@/lib/catalog";
 import { useOrderStore, type OrderPayment, type OrderRecord } from "@/lib/order-store";
-import { getPaymentStatusTone } from "@/lib/order-status";
 import { useUserStore, type SavedUser } from "@/lib/user-store";
 import type { CartItem, Product, ProductVariant } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
@@ -161,6 +159,26 @@ type CatalogSearchResult = {
   product: Product;
   variant: ProductVariant;
   score: number;
+};
+
+const statusPillStyles: Record<OrderStatus, string> = {
+  draft: "border-amber-200 bg-amber-50 text-amber-800",
+  submitted: "border-slate-300 bg-slate-100 text-slate-700",
+  confirmed: "border-blue-200 bg-blue-50 text-blue-800",
+  picking: "border-indigo-200 bg-indigo-50 text-indigo-800",
+  ready_for_pickup: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  out_for_delivery: "border-violet-200 bg-violet-50 text-violet-800",
+  completed: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  cancelled: "border-rose-200 bg-rose-50 text-rose-700"
+};
+
+const paymentPillStyles: Record<PaymentStatus, string> = {
+  unpaid: "border-rose-200 bg-rose-50 text-rose-700",
+  partial: "border-amber-200 bg-amber-50 text-amber-800",
+  paid: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  overpaid: "border-blue-200 bg-blue-50 text-blue-800",
+  refunded: "border-slate-200 bg-slate-100 text-slate-700",
+  failed: "border-red-200 bg-red-50 text-red-700"
 };
 
 const fulfillmentLabels: Record<OrderStatus, string> = {
@@ -2214,18 +2232,15 @@ export function OrderDetailPage({
                     {order.customerName} · {order.jobName || "Customer order"}
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <Badge className="rounded-full shadow-sm" tone="neutral">
+                    <span className="inline-flex h-8 items-center rounded-full border border-black/10 bg-white px-3 text-[11px] font-black uppercase tracking-[0.14em] text-industrial-ink shadow-sm">
                       {statusLabel[order.status]}
-                    </Badge>
-                    <Badge
-                      className="rounded-full shadow-sm"
-                      tone={getPaymentStatusTone(draftPaymentStatus)}
-                    >
+                    </span>
+                    <span className={`inline-flex h-8 items-center rounded-full border px-3 text-[11px] font-black uppercase tracking-[0.14em] shadow-sm ${paymentPillStyles[draftPaymentStatus]}`}>
                       {paymentLabels[draftPaymentStatus]}
-                    </Badge>
-                    <Badge className="rounded-full shadow-sm" tone="neutral">
+                    </span>
+                    <span className="inline-flex h-8 items-center rounded-full border border-black/10 bg-white px-3 text-[11px] font-black uppercase tracking-[0.14em] text-industrial-ink shadow-sm">
                       {fulfillmentLabels[order.status]}
-                    </Badge>
+                    </span>
                   </div>
                 </div>
                 <div className="rounded-xl border border-black/10 bg-white p-4 shadow-sm">
@@ -2695,12 +2710,9 @@ export function OrderDetailPage({
                         <p className="text-xs font-black uppercase tracking-[0.14em] text-industrial-muted">Payments</p>
                         <p className="mt-1 text-sm text-industrial-steel">Record cash, check, card, ACH, or other manual payments.</p>
                       </div>
-                      <Badge
-                        className="rounded-full"
-                        tone={getPaymentStatusTone(draftPaymentStatus)}
-                      >
+                      <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] ${paymentPillStyles[draftPaymentStatus]}`}>
                         {paymentLabels[draftPaymentStatus]}
-                      </Badge>
+                      </span>
                     </div>
                     <div className="mt-4 grid grid-cols-3 overflow-hidden rounded-lg border border-black/10 bg-[#f7f7f4]">
                       <div className="border-r border-black/10 p-3">
@@ -3136,18 +3148,15 @@ export function OrderDetailPage({
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <div className="flex flex-wrap gap-2">
-                <Badge className="whitespace-nowrap rounded-full shadow-sm" tone="neutral">
+                <span className="inline-flex items-center whitespace-nowrap rounded-full border border-industrial-rail bg-white px-3 py-2 text-[11px] font-black uppercase tracking-[0.1em] text-industrial-ink shadow-sm">
                   {createMode ? "Draft order" : statusLabel[order.status]}
-                </Badge>
-                <Badge
-                  className="whitespace-nowrap rounded-full shadow-sm"
-                  tone={getPaymentStatusTone(createMode ? draftPaymentStatus : order.paymentStatus)}
-                >
+                </span>
+                <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-3 py-2 text-[11px] font-black uppercase tracking-[0.1em] shadow-sm ${paymentPillStyles[createMode ? draftPaymentStatus : order.paymentStatus]}`}>
                   {createMode ? draftPaymentStatus : paymentLabels[order.paymentStatus]}
-                </Badge>
-                <Badge className="whitespace-nowrap rounded-full shadow-sm" tone="neutral">
+                </span>
+                <span className="inline-flex items-center whitespace-nowrap rounded-full border border-industrial-rail bg-white px-3 py-2 text-[11px] font-black uppercase tracking-[0.1em] text-industrial-ink shadow-sm">
                   {createMode ? "Create mode" : fulfillmentLabels[order.status]}
-                </Badge>
+                </span>
                 </div>
                 {!createMode ? (
                   <div className="min-w-[280px] flex-1 rounded-lg border border-industrial-rail bg-white/85 px-3 py-2 shadow-sm">

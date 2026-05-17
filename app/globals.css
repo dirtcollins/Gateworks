@@ -4,16 +4,11 @@
 
 :root {
   color-scheme: light;
-  --truewerk-font: var(--font-inter), ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  --truewerk-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
 }
 
 * {
   box-sizing: border-box;
-}
-
-:focus-visible {
-  outline: 2px solid rgba(47, 111, 78, 0.55);
-  outline-offset: 2px;
 }
 
 body {
