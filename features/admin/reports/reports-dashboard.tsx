@@ -32,6 +32,9 @@ export type ReportAgingBucket = {
 
 export type ReportData = {
   configured: boolean;
+  errorMessage: string | null;
+  orderLimit: number;
+  costCoveragePct: number;
   hasCostData: boolean;
   revenue30: number;
   orders30: number;
@@ -136,6 +139,21 @@ export function ReportsDashboard({ data }: { data: ReportData }) {
         </Card>
       ) : null}
 
+      {data.errorMessage ? (
+        <Card className="mb-5 border-industrial-red/30 bg-red-50">
+          <CardBody>
+            <p className="text-sm font-semibold text-industrial-red">{data.errorMessage}</p>
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {data.configured && !data.errorMessage ? (
+        <p className="mb-4 text-sm text-industrial-steel">
+          Showing the latest {data.orderLimit} non-cancelled orders. Use aggregate reporting before
+          treating this as a complete financial statement.
+        </p>
+      ) : null}
+
       <StatGrid
         stats={[
           { label: "Revenue (30 days)", value: formatCurrency(data.revenue30) },
@@ -230,8 +248,8 @@ export function ReportsDashboard({ data }: { data: ReportData }) {
         </p>
       ) : (
         <p className="mt-4 text-sm text-industrial-steel">
-          Gross margin is hidden until product costs are entered. Add unit costs in the catalog
-          manager so margin can be calculated from real cost data.
+          Gross margin is hidden until every included line has product cost data. Current cost
+          coverage is {data.costCoveragePct.toFixed(0)}%.
         </p>
       )}
 
