@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import {
-  IndustrialFooter,
-  IndustrialHeader
-} from "@/features/sites/industrial/kit";
+import { IndustrialSiteChrome } from "@/features/sites/industrial/site-chrome";
 
 export const metadata: Metadata = {
   title: {
@@ -21,9 +18,7 @@ export default function IndustrialLayout({
 }) {
   return (
     <div className="min-h-screen bg-d1-paper font-d1 text-d1-ink antialiased">
-      <IndustrialHeader />
-      {children}
-      <IndustrialFooter />
+      <IndustrialSiteChrome>{children}</IndustrialSiteChrome>
     </div>
   );
 }

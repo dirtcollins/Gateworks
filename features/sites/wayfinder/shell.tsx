@@ -111,6 +111,13 @@ export function WayfinderShell({ children }: { children: ReactNode }) {
   const cartCount = useCartCount();
   const depts = departments(8);
 
+  // The admin back-office (/wayfinder/admin/*) ships its own operations-console
+  // chrome via app/wayfinder/admin/layout.tsx, so the storefront shell steps
+  // aside for those routes to avoid double-wrapping the header/footer.
+  if (pathname === "/wayfinder/admin" || pathname.startsWith("/wayfinder/admin/")) {
+    return <>{children}</>;
+  }
+
   const isActive = (href: string) =>
     href === "/wayfinder"
       ? pathname === "/wayfinder"

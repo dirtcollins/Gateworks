@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
-import { LedgerFooter, LedgerHeader, LEDGER } from "@/features/sites/ledger/kit";
+import { LEDGER } from "@/features/sites/ledger/kit";
+import { LedgerChrome } from "@/features/sites/ledger/ledger-chrome";
 
 export const metadata: Metadata = {
   title: {
@@ -24,10 +25,8 @@ export default function LedgerLayout({ children }: { children: ReactNode }) {
       }}
     >
       <Suspense fallback={null}>
-        <LedgerHeader />
+        <LedgerChrome>{children}</LedgerChrome>
       </Suspense>
-      {children}
-      <LedgerFooter />
     </div>
   );
 }
