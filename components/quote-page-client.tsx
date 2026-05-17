@@ -80,6 +80,8 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
   const quoteItemQtyRef = useRef<HTMLInputElement>(null);
   const addItemRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const autoSaveMountedRef = useRef(false);
+  const resultsScrollRef = useRef<HTMLDivElement>(null);
 
   const quickAddResults = useMemo(() => {
     const normalized = quickAddQuery.trim().toLowerCase();
@@ -133,6 +135,58 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
   }, [isQuickAddOpen]);
 
   useEffect(() => {
+    if (!isQuickAddOpen) return;
+
+    const element = resultsScrollRef.current;
+    if (!element) return;
+
+    let isDragging = false;
+    let startY = 0;
+    let startScrollTop = 0;
+    let moved = false;
+
+    const handleDragStart = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+      isDragging = true;
+      moved = false;
+      startY = event.clientY;
+      startScrollTop = element.scrollTop;
+    };
+
+    const handleDragMove = (event: PointerEvent) => {
+      if (!isDragging) return;
+      const delta = event.clientY - startY;
+      if (Math.abs(delta) > 4) {
+        moved = true;
+      }
+      element.scrollTop = startScrollTop - delta;
+    };
+
+    const handleDragEnd = () => {
+      isDragging = false;
+    };
+
+    const handleClickCapture = (event: MouseEvent) => {
+      if (moved) {
+        event.preventDefault();
+        event.stopPropagation();
+        moved = false;
+      }
+    };
+
+    element.addEventListener("pointerdown", handleDragStart);
+    window.addEventListener("pointermove", handleDragMove);
+    window.addEventListener("pointerup", handleDragEnd);
+    element.addEventListener("click", handleClickCapture, true);
+    return () => {
+      element.removeEventListener("pointerdown", handleDragStart);
+      window.removeEventListener("pointermove", handleDragMove);
+      window.removeEventListener("pointerup", handleDragEnd);
+      element.removeEventListener("click", handleClickCapture, true);
+    };
+  }, [isQuickAddOpen]);
+
+  useEffect(() => {
     if (!focusTargetVariantId || !focusToken) return;
 
     const handle = window.setTimeout(() => {
@@ -144,6 +198,29 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
 
     return () => window.clearTimeout(handle);
   }, [focusTargetVariantId, focusToken]);
+
+  const itemsSignature = quote
+    ? quote.items.map((item) => `${item.variantId}:${item.quantity}`).join("|")
+    : "";
+
+  useEffect(() => {
+    if (!autoSaveMountedRef.current) {
+      autoSaveMountedRef.current = true;
+      return;
+    }
+
+    const handle = window.setTimeout(() => {
+      saveQuote(quoteId);
+      setActionMessage("Quote saved");
+    }, 600);
+    return () => window.clearTimeout(handle);
+  }, [itemsSignature, quoteId, saveQuote]);
+
+  useEffect(() => {
+    if (!actionMessage) return;
+    const handle = window.setTimeout(() => setActionMessage(""), 2400);
+    return () => window.clearTimeout(handle);
+  }, [actionMessage]);
 
   if (!quote) {
     return (
@@ -500,7 +577,10 @@ export function QuotePageClient({ quoteId }: QuotePageClientProps) {
                       />
                     </label>
                   </div>
-                  <div className="h-60 overflow-y-auto">
+                  <div
+                    className="h-60 cursor-grab touch-pan-y select-none overflow-y-auto overscroll-contain active:cursor-grabbing [-webkit-overflow-scrolling:touch]"
+                    ref={resultsScrollRef}
+                  >
                     {!quickAddResults.length ? (
                       <p className="px-4 py-6 text-center text-sm text-industrial-muted">
                         No products match your search.
