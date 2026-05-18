@@ -1,8 +1,9 @@
-// Wayfinder admin — back-office shell. A warehouse operations console: a thin
-// black aisle-map context rail on top and a light, full-height sidebar pinned
-// to the viewport. The sidebar leads with quick-create actions, then grouped
-// navigation with live alert badges, and closes with an operator chip.
-// Storefront chrome is suppressed for /admin/*, so this is the only chrome.
+// Wayfinder admin — back-office shell. A modern operations console: a thin
+// dark utility rail on top and a light, full-height sidebar pinned to the
+// viewport. The sidebar leads with quick-create actions, then grouped
+// navigation with live alert badges, and closes with an operator chip. Themed
+// with the "Ledger" palette (admin-theme.ts). Storefront chrome is suppressed
+// for /admin/*, so this is the only chrome.
 "use client";
 
 import Link from "next/link";
@@ -107,22 +108,20 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
               placeItems: "center",
               width: 30,
               height: 30,
-              borderRadius: 7,
+              borderRadius: 9,
               background: wf.safety,
-              color: wf.ink
+              color: "#fff"
             }}
           >
-            <Ico.pin size={17} />
+            <Ico.pin size={16} />
           </span>
           <span style={{ display: "grid", lineHeight: 1.15 }}>
-            <span style={{ fontSize: 14, fontWeight: 900, letterSpacing: "0.01em" }}>
-              Wayfinder
-            </span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: wf.ink }}>Wayfinder</span>
             <span
               style={{
-                fontFamily: monoFont,
                 fontSize: 9,
-                letterSpacing: "0.16em",
+                fontWeight: 600,
+                letterSpacing: "0.18em",
                 color: wf.muted,
                 textTransform: "uppercase"
               }}
@@ -139,6 +138,7 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
             display: "none",
             background: "none",
             border: `1px solid ${wf.rail}`,
+            borderRadius: 8,
             color: wf.ink,
             padding: 5,
             cursor: "pointer"
@@ -183,7 +183,7 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
                 margin: "0 0 7px",
                 padding: "0 8px",
                 fontSize: 10,
-                fontWeight: 800,
+                fontWeight: 600,
                 letterSpacing: "0.16em",
                 textTransform: "uppercase",
                 color: wf.muted
@@ -215,7 +215,7 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
                       }}
                     />
                     <Icon size={17} />
-                    <span style={{ flex: 1, fontSize: 13, fontWeight: 700 }}>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: active ? 600 : 500 }}>
                       {item.label}
                     </span>
                     {navCount > 0 ? (
@@ -227,10 +227,11 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
                           minWidth: 18,
                           height: 18,
                           padding: "0 5px",
+                          borderRadius: 999,
                           background: wf.safety,
-                          color: wf.ink,
+                          color: "#fff",
                           fontSize: 9,
-                          fontWeight: 900,
+                          fontWeight: 700,
                           fontFamily: monoFont
                         }}
                       >
@@ -271,20 +272,10 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
             <Ico.user size={16} />
           </span>
           <span style={{ display: "grid", lineHeight: 1.3, minWidth: 0 }}>
-            <span style={{ fontSize: 12, fontWeight: 800, color: wf.ink }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: wf.ink }}>
               Counter staff
             </span>
-            <span
-              style={{
-                fontFamily: monoFont,
-                fontSize: 9,
-                letterSpacing: "0.08em",
-                color: wf.muted,
-                textTransform: "uppercase"
-              }}
-            >
-              Bakersfield warehouse
-            </span>
+            <span style={{ fontSize: 11, color: wf.muted }}>Bakersfield warehouse</span>
           </span>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
@@ -309,7 +300,7 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
         minHeight: "100vh"
       }}
     >
-      {/* Black aisle-map context rail */}
+      {/* Thin dark utility rail */}
       <div
         style={{
           height: RAIL_HEIGHT,
@@ -317,9 +308,8 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
           color: "#fff",
           padding: "0 18px",
           fontSize: 11,
-          fontWeight: 700,
-          letterSpacing: "0.06em",
-          textTransform: "uppercase",
+          fontWeight: 500,
+          letterSpacing: "0.02em",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -336,6 +326,7 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
               display: "none",
               background: "none",
               border: "1px solid rgba(255,255,255,0.25)",
+              borderRadius: 7,
               color: "#fff",
               padding: 4,
               cursor: "pointer"
@@ -347,14 +338,14 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
             <Ico.map size={12} /> Operations console
           </span>
           <span style={{ color: "rgba(255,255,255,0.4)" }}>·</span>
-          <span style={{ color: wf.safety }}>Will-call cutoff 11A</span>
+          <span style={{ color: "#aab1ff" }}>Will-call cutoff 11A</span>
         </span>
         <span
           style={{
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
-            color: "rgba(255,255,255,0.7)"
+            color: "rgba(255,255,255,0.62)"
           }}
         >
           <Ico.user size={12} /> Counter staff
@@ -365,7 +356,7 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
         {navOpen ? (
           <div
             onClick={() => setNavOpen(false)}
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 40 }}
+            style={{ position: "fixed", inset: 0, background: "rgba(21,24,31,0.4)", zIndex: 40 }}
             aria-hidden
           />
         ) : null}
@@ -377,7 +368,7 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
           style={{
             flex: 1,
             minWidth: 0,
-            padding: "20px 22px 48px",
+            padding: "22px 24px 52px",
             display: "grid",
             gap: 18,
             alignContent: "start"
@@ -399,8 +390,8 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
           transition: background 120ms ease, color 120ms ease;
         }
         .wf-nav-item:hover { background: ${wf.bone}; color: ${wf.ink}; }
-        .wf-nav-active { background: ${wf.control}; color: #fff; }
-        .wf-nav-active:hover { background: ${wf.control}; color: #fff; }
+        .wf-nav-active { background: ${wf.indigoSoft}; color: ${wf.ink}; }
+        .wf-nav-active:hover { background: ${wf.indigoSoft}; color: ${wf.ink}; }
         .wf-qa {
           display: flex;
           align-items: center;
@@ -408,38 +399,37 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
           gap: 7px;
           height: 38px;
           font-size: 13px;
-          font-weight: 700;
+          font-weight: 600;
           border-radius: ${RADIUS_SM}px;
           transition: background 120ms ease, border-color 120ms ease;
         }
         .wf-qa-primary { background: ${wf.control}; color: #fff; }
-        .wf-qa-primary:hover { background: #2d3c52; }
+        .wf-qa-primary:hover { background: #27308c; }
         .wf-qa-ghost {
           background: #fff;
           color: ${wf.ink};
           border: 1px solid ${wf.rail};
         }
-        .wf-qa-ghost:hover { background: ${wf.bone}; border-color: ${wf.steel}; }
+        .wf-qa-ghost:hover { background: ${wf.bone}; border-color: ${wf.muted}; }
         .wf-foot-link {
           flex: 1;
           text-align: center;
           padding: 8px;
           font-size: 11px;
-          font-weight: 700;
-          letter-spacing: 0.04em;
+          font-weight: 600;
           border-radius: ${RADIUS_SM}px;
           color: ${wf.steel};
           background: #fff;
           border: 1px solid ${wf.rail};
           transition: background 120ms ease, color 120ms ease;
         }
-        .wf-foot-link:hover { background: ${wf.control}; color: #fff; border-color: ${wf.control}; }
+        .wf-foot-link:hover { background: ${wf.bone}; color: ${wf.ink}; }
         .wf-trow { transition: background 100ms ease; }
         .wf-trow:hover { background: ${wf.bone}; }
-        .wf-field:focus { border-color: ${wf.ink}; box-shadow: 0 0 0 3px rgba(15,20,25,0.1); }
-        .wf-abtn-default:hover, .wf-abtn-ghost:hover { background: ${wf.bone}; border-color: ${wf.steel}; }
-        .wf-abtn-primary:hover { background: #2d3c52; }
-        .wf-abtn-danger:hover { background: #fef2f2; }
+        .wf-field:focus { border-color: ${wf.safety}; box-shadow: 0 0 0 3px rgba(47,58,163,0.13); }
+        .wf-abtn-default:hover, .wf-abtn-ghost:hover { background: ${wf.bone}; border-color: ${wf.muted}; }
+        .wf-abtn-primary:hover { background: #27308c; border-color: #27308c; }
+        .wf-abtn-danger:hover { background: ${wf.roseSoft}; }
         .wf-abtn:disabled { cursor: default; box-shadow: none; }
         @media (max-width: 880px) {
           .wf-admin-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 50; display: none; height: 100vh; }

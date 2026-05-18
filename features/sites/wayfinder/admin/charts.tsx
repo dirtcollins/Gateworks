@@ -6,7 +6,7 @@
 
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { monoFont } from "../kit";
-import { RADIUS, wf } from "./admin-theme";
+import { ELEVATION, RADIUS, wf } from "./admin-theme";
 
 // ─── Delta — period-over-period change indicator ─────────────────────────────
 export function Delta({
@@ -438,7 +438,7 @@ export function TrendKpi({
         border: `1px solid ${wf.rail}`,
         borderTop: `3px solid ${accent}`,
         borderRadius: RADIUS,
-        boxShadow: "0 1px 2px rgba(15,23,42,0.04), 0 4px 14px rgba(15,23,42,0.06)",
+        boxShadow: ELEVATION,
         padding: "15px 17px",
         display: "grid",
         gap: 8

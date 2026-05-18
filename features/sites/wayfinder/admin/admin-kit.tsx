@@ -1,8 +1,7 @@
 // Wayfinder admin — shared back-office primitives. Every admin page is built
-// from these, so their styling IS the admin design system: a cool, modern
-// dashboard look (slate neutrals, rounded surfaces, soft elevation) that is
-// deliberately distinct from the warm-paper storefront. The palette lives in
-// admin-theme.ts; refining anything here propagates across the whole console.
+// from these, so their styling IS the admin design system. Themed with the
+// "Ledger" palette (admin-theme.ts): a modern fintech look — airy white
+// surfaces, indigo accent, soft elevation, rounded corners.
 "use client";
 
 import Link from "next/link";
@@ -47,7 +46,7 @@ export function Panel({
             justifyContent: "space-between",
             gap: 12,
             flexWrap: "wrap",
-            padding: "13px 18px",
+            padding: "14px 18px",
             borderBottom: `1px solid ${wf.hairline}`
           }}
         >
@@ -56,9 +55,9 @@ export function Panel({
               <p
                 style={{
                   margin: 0,
-                  fontSize: 13.5,
-                  fontWeight: 700,
-                  letterSpacing: "-0.006em",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  letterSpacing: "-0.01em",
                   color: wf.ink
                 }}
               >
@@ -66,7 +65,7 @@ export function Panel({
               </p>
             ) : null}
             {meta ? (
-              <p style={{ margin: "3px 0 0", fontSize: 12, color: wf.muted }}>{meta}</p>
+              <p style={{ margin: "3px 0 0", fontSize: 12.5, color: wf.muted }}>{meta}</p>
             ) : null}
           </div>
           {action ? <div style={{ flexShrink: 0, maxWidth: "100%" }}>{action}</div> : null}
@@ -89,17 +88,16 @@ export function Kpi({
   hint?: ReactNode;
   tone?: "ink" | "pine" | "red" | "safety";
 }) {
-  const accent =
+  const valueColor =
     tone === "pine" ? wf.pine : tone === "red" ? wf.red : tone === "safety" ? wf.safety : wf.ink;
   return (
     <div
       style={{
         background: "#fff",
         border: `1px solid ${wf.rail}`,
-        borderTop: `3px solid ${accent}`,
         borderRadius: RADIUS,
         boxShadow: ELEVATION,
-        padding: "15px 17px",
+        padding: "16px 18px",
         display: "grid",
         gap: 7
       }}
@@ -108,7 +106,7 @@ export function Kpi({
         style={{
           margin: 0,
           fontSize: 11,
-          fontWeight: 700,
+          fontWeight: 600,
           letterSpacing: "0.1em",
           textTransform: "uppercase",
           color: wf.muted
@@ -120,18 +118,16 @@ export function Kpi({
         style={{
           margin: 0,
           fontFamily: monoFont,
-          fontSize: 27,
-          fontWeight: 700,
-          color: wf.ink,
+          fontSize: 26,
+          fontWeight: 600,
+          color: valueColor,
           lineHeight: 1.1,
-          letterSpacing: "-0.01em"
+          letterSpacing: "-0.015em"
         }}
       >
         {value}
       </p>
-      {hint ? (
-        <p style={{ margin: 0, fontSize: 11, color: wf.muted, fontFamily: monoFont }}>{hint}</p>
-      ) : null}
+      {hint ? <p style={{ margin: 0, fontSize: 12, color: wf.muted }}>{hint}</p> : null}
     </div>
   );
 }
@@ -139,13 +135,13 @@ export function Kpi({
 // ─── Status pill ─────────────────────────────────────────────────────────────
 type PillTone = "neutral" | "open" | "active" | "done" | "warn" | "stop";
 
-const pillColors: Record<PillTone, { fg: string; bg: string; bd: string }> = {
-  neutral: { fg: wf.steel, bg: wf.bone, bd: wf.rail },
-  open: { fg: "#1d4ed8", bg: "#eff4ff", bd: "#c7d6fe" },
-  active: { fg: wf.pineDeep, bg: "#cdfaf2", bd: "#99f0e3" },
-  done: { fg: "#fff", bg: wf.pine, bd: wf.pine },
-  warn: { fg: "#92500a", bg: wf.amber, bd: wf.amberDeep },
-  stop: { fg: "#b42318", bg: "#fef2f2", bd: "#fecaca" }
+const pillColors: Record<PillTone, { fg: string; bg: string }> = {
+  neutral: { fg: wf.steel, bg: wf.bone },
+  open: { fg: wf.safety, bg: wf.indigoSoft },
+  active: { fg: wf.pineDeep, bg: wf.mintSoft },
+  done: { fg: "#fff", bg: wf.pine },
+  warn: { fg: "#8a5a12", bg: wf.amber },
+  stop: { fg: wf.red, bg: wf.roseSoft }
 };
 
 export function Pill({ tone = "neutral", children }: { tone?: PillTone; children: ReactNode }) {
@@ -155,17 +151,13 @@ export function Pill({ tone = "neutral", children }: { tone?: PillTone; children
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 6,
-        padding: "3px 9px",
-        borderRadius: 5,
-        fontFamily: monoFont,
-        fontSize: 10,
-        fontWeight: 700,
-        letterSpacing: "0.04em",
-        textTransform: "uppercase",
+        gap: 5,
+        padding: "3px 10px",
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 600,
         color: c.fg,
-        background: c.bg,
-        border: `1px solid ${c.bd}`
+        background: c.bg
       }}
     >
       {children}
@@ -202,27 +194,20 @@ function adminBtnStyle(
     padding: size === "sm" ? "0 12px" : "0 15px",
     fontSize: size === "sm" ? 12 : 13,
     fontWeight: 600,
-    letterSpacing: "0",
     border: `1px solid ${wf.rail}`,
     borderRadius: RADIUS_SM,
     background: "#fff",
     color: wf.ink,
     cursor: "pointer",
     whiteSpace: "nowrap",
-    transition: "background 120ms ease, border-color 120ms ease, box-shadow 120ms ease",
+    transition: "background 120ms ease, border-color 120ms ease, opacity 120ms ease",
     width: block ? "100%" : undefined
   };
   if (variant === "primary") {
-    return {
-      ...base,
-      background: wf.control,
-      color: "#fff",
-      borderColor: wf.control,
-      fontWeight: 700
-    };
+    return { ...base, background: wf.control, color: "#fff", borderColor: wf.control };
   }
   if (variant === "ghost") return { ...base, background: "transparent" };
-  if (variant === "danger") return { ...base, color: wf.red, borderColor: "#fecaca" };
+  if (variant === "danger") return { ...base, color: wf.red, borderColor: "#e7c2cb" };
   return base;
 }
 
@@ -265,7 +250,7 @@ export function AdminBtn({
 const fieldBase: CSSProperties = {
   width: "100%",
   height: 38,
-  padding: "0 11px",
+  padding: "0 12px",
   border: `1px solid ${wf.rail}`,
   borderRadius: RADIUS_SM,
   background: "#fff",
@@ -289,8 +274,8 @@ export function Field({
         <span
           style={{
             fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: "0.07em",
+            fontWeight: 600,
+            letterSpacing: "0.06em",
             textTransform: "uppercase",
             color: wf.muted
           }}
@@ -337,7 +322,7 @@ export function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
         ...fieldBase,
         height: undefined,
         minHeight: 76,
-        padding: "9px 11px",
+        padding: "9px 12px",
         resize: "vertical",
         ...style
       }}
@@ -374,8 +359,7 @@ export function DataTable<T>({
           padding: "44px 16px",
           textAlign: "center",
           color: wf.muted,
-          fontSize: 13,
-          fontFamily: monoFont
+          fontSize: 13
         }}
       >
         {empty}
@@ -395,7 +379,7 @@ export function DataTable<T>({
                   textAlign: col.align || "left",
                   padding: "10px 16px",
                   fontSize: 10,
-                  fontWeight: 700,
+                  fontWeight: 600,
                   letterSpacing: "0.09em",
                   textTransform: "uppercase",
                   color: wf.muted,
@@ -511,9 +495,7 @@ export function PageHead({
         alignItems: "flex-end",
         justifyContent: "space-between",
         gap: 16,
-        flexWrap: "wrap",
-        paddingBottom: 14,
-        borderBottom: `1px solid ${wf.rail}`
+        flexWrap: "wrap"
       }}
     >
       <div style={{ minWidth: 0 }}>
@@ -522,10 +504,10 @@ export function PageHead({
             style={{
               margin: 0,
               fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: "0.12em",
+              fontWeight: 600,
+              letterSpacing: "0.16em",
               textTransform: "uppercase",
-              color: wf.muted
+              color: wf.safety
             }}
           >
             {eyebrow}
@@ -533,10 +515,10 @@ export function PageHead({
         ) : null}
         <h1
           style={{
-            margin: "5px 0 0",
+            margin: "6px 0 0",
             fontSize: 25,
-            fontWeight: 800,
-            letterSpacing: "-0.022em",
+            fontWeight: 600,
+            letterSpacing: "-0.025em",
             color: wf.ink,
             lineHeight: 1.15
           }}
@@ -544,7 +526,9 @@ export function PageHead({
           {title}
         </h1>
         {desc ? (
-          <p style={{ margin: "6px 0 0", fontSize: 13, color: wf.muted, maxWidth: 580 }}>{desc}</p>
+          <p style={{ margin: "6px 0 0", fontSize: 13.5, color: wf.steel, maxWidth: 580 }}>
+            {desc}
+          </p>
         ) : null}
       </div>
       {action ? <div style={{ flexShrink: 0, paddingBottom: 2 }}>{action}</div> : null}
@@ -562,21 +546,19 @@ export function Notice({
 }) {
   const c =
     tone === "warn"
-      ? { bg: "#fffbeb", bd: "#fde68a", fg: "#92500a", bar: wf.safety }
+      ? { bg: wf.amber, fg: "#8a5a12" }
       : tone === "good"
-        ? { bg: "#effcf9", bd: "#a7f0e3", fg: wf.pineDeep, bar: wf.pine }
-        : { bg: wf.bone, bd: wf.rail, fg: wf.steel, bar: wf.muted };
+        ? { bg: wf.mintSoft, fg: wf.pineDeep }
+        : { bg: wf.indigoSoft, fg: wf.safety };
   return (
     <div
       style={{
-        padding: "11px 14px",
+        padding: "11px 15px",
         background: c.bg,
-        border: `1px solid ${c.bd}`,
-        borderLeft: `3px solid ${c.bar}`,
         borderRadius: RADIUS_SM,
         color: c.fg,
-        fontSize: 12,
-        fontWeight: 600
+        fontSize: 12.5,
+        fontWeight: 500
       }}
     >
       {children}

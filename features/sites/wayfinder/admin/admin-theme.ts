@@ -1,28 +1,31 @@
-// Wayfinder admin theme — a cool, modern dashboard palette, deliberately
-// distinct from the warm-paper storefront. The back-office is a tool, not a
-// shopfront, so it leans on cool slate neutrals, crisp hairlines, soft
-// elevation, and rounded corners. Keys mirror the storefront `wf` tokens so
-// this is a drop-in for every admin component.
+// Wayfinder admin theme — the "Ledger" palette. A modern fintech look
+// (Ramp / Mercury / Brex): airy paper-white surfaces, an institutional indigo
+// accent, soft elevation, and generous rounding. Ported from the Ledger site
+// theme (features/sites/ledger/kit.tsx). Keys mirror the storefront `wf`
+// tokens so this drops into every admin component unchanged.
 export const wf = {
-  ink: "#0f1419", // cool near-black — headings and text only
-  control: "#1e293b", // slate-800 — filled buttons and active states (softer than ink)
-  steel: "#475569", // slate-600 — body text, labels
-  muted: "#64748b", // slate-500 — secondary text
-  rail: "#e2e8f0", // slate-200 — borders
-  hairline: "#eef2f6", // very light cool divider
-  paper: "#f4f6f9", // cool light gray — app background
-  bone: "#f1f4f9", // slate-50/100 — table headers, subtle fills
-  pine: "#0d9488", // teal-600 — positive / good
-  pineDeep: "#0f766e", // teal-700
-  amber: "#fef3c7", // light amber — warning fills
-  amberDeep: "#fcd34d", // amber border
-  red: "#dc2626", // modern red — danger
-  safety: "#f5a623" // brand accent — carries through from the storefront
+  ink: "#15181f", // primary text — near-black slate
+  control: "#2f3aa3", // filled controls / primary — institutional indigo
+  steel: "#41475a", // secondary text
+  muted: "#8b91a3", // tertiary text / labels
+  rail: "#e4e6ec", // hairline borders
+  hairline: "#edeef2", // lighter divider
+  paper: "#f5f6f8", // app background — cool airy paper
+  bone: "#f7f8fb", // subtle fill — table headers
+  pine: "#0f7a52", // positive / collected (Ledger mint)
+  pineDeep: "#0c6443",
+  amber: "#fbf2dd", // attention surface (Ledger amberSoft)
+  amberDeep: "#ead7a6",
+  red: "#a8324a", // negative / overdue (Ledger rose)
+  safety: "#2f3aa3", // accent — institutional indigo
+  indigoSoft: "#eef0fb", // accent tint surface
+  mintSoft: "#e6f4ee",
+  roseSoft: "#fbe9ec"
 } as const;
 
-// Corner radius — the storefront is sharp; the admin is rounded and modern.
-export const RADIUS = 8;
-export const RADIUS_SM = 6;
+// Generous rounding — the Ledger look. Cards/panels vs. controls.
+export const RADIUS = 16;
+export const RADIUS_SM = 10;
 
-// Soft, cool-tinted elevation so panels read as surfaces, not outlined boxes.
-export const ELEVATION = "0 1px 2px rgba(15,23,42,0.04), 0 4px 14px rgba(15,23,42,0.06)";
+// Soft, low fintech elevation so panels read as surfaces on the paper canvas.
+export const ELEVATION = "0 1px 2px rgba(21,24,31,0.05), 0 4px 14px rgba(21,24,31,0.04)";
