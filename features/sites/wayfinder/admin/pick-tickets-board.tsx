@@ -142,7 +142,9 @@ export function WayfinderPickTicketsBoard({
         lines,
         progress
       };
-    });
+    })
+      // An order with no pickable lines is not a real pick ticket.
+      .filter((row) => row.progress.lineCount > 0);
   }, [orders, inventoryRows, pickTickets]);
 
   const filtered = useMemo(() => {

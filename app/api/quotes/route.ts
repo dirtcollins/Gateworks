@@ -178,6 +178,23 @@ function toQuoteRow(input: QuoteInput) {
   return row;
 }
 
+// A submitted quote must carry real value. Drafts may be empty while they are
+// being built, but a `sent` quote with no items or a $0 total is blocked.
+function zeroValueBlock(
+  status: unknown,
+  items: QuoteItemInput[] | undefined,
+  total: unknown
+): string | null {
+  if (status !== "sent") return null;
+  if (items && !items.length) {
+    return "A quote can't be submitted without line items.";
+  }
+  if (total !== undefined && Number(total) <= 0) {
+    return "A submitted quote must total more than $0.";
+  }
+  return null;
+}
+
 async function fetchQuoteById(
   admin: NonNullable<ReturnType<typeof getSupabaseAdminClient>>,
   id: string
@@ -255,6 +272,14 @@ export async function POST(request: NextRequest) {
     quoteRow.quote_number = input.quoteNumber || (await generateQuoteNumber(admin));
     if (quoteRow.status === undefined) quoteRow.status = "draft";
 
+    const postBlock = zeroValueBlock(quoteRow.status, input.items, input.total);
+    if (postBlock) {
+      return NextResponse.json(
+        { ok: false, persisted: false, reason: postBlock },
+        { status: 400 }
+      );
+    }
+
     const { data: created, error: quoteError } = await admin
       .from("quotes")
       .insert(quoteRow)
@@ -309,6 +334,14 @@ export async function PATCH(request: NextRequest) {
   try {
     const updates = toQuoteRow(input);
     updates.updated_at = new Date().toISOString();
+
+    const patchBlock = zeroValueBlock(updates.status, input.items, input.total);
+    if (patchBlock) {
+      return NextResponse.json(
+        { ok: false, persisted: false, reason: patchBlock },
+        { status: 400 }
+      );
+    }
 
     const { error: updateError } = await admin
       .from("quotes")

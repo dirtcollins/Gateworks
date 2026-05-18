@@ -581,6 +581,18 @@ export async function createPickTicketForOrder(
   if (existingError) throw existingError;
   if (existingTicket?.id) return existingTicket.id;
 
+  // No pickable lines means there is nothing to pick — never create a ticket
+  // for an empty order (it would show up as a 0/0 pick ticket).
+  const { data: orderItems, error: itemsError } = await admin
+    .from("order_items")
+    .select("id, variant_id, quantity")
+    .eq("order_id", orderId);
+
+  if (itemsError) throw itemsError;
+
+  const pickable = (orderItems || []).filter((item) => item.variant_id);
+  if (!pickable.length) return null;
+
   const { data: ticket, error: ticketError } = await admin
     .from("pick_tickets")
     .insert({
@@ -592,26 +604,15 @@ export async function createPickTicketForOrder(
 
   if (ticketError) throw ticketError;
 
-  const { data: orderItems, error: itemsError } = await admin
-    .from("order_items")
-    .select("id, variant_id, quantity")
-    .eq("order_id", orderId);
+  const ticketItems = pickable.map((item) => ({
+    pick_ticket_id: ticket.id,
+    order_item_id: item.id,
+    variant_id: item.variant_id,
+    quantity_to_pick: Number(item.quantity || 0)
+  }));
 
-  if (itemsError) throw itemsError;
-
-  const ticketItems = (orderItems || [])
-    .filter((item) => item.variant_id)
-    .map((item) => ({
-      pick_ticket_id: ticket.id,
-      order_item_id: item.id,
-      variant_id: item.variant_id,
-      quantity_to_pick: Number(item.quantity || 0)
-    }));
-
-  if (ticketItems.length) {
-    const { error } = await admin.from("pick_ticket_items").insert(ticketItems);
-    if (error) throw error;
-  }
+  const { error } = await admin.from("pick_ticket_items").insert(ticketItems);
+  if (error) throw error;
 
   return ticket.id;
 }

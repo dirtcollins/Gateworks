@@ -595,6 +595,29 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // An order with nothing in it (and no value) is junk — it surfaces later as
+  // a 0/0 pick ticket. Block it at the source.
+  if (!payload.items?.length) {
+    return NextResponse.json(
+      {
+        ok: false,
+        persisted: false,
+        reason: "An order must have at least one line item."
+      },
+      { status: 400 }
+    );
+  }
+  if (Number(payload.total) <= 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        persisted: false,
+        reason: "An order total must be greater than $0."
+      },
+      { status: 400 }
+    );
+  }
+
   try {
     const safeUserId = (payload.userId || "guest").trim();
 
