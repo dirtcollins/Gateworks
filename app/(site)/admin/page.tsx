@@ -1,8 +1,9 @@
 // Wayfinder admin — dashboard route. Server component: resolves catalog stock
-// counts from Supabase (falling back to the bundled catalog) and hands them to
-// the client dashboard, which adds live order/quote KPIs from the order store.
+// counts and server-aggregated financials (revenue trend, AOV, receivables),
+// then hands them to the client dashboard, which adds the live order pipeline.
 import { WayfinderAdminDashboard } from "@/features/sites/wayfinder/admin/dashboard";
 import { products as fallbackProducts } from "@/lib/catalog";
+import { fetchReportData } from "@/lib/reports-data";
 import { fetchSupabaseProducts } from "@/lib/supabase-catalog";
 import type { Product } from "@/lib/types";
 
@@ -27,9 +28,13 @@ function lowStockCount(products: Product[]) {
 }
 
 export default async function WayfinderAdminDashboardPage() {
-  const catalog = (await fetchSupabaseProducts()) || fallbackProducts;
+  const [catalog, reportData] = await Promise.all([
+    fetchSupabaseProducts().then((products) => products || fallbackProducts),
+    fetchReportData()
+  ]);
   return (
     <WayfinderAdminDashboard
+      reportData={reportData}
       productCount={catalog.length}
       lowStockCount={lowStockCount(catalog)}
     />
