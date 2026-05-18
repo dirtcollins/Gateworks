@@ -116,7 +116,7 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
             <Ico.pin size={16} />
           </span>
           <span style={{ display: "grid", lineHeight: 1.15 }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: wf.ink }}>Wayfinder</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: wf.ink }}>Gateworks</span>
             <span
               style={{
                 fontSize: 9,
