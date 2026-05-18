@@ -4,7 +4,8 @@
 // elevation, and rounded corners. Keys mirror the storefront `wf` tokens so
 // this is a drop-in for every admin component.
 export const wf = {
-  ink: "#0f1419", // cool near-black — headings, primary surfaces
+  ink: "#0f1419", // cool near-black — headings and text only
+  control: "#1e293b", // slate-800 — filled buttons and active states (softer than ink)
   steel: "#475569", // slate-600 — body text, labels
   muted: "#64748b", // slate-500 — secondary text
   rail: "#e2e8f0", // slate-200 — borders

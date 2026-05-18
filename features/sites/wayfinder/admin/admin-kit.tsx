@@ -213,7 +213,13 @@ function adminBtnStyle(
     width: block ? "100%" : undefined
   };
   if (variant === "primary") {
-    return { ...base, background: wf.ink, color: "#fff", borderColor: wf.ink, fontWeight: 700 };
+    return {
+      ...base,
+      background: wf.control,
+      color: "#fff",
+      borderColor: wf.control,
+      fontWeight: 700
+    };
   }
   if (variant === "ghost") return { ...base, background: "transparent" };
   if (variant === "danger") return { ...base, color: wf.red, borderColor: "#fecaca" };
@@ -471,8 +477,8 @@ export function FilterChips<T extends string>({
               fontSize: 12,
               fontWeight: 600,
               borderRadius: RADIUS_SM,
-              border: `1px solid ${active ? wf.ink : wf.rail}`,
-              background: active ? wf.ink : "#fff",
+              border: `1px solid ${active ? wf.control : wf.rail}`,
+              background: active ? wf.control : "#fff",
               color: active ? "#fff" : wf.steel,
               cursor: "pointer",
               transition: "background 120ms ease, border-color 120ms ease"

@@ -674,8 +674,8 @@ function Stepper({ current }: { current: number }) {
               alignItems: "center",
               gap: 8,
               padding: "7px 12px",
-              background: active ? wf.ink : "#fff",
-              border: `1px solid ${active ? wf.ink : wf.rail}`,
+              background: active ? wf.control : "#fff",
+              border: `1px solid ${active ? wf.control : wf.rail}`,
               flex: "1 1 120px"
             }}
           >
@@ -736,7 +736,7 @@ function TypeCard({
         padding: 18,
         cursor: "pointer",
         background: "#fff",
-        border: `2px solid ${active ? wf.ink : wf.rail}`
+        border: `2px solid ${active ? wf.control : wf.rail}`
       }}
     >
       <span
@@ -781,9 +781,9 @@ function ModeChip({
         textTransform: "uppercase",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.4 : 1,
-        background: active ? wf.ink : "#fff",
+        background: active ? wf.control : "#fff",
         color: active ? "#fff" : wf.steel,
-        border: `1px solid ${active ? wf.ink : wf.rail}`
+        border: `1px solid ${active ? wf.control : wf.rail}`
       }}
     >
       {children}

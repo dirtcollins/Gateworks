@@ -399,8 +399,8 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
           transition: background 120ms ease, color 120ms ease;
         }
         .wf-nav-item:hover { background: ${wf.bone}; color: ${wf.ink}; }
-        .wf-nav-active { background: ${wf.ink}; color: #fff; }
-        .wf-nav-active:hover { background: ${wf.ink}; color: #fff; }
+        .wf-nav-active { background: ${wf.control}; color: #fff; }
+        .wf-nav-active:hover { background: ${wf.control}; color: #fff; }
         .wf-qa {
           display: flex;
           align-items: center;
@@ -412,8 +412,8 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
           border-radius: ${RADIUS_SM}px;
           transition: background 120ms ease, border-color 120ms ease;
         }
-        .wf-qa-primary { background: ${wf.ink}; color: #fff; }
-        .wf-qa-primary:hover { background: #222b38; }
+        .wf-qa-primary { background: ${wf.control}; color: #fff; }
+        .wf-qa-primary:hover { background: #2d3c52; }
         .wf-qa-ghost {
           background: #fff;
           color: ${wf.ink};
@@ -433,12 +433,12 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
           border: 1px solid ${wf.rail};
           transition: background 120ms ease, color 120ms ease;
         }
-        .wf-foot-link:hover { background: ${wf.ink}; color: #fff; border-color: ${wf.ink}; }
+        .wf-foot-link:hover { background: ${wf.control}; color: #fff; border-color: ${wf.control}; }
         .wf-trow { transition: background 100ms ease; }
         .wf-trow:hover { background: ${wf.bone}; }
         .wf-field:focus { border-color: ${wf.ink}; box-shadow: 0 0 0 3px rgba(15,20,25,0.1); }
         .wf-abtn-default:hover, .wf-abtn-ghost:hover { background: ${wf.bone}; border-color: ${wf.steel}; }
-        .wf-abtn-primary:hover { background: #222b38; }
+        .wf-abtn-primary:hover { background: #2d3c52; }
         .wf-abtn-danger:hover { background: #fef2f2; }
         .wf-abtn:disabled { cursor: default; box-shadow: none; }
         @media (max-width: 880px) {
