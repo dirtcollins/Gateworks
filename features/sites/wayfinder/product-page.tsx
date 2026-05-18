@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useCartStore } from "@/lib/cart-store";
 import { useUserStore } from "@/lib/user-store";
 import { saveQuote } from "@/lib/quotes-data";
+import { FunnelEvent, trackEvent } from "@/lib/analytics";
 import type { Product, ProductVariant } from "@/lib/types";
 import { ProductCard } from "./product-card";
 import {
@@ -136,6 +137,16 @@ export function WayfinderProduct({
     if (index >= 0) setActiveImage(index);
   }, [selectedVariant, gallery]);
 
+  // Funnel: product viewed — fire once per product page mount.
+  useEffect(() => {
+    trackEvent(FunnelEvent.viewItem, {
+      item_id: product.id,
+      item_name: product.title,
+      item_category: product.category.name,
+      price: product.price
+    });
+  }, [product.id, product.title, product.category.name, product.price]);
+
   const unit = selectedVariant?.price ?? product.price;
   const inStock = selectedVariant?.inventory === "in_stock";
   const way = wayfinding(selectedVariant?.id ?? product.id);
@@ -157,6 +168,15 @@ export function WayfinderProduct({
   function onAddToCart() {
     if (!inStock) return;
     addToCart(cartItem);
+    // Funnel: add to cart.
+    trackEvent(FunnelEvent.addToCart, {
+      item_id: cartItem.productId,
+      variant_id: cartItem.variantId,
+      item_name: cartItem.title,
+      price: cartItem.price,
+      quantity: cartItem.quantity,
+      value: Number((cartItem.price * cartItem.quantity).toFixed(2))
+    });
     setAdded(true);
     window.setTimeout(() => setAdded(false), 1400);
   }
@@ -187,6 +207,14 @@ export function WayfinderProduct({
     });
     setQuoting(false);
     if (result.quote) {
+      // Funnel: quote created from a product page.
+      trackEvent(FunnelEvent.quoteCreated, {
+        quote_id: result.quote.id,
+        item_id: product.id,
+        item_name: product.title,
+        quantity: qty,
+        value: Number((unitPrice * qty).toFixed(2))
+      });
       router.push(`/quotes/${result.quote.id}`);
     } else {
       // Degraded mode: Supabase not configured — still acknowledge the action.

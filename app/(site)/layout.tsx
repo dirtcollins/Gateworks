@@ -6,6 +6,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { WayfinderShell } from "@/features/sites/wayfinder/shell";
 
+// metadataBase is inherited from the root app/layout.tsx.
 export const metadata: Metadata = {
   title: {
     default: "Wayfinder · Gateworks Supply",

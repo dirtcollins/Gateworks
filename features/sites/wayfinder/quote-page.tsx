@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { products } from "@/lib/catalog";
 import { calculateTax } from "@/lib/tax";
+import { FunnelEvent, trackEvent } from "@/lib/analytics";
 import { useUserStore } from "@/lib/user-store";
 import {
   convertQuoteToOrder,
@@ -288,10 +289,19 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
 
   async function handleSaveDraft() {
     if (busy) return;
+    const isNewQuote = !draft.id;
     setBusy(true);
     const saved = await persist("draft");
     setBusy(false);
     if (saved) {
+      // Funnel: quote created — only when a brand-new draft is first saved.
+      if (isNewQuote) {
+        trackEvent(FunnelEvent.quoteCreated, {
+          quote_id: saved.id,
+          item_count: items.length,
+          value: Number(total.toFixed(2))
+        });
+      }
       setDraft(draftFromQuote(saved));
       setMessage("Quote saved.");
       if (!quoteId) router.replace(`/quotes/${saved.id}`);
@@ -310,6 +320,12 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
     const saved = await persist("sent");
     setBusy(false);
     if (saved) {
+      // Funnel: quote submitted to staff.
+      trackEvent(FunnelEvent.quoteSubmitted, {
+        quote_id: saved.id,
+        item_count: items.length,
+        value: Number(total.toFixed(2))
+      });
       setDraft(draftFromQuote(saved));
       setMessage("Quote submitted to the Bakersfield desk.");
       if (!quoteId) router.replace(`/quotes/${saved.id}`);

@@ -5,7 +5,9 @@ import { SITE_URL } from "@/lib/seo";
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();
 
-  const staticRoutes = ["", "/search", "/quote", "/cart"].map((path) => ({
+  // Only crawlable, indexable storefront entry points belong here. /quote and
+  // /cart are transactional pages with no SEO value and were removed.
+  const staticRoutes = ["", "/search"].map((path) => ({
     url: `${SITE_URL}${path}`,
     lastModified,
     changeFrequency: "weekly" as const,

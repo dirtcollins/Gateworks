@@ -12,6 +12,7 @@ import { useCartStore } from "@/lib/cart-store";
 import { useOrderStore, type OrderAddress } from "@/lib/order-store";
 import { useUserStore } from "@/lib/user-store";
 import { calculateTax } from "@/lib/tax";
+import { FunnelEvent, trackEvent } from "@/lib/analytics";
 import type { FulfillmentMethod } from "@/lib/platform-backend";
 import { Btn, Card, Eyebrow, Ico, Mono, fmt, monoFont, wf } from "./kit";
 import { WfInput } from "./cart-page";
@@ -68,6 +69,21 @@ export function WayfinderCheckout() {
     useOrderStore.persist.rehydrate();
     setReady(true);
   }, []);
+
+  // Funnel: begin checkout — fire once the checkout page is ready with items.
+  const [beganCheckout, setBeganCheckout] = useState(false);
+  useEffect(() => {
+    if (!ready || beganCheckout || items.length === 0) return;
+    const checkoutValue = items.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    );
+    trackEvent(FunnelEvent.beginCheckout, {
+      item_count: items.length,
+      value: Number(checkoutValue.toFixed(2))
+    });
+    setBeganCheckout(true);
+  }, [ready, beganCheckout, items]);
 
   // Seed the contact name from the signed-in account once ready.
   useEffect(() => {
@@ -176,6 +192,24 @@ export function WayfinderCheckout() {
       if (!response.ok || !payload?.persisted) {
         setError(payload?.reason || "Order could not be saved to Supabase.");
         return;
+      }
+
+      // Funnel: order placed (purchase). A purchase-order checkout also emits
+      // a dedicated po_submitted event so the PO path is tracked separately.
+      trackEvent(FunnelEvent.purchase, {
+        transaction_id: orderNumber,
+        payment_method: payment,
+        item_count: items.length,
+        value: Number(total.toFixed(2)),
+        tax: Number(tax.toFixed(2)),
+        shipping: Number(deliveryFee.toFixed(2))
+      });
+      if (isPurchaseOrder) {
+        trackEvent(FunnelEvent.poSubmitted, {
+          transaction_id: orderNumber,
+          po_number: poNumber.trim(),
+          value: Number(total.toFixed(2))
+        });
       }
 
       setSubmittedOrderNumber(orderNumber);
