@@ -282,9 +282,20 @@ export function WayfinderPickTicketDetail({
             <AdminBtn href="/admin/pick-tickets">
               <Ico.clipboard size={13} /> Pick queue
             </AdminBtn>
-            <AdminBtn variant="primary" onClick={() => completeTicket(false)}>
-              <Ico.check size={13} /> Mark complete
-            </AdminBtn>
+            {order.status === "submitted" || order.status === "confirmed" ? (
+              <AdminBtn
+                variant="primary"
+                onClick={() =>
+                  patchOrderStatus("picking", "Picking started on the warehouse floor.")
+                }
+              >
+                <Ico.arrowRight size={13} /> Start picking
+              </AdminBtn>
+            ) : order.status === "picking" ? (
+              <AdminBtn variant="primary" onClick={() => completeTicket(false)}>
+                <Ico.check size={13} /> Mark complete
+              </AdminBtn>
+            ) : null}
           </div>
         }
       />

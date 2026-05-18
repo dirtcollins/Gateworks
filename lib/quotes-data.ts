@@ -151,7 +151,12 @@ export type ProcurementOrderInput = {
 // Fetch helpers
 // ---------------------------------------------------------------------------
 
-type ApiResult<T> = T & { ok?: boolean; configured?: boolean; persisted?: boolean };
+type ApiResult<T> = T & {
+  ok?: boolean;
+  configured?: boolean;
+  persisted?: boolean;
+  reason?: string;
+};
 
 async function readJson<T>(response: Response): Promise<ApiResult<T> | null> {
   try {
@@ -254,9 +259,12 @@ export async function deleteQuote(id: string): Promise<{ persisted: boolean }> {
   }
 }
 
-export async function convertQuoteToOrder(
-  id: string
-): Promise<{ orderId: string | null; orderNumber: string | null; persisted: boolean }> {
+export async function convertQuoteToOrder(id: string): Promise<{
+  orderId: string | null;
+  orderNumber: string | null;
+  persisted: boolean;
+  reason?: string;
+}> {
   try {
     const response = await fetch("/api/quotes/convert", {
       method: "POST",
@@ -266,7 +274,12 @@ export async function convertQuoteToOrder(
     const data = await readJson<{ orderId: string; orderNumber: string }>(response);
 
     if (!data || data.persisted === false || data.ok === false) {
-      return { orderId: null, orderNumber: null, persisted: false };
+      return {
+        orderId: null,
+        orderNumber: null,
+        persisted: false,
+        reason: data?.reason
+      };
     }
 
     return {
@@ -275,7 +288,12 @@ export async function convertQuoteToOrder(
       persisted: true
     };
   } catch {
-    return { orderId: null, orderNumber: null, persisted: false };
+    return {
+      orderId: null,
+      orderNumber: null,
+      persisted: false,
+      reason: "Network error — the quote could not be converted."
+    };
   }
 }
 

@@ -34,6 +34,7 @@ import {
 
 type StatusTab =
   | "all"
+  | "draft"
   | "pending"
   | "processing"
   | "ready_for_pickup"
@@ -43,6 +44,7 @@ type StatusTab =
 
 const STATUS_TABS: { id: StatusTab; label: string }[] = [
   { id: "all", label: "All" },
+  { id: "draft", label: "Draft" },
   { id: "pending", label: "Pending" },
   { id: "processing", label: "Processing" },
   { id: "ready_for_pickup", label: "Will-call" },
@@ -53,7 +55,8 @@ const STATUS_TABS: { id: StatusTab; label: string }[] = [
 
 function matchesTab(order: OrderRecord, tab: StatusTab) {
   if (tab === "all") return true;
-  if (tab === "pending") return ["draft", "submitted"].includes(order.status);
+  if (tab === "draft") return order.status === "draft";
+  if (tab === "pending") return order.status === "submitted";
   if (tab === "processing") return ["confirmed", "picking"].includes(order.status);
   return order.status === tab;
 }
@@ -62,6 +65,7 @@ export function WayfinderOrdersList() {
   const storedOrders = useOrderStore((state) => state.orders);
   const setOrders = useOrderStore((state) => state.setOrders);
   const updateOrderStatus = useOrderStore((state) => state.updateOrderStatus);
+  const removeOrder = useOrderStore((state) => state.removeOrder);
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<StatusTab>("all");
   const [loaded, setLoaded] = useState(false);
@@ -113,6 +117,35 @@ export function WayfinderOrdersList() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ orderId: order.id, status: step.next })
     }).catch(() => null);
+  }
+
+  async function deleteOrder(order: OrderRecord) {
+    if (
+      !window.confirm(
+        `Delete ${order.orderNumber}? This permanently removes the order.`
+      )
+    ) {
+      return;
+    }
+    removeOrder(order.id);
+    await fetch(`/api/orders?orderId=${encodeURIComponent(order.id)}`, {
+      method: "DELETE"
+    }).catch(() => null);
+  }
+
+  async function discardAllDrafts() {
+    const drafts = orders.filter((order) => order.status === "draft");
+    if (!drafts.length) return;
+    if (
+      !window.confirm(
+        `Discard all ${drafts.length} draft order${drafts.length === 1 ? "" : "s"}? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    const draftIds = new Set(drafts.map((order) => order.id));
+    setOrders(storedOrders.filter((order) => !draftIds.has(order.id)));
+    await fetch("/api/orders?scope=drafts", { method: "DELETE" }).catch(() => null);
   }
 
   function exportCsv() {
@@ -239,6 +272,16 @@ export function WayfinderOrdersList() {
                 {step.label}
               </AdminBtn>
             ) : null}
+            {o.status === "draft" || o.status === "cancelled" ? (
+              <AdminBtn
+                size="sm"
+                variant="danger"
+                onClick={() => deleteOrder(o)}
+                title="Delete this order"
+              >
+                Delete
+              </AdminBtn>
+            ) : null}
             <AdminBtn
               size="sm"
               variant="primary"
@@ -285,8 +328,23 @@ export function WayfinderOrdersList() {
         }
         pad={false}
       >
-        <div style={{ padding: "12px 16px", borderBottom: `1px solid ${wf.hairline}` }}>
+        <div
+          style={{
+            padding: "12px 16px",
+            borderBottom: `1px solid ${wf.hairline}`,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap"
+          }}
+        >
           <FilterChips value={tab} options={STATUS_TABS} onChange={setTab} />
+          {tab === "draft" && orders.some((order) => order.status === "draft") ? (
+            <AdminBtn size="sm" variant="danger" onClick={discardAllDrafts}>
+              <Ico.x size={13} /> Discard all drafts
+            </AdminBtn>
+          ) : null}
         </div>
         <DataTable
           columns={columns}

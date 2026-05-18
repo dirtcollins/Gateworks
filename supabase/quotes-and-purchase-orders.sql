@@ -19,6 +19,11 @@ create table if not exists public.quotes (
 
 alter table public.quotes add column if not exists quote_number text;
 alter table public.quotes add column if not exists status text not null default 'draft';
+-- Quote lifecycle statuses. `converted` is required: the quote→order conversion
+-- sets it as the final step, and the constraint must allow it.
+alter table public.quotes drop constraint if exists quotes_status_check;
+alter table public.quotes add constraint quotes_status_check
+  check (status in ('draft','sent','viewed','accepted','declined','changes_requested','expired','converted'));
 alter table public.quotes add column if not exists is_template boolean not null default false;
 alter table public.quotes add column if not exists template_name text;
 -- site_user_id holds the text ids used by `site_users`, not a uuid.

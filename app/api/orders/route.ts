@@ -933,3 +933,93 @@ export async function PATCH(request: NextRequest) {
 
   return NextResponse.json({ ok: true, persisted: true, workflow });
 }
+
+// Delete orders — a single order by ?orderId (draft or cancelled only, so a
+// live order can't be wiped), or every draft order via ?scope=drafts. Line
+// items are removed first so the parent delete can't orphan them.
+export async function DELETE(request: NextRequest) {
+  const auth = await authorizeAdminRequest(request);
+  if (!auth.ok) return auth.response;
+
+  const admin = getSupabaseAdminClient();
+  if (!admin) {
+    return NextResponse.json(
+      { ok: false, persisted: false, reason: "Supabase is not configured." },
+      { status: 503 }
+    );
+  }
+
+  const { searchParams } = new URL(request.url);
+  const orderId = searchParams.get("orderId");
+  const scope = searchParams.get("scope");
+
+  try {
+    let targetIds: string[] = [];
+
+    if (orderId) {
+      const { data: row, error } = await admin
+        .from("orders")
+        .select("id, status")
+        .eq("id", orderId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!row) {
+        return NextResponse.json(
+          { ok: false, reason: "Order not found." },
+          { status: 404 }
+        );
+      }
+      if (row.status !== "draft" && row.status !== "cancelled") {
+        return NextResponse.json(
+          { ok: false, reason: "Only draft or cancelled orders can be deleted." },
+          { status: 400 }
+        );
+      }
+      targetIds = [orderId];
+    } else if (scope === "drafts") {
+      const { data, error } = await admin
+        .from("orders")
+        .select("id")
+        .eq("status", "draft")
+        .eq("is_quote_request", false);
+      if (error) throw error;
+      targetIds = (data || []).map((entry) => entry.id as string);
+    } else {
+      return NextResponse.json(
+        { ok: false, reason: "Provide an orderId, or scope=drafts." },
+        { status: 400 }
+      );
+    }
+
+    if (!targetIds.length) {
+      return NextResponse.json({ ok: true, persisted: true, deleted: 0 });
+    }
+
+    const { error: itemsError } = await admin
+      .from("order_items")
+      .delete()
+      .in("order_id", targetIds);
+    if (itemsError) throw itemsError;
+
+    const { error: ordersError } = await admin
+      .from("orders")
+      .delete()
+      .in("id", targetIds);
+    if (ordersError) throw ordersError;
+
+    return NextResponse.json({
+      ok: true,
+      persisted: true,
+      deleted: targetIds.length
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        persisted: false,
+        reason: error instanceof Error ? error.message : "Unknown order delete error."
+      },
+      { status: 500 }
+    );
+  }
+}

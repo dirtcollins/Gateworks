@@ -125,6 +125,7 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
   const router = useRouter();
   const userId = useUserStore((state) => state.userId);
   const displayName = useUserStore((state) => state.displayName);
+  const email = useUserStore((state) => state.email);
 
   const [ready, setReady] = useState(false);
   const [configured, setConfigured] = useState(true);
@@ -170,6 +171,17 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
     const handle = window.setTimeout(() => setMessage(""), 3200);
     return () => window.clearTimeout(handle);
   }, [message]);
+
+  // Pre-fill the signed-in customer's identity on a brand-new quote.
+  useEffect(() => {
+    if (quoteId) return;
+    const name = displayName && displayName !== "Guest" ? displayName : "";
+    if (!name && !email) return;
+    setDraft((current) => {
+      if (current.id || current.customerName || current.customerEmail) return current;
+      return { ...current, customerName: name, customerEmail: email };
+    });
+  }, [quoteId, displayName, email]);
 
   const searchResults = useMemo(() => {
     const normalized = search.trim().toLowerCase();
@@ -356,7 +368,11 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
       const refreshed = await fetchQuote(saved.id);
       if (refreshed.quote) setDraft(draftFromQuote(refreshed.quote));
     } else {
-      setMessage("Could not convert the quote.");
+      setMessage(
+        result.reason
+          ? `Could not convert: ${result.reason}`
+          : "Could not convert the quote."
+      );
     }
   }
 

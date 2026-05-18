@@ -230,7 +230,12 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", quote.id);
 
-    if (quoteUpdateError) throw quoteUpdateError;
+    if (quoteUpdateError) {
+      // Roll the new order back so a failed status update leaves no orphan.
+      await admin.from("order_items").delete().eq("order_id", orderId);
+      await admin.from("orders").delete().eq("id", orderId);
+      throw quoteUpdateError;
+    }
 
     return NextResponse.json({
       ok: true,

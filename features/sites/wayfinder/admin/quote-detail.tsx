@@ -389,7 +389,11 @@ export function WayfinderQuoteDetail({ quoteId }: { quoteId: string }) {
       setMessage(`Converted to order ${result.orderNumber || ""}.`.trim());
       void load();
     } else {
-      setMessage("Could not convert the quote.");
+      setMessage(
+        result.reason
+          ? `Could not convert the quote: ${result.reason}`
+          : "Could not convert the quote."
+      );
     }
   }
 
