@@ -231,6 +231,31 @@ export function WayfinderPickTicketDetail({
     });
   }
 
+  function cancelTicket() {
+    if (!order) return;
+    if (
+      !window.confirm(
+        `Cancel pick ticket ${order.orderNumber}? The order will be marked cancelled and leave the pick queue.`
+      )
+    ) {
+      return;
+    }
+    patchOrderStatus("cancelled", "Pick ticket cancelled on the warehouse floor.");
+    setNotice({
+      tone: "warn",
+      message: "Pick ticket cancelled — this order has left the pick queue."
+    });
+  }
+
+  function reopenTicket() {
+    if (!order) return;
+    patchOrderStatus("confirmed", "Pick ticket reopened — returned to the queue.");
+    setNotice({
+      tone: "info",
+      message: "Ticket reopened — it is back in the queue, ready to pick."
+    });
+  }
+
   if (loaded && (!order || !progress)) {
     return (
       <>
@@ -271,6 +296,44 @@ export function WayfinderPickTicketDetail({
     ? Math.round((progress.pulledQuantity / progress.totalQuantity) * 100)
     : 0;
 
+  const notStarted =
+    order.status === "submitted" || order.status === "confirmed";
+  const isPicking = order.status === "picking";
+  const isStaged =
+    order.status === "ready_for_pickup" || order.status === "out_for_delivery";
+
+  // A plain-language banner telling the picker exactly where the ticket is and
+  // what to do next — shown in every state.
+  const stageBanner: { tone: "info" | "warn" | "good"; text: string } =
+    order.status === "cancelled"
+      ? {
+          tone: "warn",
+          text: "This pick ticket was cancelled. Reopen it to put the order back in the queue."
+        }
+      : order.status === "completed"
+        ? { tone: "good", text: "Order completed — this ticket is closed." }
+        : isStaged
+          ? {
+              tone: "good",
+              text:
+                order.fulfillmentMethod === "pickup"
+                  ? "Picked and staged for will-call at Bay 7."
+                  : "Picked and loaded — dispatched for delivery."
+            }
+          : isPicking
+            ? {
+                tone: "info",
+                text: `Picking in progress — ${progress.pulledQuantity} of ${progress.totalQuantity} items pulled. Mark complete once every line is on the cart.`
+              }
+            : {
+                tone: "info",
+                text: `Ready to pick — ${progress.totalQuantity} item${
+                  progress.totalQuantity === 1 ? "" : "s"
+                } across ${progress.lineCount} line${
+                  progress.lineCount === 1 ? "" : "s"
+                }. Press Start picking to begin.`
+              };
+
   return (
     <>
       <PageHead
@@ -278,11 +341,20 @@ export function WayfinderPickTicketDetail({
         title={order.orderNumber}
         desc={`${order.companyName || order.customerName} · created ${formatWarehouseDate(order.createdAt)}`}
         action={
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <AdminBtn href="/admin/pick-tickets">
               <Ico.clipboard size={13} /> Pick queue
             </AdminBtn>
-            {order.status === "submitted" || order.status === "confirmed" ? (
+            {notStarted || isPicking ? (
+              <AdminBtn variant="danger" onClick={cancelTicket}>
+                <Ico.x size={13} /> Cancel ticket
+              </AdminBtn>
+            ) : null}
+            {order.status === "cancelled" ? (
+              <AdminBtn variant="primary" onClick={reopenTicket}>
+                <Ico.arrowRight size={13} /> Reopen ticket
+              </AdminBtn>
+            ) : notStarted ? (
               <AdminBtn
                 variant="primary"
                 onClick={() =>
@@ -291,14 +363,24 @@ export function WayfinderPickTicketDetail({
               >
                 <Ico.arrowRight size={13} /> Start picking
               </AdminBtn>
-            ) : order.status === "picking" ? (
+            ) : isPicking ? (
               <AdminBtn variant="primary" onClick={() => completeTicket(false)}>
                 <Ico.check size={13} /> Mark complete
+              </AdminBtn>
+            ) : isStaged ? (
+              <AdminBtn
+                onClick={() =>
+                  patchOrderStatus("picking", "Ticket reopened for re-picking.")
+                }
+              >
+                <Ico.arrowRight size={13} /> Reopen picking
               </AdminBtn>
             ) : null}
           </div>
         }
       />
+
+      <Notice tone={stageBanner.tone}>{stageBanner.text}</Notice>
 
       {notice ? <Notice tone={notice.tone}>{notice.message}</Notice> : null}
 
