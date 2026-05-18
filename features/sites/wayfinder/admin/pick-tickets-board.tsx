@@ -469,7 +469,7 @@ function TicketCard({ row, dense }: { row: TicketRow; dense: boolean }) {
       <AdminBtn
         size="sm"
         variant="primary"
-        href={`/wayfinder/admin/warehouse/${encodeURIComponent(row.orderId)}`}
+        href={`/admin/warehouse/${encodeURIComponent(row.orderId)}`}
         block
       >
         <Ico.clipboard size={13} /> Open pick ticket

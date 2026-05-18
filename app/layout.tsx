@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { Inter } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
-import { RootShell } from "@/components/layout/root-shell";
 import { GA_MEASUREMENT_ID } from "@/lib/analytics";
 import {
   SITE_DESCRIPTION,
@@ -51,7 +50,7 @@ export default function RootLayout({
             </Script>
           </>
         ) : null}
-        <RootShell>{children}</RootShell>
+        {children}
       </body>
     </html>
   );

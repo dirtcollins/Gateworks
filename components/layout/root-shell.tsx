@@ -1,36 +1,15 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { usePathname } from "next/navigation";
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteHeader } from "@/components/layout/site-header";
 
 type RootShellProps = {
   children: ReactNode;
 };
 
+// Legacy app chrome is fully retired. The storefront (app/(site)/) and the
+// admin back-office each ship their own complete layout, so RootShell is a
+// pass-through. Retained only to avoid touching any stale imports; safe to
+// delete in a later cleanup wave.
 export function RootShell({ children }: RootShellProps) {
-  const pathname = usePathname() || "/";
-  const isAdminRoute = pathname.startsWith("/admin");
-  // The Wayfinder storefront brings its own complete shell.
-  const isWayfinder =
-    pathname === "/wayfinder" || pathname.startsWith("/wayfinder/");
-
-  if (isAdminRoute || isWayfinder) {
-    return <>{children}</>;
-  }
-
-  return (
-    <div className="min-h-screen bg-transparent text-industrial-ink lg:grid lg:grid-cols-[248px_minmax(0,1fr)] print:block">
-      <div className="print:hidden">
-        <SiteHeader />
-      </div>
-      <div className="flex min-h-screen flex-col lg:max-h-screen lg:overflow-y-auto print:block print:min-h-0 print:max-h-none print:overflow-visible">
-        <div className="flex-1">{children}</div>
-        <div className="print:hidden">
-          <SiteFooter />
-        </div>
-      </div>
-    </div>
-  );
+  return <>{children}</>;
 }

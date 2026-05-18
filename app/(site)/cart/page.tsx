@@ -1,5 +1,5 @@
 // Wayfinder — cart route. Renders the cart client component inside the
-// Wayfinder shell (provided by app/wayfinder/layout.tsx).
+// Wayfinder shell (provided by the (site) route-group layout).
 import type { Metadata } from "next";
 import { WayfinderCart } from "@/features/sites/wayfinder/cart-page";
 

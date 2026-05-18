@@ -76,7 +76,7 @@ export function WayfinderOrderDetail({ orderId }: { orderId: string }) {
         <PageHead
           eyebrow="Operations"
           title="Order not found"
-          action={<AdminBtn href="/wayfinder/admin/orders">Back to orders</AdminBtn>}
+          action={<AdminBtn href="/admin/orders">Back to orders</AdminBtn>}
         />
         <Panel>
           <p style={{ margin: 0, color: wf.muted, fontSize: 13 }}>
@@ -139,7 +139,7 @@ export function WayfinderOrderDetail({ orderId }: { orderId: string }) {
     <>
       <PageHead
         eyebrow={
-          <Link href="/wayfinder/admin/orders" style={{ color: wf.steel }}>
+          <Link href="/admin/orders" style={{ color: wf.steel }}>
             ← Orders
           </Link>
         }

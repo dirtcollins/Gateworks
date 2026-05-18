@@ -242,10 +242,10 @@ export function WayfinderCheckout() {
               : `Your order is scheduled for jobsite delivery on ${requestedDate}.`}
           </p>
           <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-            <Btn variant="primary" href="/wayfinder/account">
+            <Btn variant="primary" href="/account">
               View account
             </Btn>
-            <Btn variant="default" href="/wayfinder/search">
+            <Btn variant="default" href="/search">
               Keep shopping
             </Btn>
           </div>
@@ -262,7 +262,7 @@ export function WayfinderCheckout() {
           <p style={{ fontSize: 13, color: wf.steel, margin: "8px 0 18px" }}>
             Add products before scheduling pickup or delivery.
           </p>
-          <Btn variant="primary" href="/wayfinder/search">
+          <Btn variant="primary" href="/search">
             Browse the catalog <Ico.arrowRight size={14} />
           </Btn>
         </Card>
@@ -651,7 +651,7 @@ export function WayfinderCheckout() {
                     ? "Submit purchase order"
                     : "Place order"}
             </Btn>
-            <Btn variant="ghost" href="/wayfinder/cart" block size="sm">
+            <Btn variant="ghost" href="/cart" block size="sm">
               Back to cart
             </Btn>
           </div>

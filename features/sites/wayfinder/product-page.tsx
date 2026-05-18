@@ -187,7 +187,7 @@ export function WayfinderProduct({
     });
     setQuoting(false);
     if (result.quote) {
-      router.push(`/wayfinder/quotes/${result.quote.id}`);
+      router.push(`/quotes/${result.quote.id}`);
     } else {
       // Degraded mode: Supabase not configured — still acknowledge the action.
       setQuoted(true);
@@ -282,9 +282,9 @@ export function WayfinderProduct({
           letterSpacing: "0.04em"
         }}
       >
-        <Link href="/wayfinder">Home</Link>
+        <Link href="/">Home</Link>
         <span style={{ margin: "0 8px", color: wf.rail }}>/</span>
-        <Link href={`/wayfinder/categories/${product.category.slug}`}>
+        <Link href={`/categories/${product.category.slug}`}>
           {product.category.name}
         </Link>
         <span style={{ margin: "0 8px", color: wf.rail }}>/</span>

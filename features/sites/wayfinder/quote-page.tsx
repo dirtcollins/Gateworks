@@ -294,7 +294,7 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
     if (saved) {
       setDraft(draftFromQuote(saved));
       setMessage("Quote saved.");
-      if (!quoteId) router.replace(`/wayfinder/quotes/${saved.id}`);
+      if (!quoteId) router.replace(`/quotes/${saved.id}`);
     } else {
       setMessage("Quote not yet persisted — Supabase is not configured.");
     }
@@ -312,7 +312,7 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
     if (saved) {
       setDraft(draftFromQuote(saved));
       setMessage("Quote submitted to the Bakersfield desk.");
-      if (!quoteId) router.replace(`/wayfinder/quotes/${saved.id}`);
+      if (!quoteId) router.replace(`/quotes/${saved.id}`);
     } else {
       setMessage("Quote not yet persisted — Supabase is not configured.");
     }
@@ -362,7 +362,7 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
           <p style={{ fontSize: 13, color: wf.steel, margin: "8px 0 18px" }}>
             It may have been deleted or belongs to another account.
           </p>
-          <Btn variant="primary" href="/wayfinder/quotes">
+          <Btn variant="primary" href="/quotes">
             View all quotes
           </Btn>
         </Card>
@@ -388,7 +388,7 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
       >
         <div>
           <Link
-            href="/wayfinder/quotes"
+            href="/quotes"
             style={{
               fontSize: 11,
               fontWeight: 700,
@@ -418,7 +418,7 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
             {lineCount === 1 ? "" : "s"}
           </Mono>
         </div>
-        <Btn variant="default" size="sm" href="/wayfinder/quotes">
+        <Btn variant="default" size="sm" href="/quotes">
           <Ico.plus size={14} /> New quote
         </Btn>
       </div>
@@ -613,7 +613,7 @@ export function WayfinderQuoteBuilder({ quoteId }: { quoteId?: string }) {
                 >
                   <div style={{ minWidth: 0 }}>
                     <Link
-                      href={`/wayfinder/products/${item.productId}`}
+                      href={`/products/${item.productId}`}
                       style={{ fontSize: 14, fontWeight: 800, color: wf.ink }}
                     >
                       {item.title}

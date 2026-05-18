@@ -1,6 +1,6 @@
 // Wayfinder — product card + grid. Hairline tiles with mono SKU labels and
 // the warehouse stock/aisle tag. Used by the home rails, search results, and
-// category landing pages. Links into the real /wayfinder/products/[slug].
+// category landing pages. Links into the real /products/[slug].
 "use client";
 
 import Link from "next/link";
@@ -25,7 +25,7 @@ export function ProductCard({
 }) {
   const variant = product.variants[0];
   const hasOptions = product.variants.length > 1;
-  const href = `/wayfinder/products/${product.slug}`;
+  const href = `/products/${product.slug}`;
 
   return (
     <div style={{ background: "#fff", padding: 14, display: "grid", gap: 8 }}>

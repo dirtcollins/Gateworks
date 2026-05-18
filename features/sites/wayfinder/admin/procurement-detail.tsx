@@ -174,7 +174,7 @@ export function WayfinderProcurementDetail({ poId }: { poId: string }) {
           eyebrow="Receiving dock"
           title="Purchase order not found"
           action={
-            <AdminBtn href="/wayfinder/admin/procurement">
+            <AdminBtn href="/admin/procurement">
               Back to procurement
             </AdminBtn>
           }
@@ -346,7 +346,7 @@ export function WayfinderProcurementDetail({ poId }: { poId: string }) {
     <>
       <PageHead
         eyebrow={
-          <Link href="/wayfinder/admin/procurement" style={{ color: wf.steel }}>
+          <Link href="/admin/procurement" style={{ color: wf.steel }}>
             ← Procurement
           </Link>
         }

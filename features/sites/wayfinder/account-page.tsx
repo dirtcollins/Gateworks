@@ -427,7 +427,7 @@ export function WayfinderAccount() {
                   ? "Place a checkout or submit a quote to build order history."
                   : "Sign in to see purchase history tied to your account."}
               </p>
-              <Btn variant="primary" href="/wayfinder/search">
+              <Btn variant="primary" href="/search">
                 Browse the catalog
               </Btn>
             </Card>
@@ -460,7 +460,7 @@ export function WayfinderAccount() {
                       <Btn
                         size="xs"
                         variant="primary"
-                        href="/wayfinder/cart"
+                        href="/cart"
                         onClick={() => replaceCart(cart.items)}
                         style={{ flex: 1 }}
                       >
@@ -538,7 +538,7 @@ export function WayfinderAccount() {
                       <Btn
                         size="xs"
                         variant="default"
-                        href="/wayfinder/cart"
+                        href="/cart"
                         onClick={() => replaceCart(list.items)}
                         style={{ marginTop: 6 }}
                       >

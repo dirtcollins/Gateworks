@@ -47,7 +47,7 @@ export function WayfinderSearch() {
     if (nextQuery.trim()) search.set("q", nextQuery.trim());
     if (nextCategory !== "all") search.set("category", nextCategory);
     const qs = search.toString();
-    router.push(qs ? `/wayfinder/search?${qs}` : "/wayfinder/search");
+    router.push(qs ? `/search?${qs}` : "/search");
   }
 
   const activeCategory = depts.find((dept) => dept.slug === category);
@@ -266,7 +266,7 @@ export function WayfinderSearch() {
                 type="button"
                 onClick={() => {
                   setDraft("");
-                  router.push("/wayfinder/search");
+                  router.push("/search");
                 }}
                 style={{
                   marginTop: 4,

@@ -199,7 +199,7 @@ export function WayfinderQuoteDetail({ quoteId }: { quoteId: string }) {
           eyebrow="Operations"
           title="Quote not found"
           action={
-            <AdminBtn href="/wayfinder/admin/quotes">Back to quotes</AdminBtn>
+            <AdminBtn href="/admin/quotes">Back to quotes</AdminBtn>
           }
         />
         <Panel>
@@ -413,7 +413,7 @@ export function WayfinderQuoteDetail({ quoteId }: { quoteId: string }) {
     <>
       <PageHead
         eyebrow={
-          <Link href="/wayfinder/admin/quotes" style={{ color: wf.steel }}>
+          <Link href="/admin/quotes" style={{ color: wf.steel }}>
             ← Quotes
           </Link>
         }

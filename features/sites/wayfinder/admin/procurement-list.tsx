@@ -138,7 +138,7 @@ export function WayfinderProcurementList() {
     setBusy(false);
     if (result.order) {
       router.push(
-        `/wayfinder/admin/procurement/${encodeURIComponent(result.order.id)}`
+        `/admin/procurement/${encodeURIComponent(result.order.id)}`
       );
     } else {
       setMessage("Could not create the PO — Supabase is not configured.");
@@ -267,7 +267,7 @@ export function WayfinderProcurementList() {
           <AdminBtn
             size="sm"
             variant="primary"
-            href={`/wayfinder/admin/procurement/${encodeURIComponent(o.id)}`}
+            href={`/admin/procurement/${encodeURIComponent(o.id)}`}
           >
             Open
           </AdminBtn>

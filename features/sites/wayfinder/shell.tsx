@@ -1,7 +1,6 @@
 // Wayfinder — site shell: black aisle-map context bar, header with nav +
 // search + cart link, aisle-coded department strip, and footer. This component
-// provides the entire chrome for every /wayfinder/* route (the app's global
-// sidebar is suppressed for this prefix).
+// provides the entire chrome for every storefront route.
 "use client";
 
 import Image from "next/image";
@@ -13,9 +12,9 @@ import { departments } from "./data";
 import { Ico, Mono, monoFont, sansFont, wf, wfFontVars } from "./kit";
 
 const NAV_ITEMS: { label: string; href: string }[] = [
-  { label: "Catalog", href: "/wayfinder/search" },
-  { label: "Quote", href: "/wayfinder/quote" },
-  { label: "Account", href: "/wayfinder/account" }
+  { label: "Catalog", href: "/search" },
+  { label: "Quote", href: "/quote" },
+  { label: "Account", href: "/account" }
 ];
 
 // Cart count — reads the real cart store. The store uses skipHydration, so we
@@ -43,7 +42,7 @@ function HeaderSearch() {
     event.preventDefault();
     const trimmed = query.trim();
     router.push(
-      trimmed ? `/wayfinder/search?q=${encodeURIComponent(trimmed)}` : "/wayfinder/search"
+      trimmed ? `/search?q=${encodeURIComponent(trimmed)}` : "/search"
     );
   }
 
@@ -107,24 +106,24 @@ function HeaderSearch() {
 }
 
 export function WayfinderShell({ children }: { children: ReactNode }) {
-  const pathname = usePathname() || "/wayfinder";
+  const pathname = usePathname() || "/";
   const cartCount = useCartCount();
   const depts = departments(8);
 
-  // The admin back-office (/wayfinder/admin/*) ships its own operations-console
-  // chrome via app/wayfinder/admin/layout.tsx, so the storefront shell steps
+  // The admin back-office (/admin/*) ships its own operations-console
+  // chrome via app/(site)/admin/layout.tsx, so the storefront shell steps
   // aside for those routes to avoid double-wrapping the header/footer.
-  if (pathname === "/wayfinder/admin" || pathname.startsWith("/wayfinder/admin/")) {
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     return <>{children}</>;
   }
 
   const isActive = (href: string) =>
-    href === "/wayfinder"
-      ? pathname === "/wayfinder"
+    href === "/"
+      ? pathname === "/"
       : pathname === href || pathname.startsWith(`${href}/`);
   const catalogActive =
-    pathname.startsWith("/wayfinder/search") ||
-    pathname.startsWith("/wayfinder/categories");
+    pathname.startsWith("/search") ||
+    pathname.startsWith("/categories");
 
   return (
     <div
@@ -176,7 +175,7 @@ export function WayfinderShell({ children }: { children: ReactNode }) {
             <span style={{ color: wf.amber }}>11A will-call cutoff</span>
           </div>
           <Link
-            href="/wayfinder/account"
+            href="/account"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -202,7 +201,7 @@ export function WayfinderShell({ children }: { children: ReactNode }) {
             gap: 24
           }}
         >
-          <Link href="/wayfinder" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <Image
               src="/assets/logo.svg"
               alt="Gateworks Wayfinder"
@@ -217,7 +216,7 @@ export function WayfinderShell({ children }: { children: ReactNode }) {
           <nav style={{ display: "flex", alignItems: "center", gap: 4 }}>
             {NAV_ITEMS.map((item) => {
               const active =
-                item.href === "/wayfinder/search" ? catalogActive : isActive(item.href);
+                item.href === "/search" ? catalogActive : isActive(item.href);
               return (
                 <Link
                   key={item.href}
@@ -241,7 +240,7 @@ export function WayfinderShell({ children }: { children: ReactNode }) {
               );
             })}
             <Link
-              href="/wayfinder/cart"
+              href="/cart"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -252,8 +251,8 @@ export function WayfinderShell({ children }: { children: ReactNode }) {
                 letterSpacing: "0.06em",
                 textTransform: "uppercase",
                 color: wf.ink,
-                border: `1px solid ${isActive("/wayfinder/cart") ? wf.ink : "transparent"}`,
-                background: isActive("/wayfinder/cart") ? wf.paper : "transparent"
+                border: `1px solid ${isActive("/cart") ? wf.ink : "transparent"}`,
+                background: isActive("/cart") ? wf.paper : "transparent"
               }}
             >
               <span style={{ position: "relative", display: "inline-block" }}>
@@ -298,7 +297,7 @@ export function WayfinderShell({ children }: { children: ReactNode }) {
           }}
         >
           <Link
-            href="/wayfinder/search"
+            href="/search"
             style={{
               padding: "10px 14px",
               fontSize: 12,
@@ -315,11 +314,11 @@ export function WayfinderShell({ children }: { children: ReactNode }) {
             All
           </Link>
           {depts.map((dept) => {
-            const active = pathname === `/wayfinder/categories/${dept.slug}`;
+            const active = pathname === `/categories/${dept.slug}`;
             return (
               <Link
                 key={dept.slug}
-                href={`/wayfinder/categories/${dept.slug}`}
+                href={`/categories/${dept.slug}`}
                 style={{
                   padding: "10px 14px",
                   fontSize: 12,
@@ -384,9 +383,9 @@ export function WayfinderShell({ children }: { children: ReactNode }) {
             Shop
           </p>
           {[
-            { label: "Full catalog", href: "/wayfinder/search" },
-            { label: "Departments", href: "/wayfinder" },
-            { label: "Request a quote", href: "/wayfinder/quote" }
+            { label: "Full catalog", href: "/search" },
+            { label: "Departments", href: "/" },
+            { label: "Request a quote", href: "/quote" }
           ].map((link) => (
             <Link
               key={link.href}

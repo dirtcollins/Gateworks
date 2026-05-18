@@ -221,13 +221,13 @@ export function WayfinderNewOrder({ catalogProducts }: { catalogProducts: Produc
           orderNumber: payload.orderNumber || created.orderNumber
         };
         upsertOrder(persisted);
-        router.push(`/wayfinder/admin/orders/${encodeURIComponent(payload.orderId)}`);
+        router.push(`/admin/orders/${encodeURIComponent(payload.orderId)}`);
         return;
       }
     } catch {
       // Supabase not configured / offline — the order still lives in the store.
     }
-    router.push(`/wayfinder/admin/orders/${encodeURIComponent(created.id)}`);
+    router.push(`/admin/orders/${encodeURIComponent(created.id)}`);
   }
 
   return (
@@ -236,7 +236,7 @@ export function WayfinderNewOrder({ catalogProducts }: { catalogProducts: Produc
         eyebrow="Operations"
         title="New order"
         desc="Build a counter order — pick a customer, scan SKUs into the cart, and place it into the warehouse workflow."
-        action={<AdminBtn href="/wayfinder/admin/orders">Cancel</AdminBtn>}
+        action={<AdminBtn href="/admin/orders">Cancel</AdminBtn>}
       />
 
       {error ? <Notice tone="warn">{error}</Notice> : null}

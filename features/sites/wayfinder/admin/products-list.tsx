@@ -175,7 +175,7 @@ export function WayfinderProductsList({ products }: { products: Product[] }) {
         <AdminBtn
           size="sm"
           variant="primary"
-          href={`/wayfinder/admin/products/${encodeURIComponent(product.id)}/edit`}
+          href={`/admin/products/${encodeURIComponent(product.id)}/edit`}
         >
           Edit
         </AdminBtn>
@@ -190,7 +190,7 @@ export function WayfinderProductsList({ products }: { products: Product[] }) {
         title="Products"
         desc="Every catalog SKU on the warehouse floor — review pricing, variants, and stock, then open a product to edit."
         action={
-          <AdminBtn href="/wayfinder/admin/products/new" variant="primary">
+          <AdminBtn href="/admin/products/new" variant="primary">
             <Ico.plus size={14} /> New product
           </AdminBtn>
         }
@@ -257,7 +257,7 @@ export function WayfinderProductsList({ products }: { products: Product[] }) {
           getKey={(product) => product.id}
           empty="No products match the current filters."
           onRowHref={(product) =>
-            `/wayfinder/admin/products/${encodeURIComponent(product.id)}/edit`
+            `/admin/products/${encodeURIComponent(product.id)}/edit`
           }
         />
       </Panel>

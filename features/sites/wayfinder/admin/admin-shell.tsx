@@ -2,8 +2,8 @@
 // aisle-map context rail on top, fixed sidebar nav on the left. Covers Wave 3
 // sections (dashboard, orders, quotes, reports) and links the Wave 4 sections
 // (catalog, products, inventory, customers, warehouse) which arrive later.
-// The app's global chrome is suppressed for /wayfinder/*, so this is the only
-// chrome for /wayfinder/admin/*.
+// The storefront chrome is suppressed for /admin/*, so this is the only
+// chrome for the admin back-office.
 "use client";
 
 import Image from "next/image";
@@ -27,35 +27,35 @@ const NAV: NavGroup[] = [
   {
     heading: "Operations",
     items: [
-      { href: "/wayfinder/admin", label: "Dashboard", code: "OPS", icon: Ico.grid },
-      { href: "/wayfinder/admin/orders", label: "Orders", code: "ORD", icon: Ico.clipboard },
-      { href: "/wayfinder/admin/quotes", label: "Quotes", code: "QTE", icon: Ico.receipt },
-      { href: "/wayfinder/admin/reports", label: "Reports", code: "RPT", icon: Ico.map }
+      { href: "/admin", label: "Dashboard", code: "OPS", icon: Ico.grid },
+      { href: "/admin/orders", label: "Orders", code: "ORD", icon: Ico.clipboard },
+      { href: "/admin/quotes", label: "Quotes", code: "QTE", icon: Ico.receipt },
+      { href: "/admin/reports", label: "Reports", code: "RPT", icon: Ico.map }
     ]
   },
   {
     heading: "Catalog & Stock",
     items: [
       {
-        href: "/wayfinder/admin/catalog",
+        href: "/admin/catalog",
         label: "Catalog",
         code: "CAT",
         icon: Ico.grid
       },
       {
-        href: "/wayfinder/admin/products",
+        href: "/admin/products",
         label: "Products",
         code: "PRD",
         icon: Ico.cart
       },
       {
-        href: "/wayfinder/admin/inventory",
+        href: "/admin/inventory",
         label: "Inventory",
         code: "INV",
         icon: Ico.clipboard
       },
       {
-        href: "/wayfinder/admin/procurement",
+        href: "/admin/procurement",
         label: "Procurement",
         code: "PRC",
         icon: Ico.truck
@@ -66,25 +66,25 @@ const NAV: NavGroup[] = [
     heading: "Floor",
     items: [
       {
-        href: "/wayfinder/admin/customers",
+        href: "/admin/customers",
         label: "Customers",
         code: "CUS",
         icon: Ico.user
       },
       {
-        href: "/wayfinder/admin/pick-tickets",
+        href: "/admin/pick-tickets",
         label: "Pick tickets",
         code: "PTK",
         icon: Ico.clipboard
       },
       {
-        href: "/wayfinder/admin/warehouse",
+        href: "/admin/warehouse",
         label: "Warehouse",
         code: "WHS",
         icon: Ico.truck
       },
       {
-        href: "/wayfinder/admin/demand",
+        href: "/admin/demand",
         label: "Demand",
         code: "DMD",
         icon: Ico.map
@@ -94,12 +94,12 @@ const NAV: NavGroup[] = [
 ];
 
 function isActive(pathname: string, href: string) {
-  if (href === "/wayfinder/admin") return pathname === "/wayfinder/admin";
+  if (href === "/admin") return pathname === "/admin";
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export function WayfinderAdminShell({ children }: { children: ReactNode }) {
-  const pathname = usePathname() || "/wayfinder/admin";
+  const pathname = usePathname() || "/admin";
   const [navOpen, setNavOpen] = useState(false);
   const alerts = useAdminAlerts();
 
@@ -126,7 +126,7 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
         }}
       >
         <Link
-          href="/wayfinder/admin"
+          href="/admin"
           style={{ display: "flex", alignItems: "center", gap: 8 }}
           onClick={() => setNavOpen(false)}
         >
@@ -201,7 +201,7 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
                 // Quotes badge also carries the pending-PO count.
                 const navCount =
                   alertCountForHref(item.href, alerts) +
-                  (item.href === "/wayfinder/admin/quotes"
+                  (item.href === "/admin/quotes"
                     ? alerts.pendingPOs
                     : 0);
                 return (
@@ -276,7 +276,7 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
         <br />
         48 aisles · Bay 7 will-call
         <br />
-        <Link href="/wayfinder" style={{ color: wf.safety }}>
+        <Link href="/" style={{ color: wf.safety }}>
           ← Back to storefront
         </Link>
       </div>

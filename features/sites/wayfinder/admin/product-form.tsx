@@ -239,7 +239,7 @@ export function WayfinderProductForm({
         }
         action={
           <div style={{ display: "flex", gap: 8 }}>
-            <AdminBtn href="/wayfinder/admin/products">
+            <AdminBtn href="/admin/products">
               <Ico.x size={14} /> Cancel
             </AdminBtn>
             <AdminBtn variant="primary" onClick={handleSave} disabled={saving}>

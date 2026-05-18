@@ -241,7 +241,7 @@ export function WayfinderPickTicketDetail({
             another browser session.
           </p>
           <div style={{ marginTop: 14 }}>
-            <AdminBtn href="/wayfinder/admin/pick-tickets" variant="primary">
+            <AdminBtn href="/admin/pick-tickets" variant="primary">
               <Ico.arrowRight size={13} /> Back to pick tickets
             </AdminBtn>
           </div>
@@ -279,7 +279,7 @@ export function WayfinderPickTicketDetail({
         desc={`${order.companyName || order.customerName} · created ${formatWarehouseDate(order.createdAt)}`}
         action={
           <div style={{ display: "flex", gap: 8 }}>
-            <AdminBtn href="/wayfinder/admin/pick-tickets">
+            <AdminBtn href="/admin/pick-tickets">
               <Ico.clipboard size={13} /> Pick queue
             </AdminBtn>
             <AdminBtn variant="primary" onClick={() => completeTicket(false)}>

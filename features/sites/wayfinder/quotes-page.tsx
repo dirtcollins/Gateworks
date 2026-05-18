@@ -116,7 +116,7 @@ export function WayfinderQuotes() {
     });
     setBusy(false);
     if (result.quote) {
-      router.push(`/wayfinder/quotes/${result.quote.id}`);
+      router.push(`/quotes/${result.quote.id}`);
       return;
     }
     setMessage(
@@ -351,7 +351,7 @@ export function WayfinderQuotes() {
                   </Mono>
                   <div style={{ marginTop: 4 }}>
                     <Link
-                      href={`/wayfinder/quotes/${quote.id}`}
+                      href={`/quotes/${quote.id}`}
                       style={{ fontSize: 15, fontWeight: 800, color: wf.ink }}
                     >
                       {quote.customerName || "Untitled quote"}
@@ -398,7 +398,7 @@ export function WayfinderQuotes() {
                 <div
                   style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}
                 >
-                  <Btn size="xs" variant="primary" href={`/wayfinder/quotes/${quote.id}`}>
+                  <Btn size="xs" variant="primary" href={`/quotes/${quote.id}`}>
                     Open
                   </Btn>
                   {!converted ? (

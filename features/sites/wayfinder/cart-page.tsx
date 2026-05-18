@@ -170,7 +170,7 @@ export function WayfinderCart() {
           <p style={{ fontSize: 13, color: wf.steel, margin: "8px 0 18px" }}>
             Add hardware, tube, fence, or welding supply to stage a will-call order.
           </p>
-          <Btn variant="primary" href="/wayfinder/search">
+          <Btn variant="primary" href="/search">
             Browse the catalog <Ico.arrowRight size={14} />
           </Btn>
         </Card>
@@ -204,7 +204,7 @@ export function WayfinderCart() {
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <Link
-                      href={`/wayfinder/products/${item.productId}`}
+                      href={`/products/${item.productId}`}
                       style={{
                         fontSize: 15,
                         fontWeight: 800,
@@ -305,10 +305,10 @@ export function WayfinderCart() {
                 </span>
               </div>
               <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
-                <Btn variant="primary" href="/wayfinder/checkout" block style={{ height: 48 }}>
+                <Btn variant="primary" href="/checkout" block style={{ height: 48 }}>
                   Proceed to checkout <Ico.arrowRight size={14} />
                 </Btn>
-                <Btn variant="ghost" href="/wayfinder/search" block size="sm">
+                <Btn variant="ghost" href="/search" block size="sm">
                   Keep shopping
                 </Btn>
               </div>

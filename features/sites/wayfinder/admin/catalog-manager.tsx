@@ -201,7 +201,7 @@ export function WayfinderCatalogManager({ products }: { products: Product[] }) {
         title="Catalog manager"
         desc="Merchandising overview by category, plus the steel CWT pricing rate that feeds CWT-calculated tubing variants."
         action={
-          <AdminBtn href="/wayfinder/admin/products" variant="primary">
+          <AdminBtn href="/admin/products" variant="primary">
             <Ico.cart size={14} /> Manage products
           </AdminBtn>
         }

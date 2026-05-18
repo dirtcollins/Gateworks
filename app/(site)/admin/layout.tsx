@@ -1,7 +1,7 @@
-// Wayfinder admin — back-office layout. Wraps every /wayfinder/admin/* route in
+// Wayfinder admin — back-office layout. Wraps every /admin/* route in
 // the operations-console shell (black aisle-map context rail + sidebar nav).
-// The storefront shell does NOT wrap these routes; this layout is nested inside
-// app/wayfinder/layout.tsx, so it replaces the storefront chrome for the admin.
+// This layout is nested inside the (site) route-group layout, so it replaces
+// the storefront chrome for the admin.
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { WayfinderAdminShell } from "@/features/sites/wayfinder/admin/admin-shell";

@@ -242,7 +242,7 @@ export function WayfinderOrdersList() {
             <AdminBtn
               size="sm"
               variant="primary"
-              href={`/wayfinder/admin/orders/${encodeURIComponent(o.id)}`}
+              href={`/admin/orders/${encodeURIComponent(o.id)}`}
             >
               Open
             </AdminBtn>
@@ -263,7 +263,7 @@ export function WayfinderOrdersList() {
             <AdminBtn onClick={exportCsv}>
               <Ico.receipt size={14} /> Export CSV
             </AdminBtn>
-            <AdminBtn href="/wayfinder/admin/orders/new" variant="primary">
+            <AdminBtn href="/admin/orders/new" variant="primary">
               <Ico.plus size={14} /> New order
             </AdminBtn>
           </div>

@@ -203,7 +203,7 @@ export function WayfinderQuotesList() {
     });
     setBusy(false);
     if (result.quote) {
-      router.push(`/wayfinder/admin/quotes/${encodeURIComponent(result.quote.id)}`);
+      router.push(`/admin/quotes/${encodeURIComponent(result.quote.id)}`);
     } else {
       setMessage("Could not create the quote — Supabase is not configured.");
     }
@@ -241,7 +241,7 @@ export function WayfinderQuotesList() {
     });
     setBusy(false);
     if (result.quote) {
-      router.push(`/wayfinder/admin/quotes/${encodeURIComponent(result.quote.id)}`);
+      router.push(`/admin/quotes/${encodeURIComponent(result.quote.id)}`);
     } else {
       setMessage("Could not start a quote from this template.");
     }
@@ -367,7 +367,7 @@ export function WayfinderQuotesList() {
           <AdminBtn
             size="sm"
             variant="primary"
-            href={`/wayfinder/admin/quotes/${encodeURIComponent(q.id)}`}
+            href={`/admin/quotes/${encodeURIComponent(q.id)}`}
           >
             Open
           </AdminBtn>
@@ -471,7 +471,7 @@ export function WayfinderQuotesList() {
             ) : null}
             <AdminBtn
               size="sm"
-              href={`/wayfinder/admin/orders/${encodeURIComponent(o.id)}`}
+              href={`/admin/orders/${encodeURIComponent(o.id)}`}
             >
               Order
             </AdminBtn>

@@ -73,9 +73,9 @@ export function WayfinderCategory({
           letterSpacing: "0.04em"
         }}
       >
-        <Link href="/wayfinder">Home</Link>
+        <Link href="/">Home</Link>
         <span style={{ margin: "0 8px", color: wf.rail }}>/</span>
-        <Link href="/wayfinder/search">Catalog</Link>
+        <Link href="/search">Catalog</Link>
         <span style={{ margin: "0 8px", color: wf.rail }}>/</span>
         <span style={{ color: wf.ink }}>{category.name}</span>
       </nav>
@@ -166,7 +166,7 @@ export function WayfinderCategory({
               })}
             </div>
           </div>
-          <Btn href="/wayfinder/search" variant="default" size="sm" block>
+          <Btn href="/search" variant="default" size="sm" block>
             <Ico.grid size={14} /> All departments
           </Btn>
         </aside>

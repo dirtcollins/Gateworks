@@ -1,7 +1,7 @@
-// Wayfinder — standalone storefront. This layout wraps every /wayfinder/*
-// route in the Wayfinder shell (black aisle-map context bar, header with nav +
-// search + cart, aisle-coded department strip, footer). The app's global
-// sidebar is suppressed for /wayfinder routes, so this provides all chrome.
+// Wayfinder — standalone storefront. This route-group layout wraps every
+// storefront route in the Wayfinder shell (black aisle-map context bar, header
+// with nav + search + cart, aisle-coded department strip, footer). The
+// storefront provides all of its own chrome.
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { WayfinderShell } from "@/features/sites/wayfinder/shell";

@@ -40,8 +40,8 @@ function HeroSearch() {
         const trimmed = query.trim();
         router.push(
           trimmed
-            ? `/wayfinder/search?q=${encodeURIComponent(trimmed)}`
-            : "/wayfinder/search"
+            ? `/search?q=${encodeURIComponent(trimmed)}`
+            : "/search"
         );
       }}
       style={{
@@ -135,7 +135,7 @@ function Rail({
             {title}
           </h2>
         </div>
-        <Btn href="/wayfinder/search" variant="ghost" size="sm">
+        <Btn href="/search" variant="ghost" size="sm">
           View catalog <Ico.arrowRight size={14} />
         </Btn>
       </div>
@@ -247,7 +247,7 @@ export function WayfinderHome() {
           {depts.map((dept) => (
             <Link
               key={dept.slug}
-              href={`/wayfinder/categories/${dept.slug}`}
+              href={`/categories/${dept.slug}`}
               style={{ background: "#fff", padding: 18, display: "grid", gap: 8 }}
             >
               <div
@@ -320,11 +320,11 @@ export function WayfinderHome() {
               <StockTag product={feature} />
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
-              <Btn href={`/wayfinder/products/${feature.slug}`} variant="primary">
+              <Btn href={`/products/${feature.slug}`} variant="primary">
                 <Ico.arrowRight size={16} /> View product
               </Btn>
               <Btn
-                href={`/wayfinder/categories/${feature.category.slug}`}
+                href={`/categories/${feature.category.slug}`}
                 variant="default"
               >
                 <Ico.grid size={14} /> Browse {feature.category.name}

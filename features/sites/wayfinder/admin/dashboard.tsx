@@ -153,10 +153,10 @@ export function WayfinderAdminDashboard({ productCount, lowStockCount }: Dashboa
         desc="Live snapshot of the warehouse — orders in flight, will-call queue, quote pipeline, and catalog stock."
         action={
           <div style={{ display: "flex", gap: 8 }}>
-            <AdminBtn href="/wayfinder/admin/orders/new" variant="primary">
+            <AdminBtn href="/admin/orders/new" variant="primary">
               <Ico.plus size={14} /> New order
             </AdminBtn>
-            <AdminBtn href="/wayfinder/admin/orders">Open orders</AdminBtn>
+            <AdminBtn href="/admin/orders">Open orders</AdminBtn>
           </div>
         }
       />
@@ -212,7 +212,7 @@ export function WayfinderAdminDashboard({ productCount, lowStockCount }: Dashboa
         <Panel
           title="Recent orders"
           meta={loaded ? `${orders.length} total` : "Loading…"}
-          action={<AdminBtn href="/wayfinder/admin/orders" size="sm">View all</AdminBtn>}
+          action={<AdminBtn href="/admin/orders" size="sm">View all</AdminBtn>}
           pad={false}
         >
           <DataTable
@@ -220,7 +220,7 @@ export function WayfinderAdminDashboard({ productCount, lowStockCount }: Dashboa
             rows={recent}
             getKey={(o) => o.id}
             empty={loaded ? "No orders yet — create one to get started." : "Loading orders…"}
-            onRowHref={(o) => `/wayfinder/admin/orders/${encodeURIComponent(o.id)}`}
+            onRowHref={(o) => `/admin/orders/${encodeURIComponent(o.id)}`}
           />
         </Panel>
 
@@ -243,13 +243,13 @@ export function WayfinderAdminDashboard({ productCount, lowStockCount }: Dashboa
           </Panel>
           <Panel title="Shortcuts">
             <div style={{ display: "grid", gap: 8 }}>
-              <AdminBtn href="/wayfinder/admin/orders/new" block>
+              <AdminBtn href="/admin/orders/new" block>
                 <Ico.plus size={14} /> New order
               </AdminBtn>
-              <AdminBtn href="/wayfinder/admin/quotes" block>
+              <AdminBtn href="/admin/quotes" block>
                 <Ico.receipt size={14} /> Quotes pipeline
               </AdminBtn>
-              <AdminBtn href="/wayfinder/admin/reports" block>
+              <AdminBtn href="/admin/reports" block>
                 <Ico.map size={14} /> Financial reports
               </AdminBtn>
             </div>
