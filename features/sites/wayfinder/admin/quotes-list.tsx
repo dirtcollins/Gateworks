@@ -563,7 +563,7 @@ export function WayfinderQuotesList() {
               flexWrap: "wrap"
             }}
           >
-            <div style={{ width: 320, maxWidth: "60vw" }}>
+            <div style={{ width: 320, maxWidth: "100%" }}>
               <SelectInput
                 value={templateChoice}
                 onChange={(event) => setTemplateChoice(event.target.value)}
@@ -606,7 +606,7 @@ export function WayfinderQuotesList() {
             : "Loading…"
         }
         action={
-          <div style={{ width: 260, maxWidth: "48vw" }}>
+          <div style={{ width: 260, maxWidth: "100%" }}>
             <TextInput
               value={query}
               onChange={(event) => setQuery(event.target.value)}

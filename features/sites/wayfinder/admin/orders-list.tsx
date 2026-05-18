@@ -274,7 +274,7 @@ export function WayfinderOrdersList() {
         title="Order queue"
         meta={loaded ? `${filtered.length} of ${orders.length} orders` : "Loading…"}
         action={
-          <div style={{ width: 260, maxWidth: "48vw" }}>
+          <div style={{ width: 260, maxWidth: "100%" }}>
             <TextInput
               value={query}
               onChange={(event) => setQuery(event.target.value)}

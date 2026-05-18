@@ -1,8 +1,7 @@
-// Wayfinder admin — shared back-office primitives. Reuses the storefront kit
-// (palette, fonts, icons, fmt) and adds operations-console pieces: KPI tiles,
-// section panels, data tables, status pills, toolbar. The admin theme keeps
-// the warm paper/bone palette but leans on the black aisle-map context bar as
-// a stationary operations rail.
+// Wayfinder admin — shared back-office primitives. Every admin page is built
+// from these, so their styling IS the admin design system: a calm warm-paper
+// surface, white panels lifted with a soft shadow, a consistent type scale, and
+// uniform spacing. Refining anything here propagates across the whole console.
 "use client";
 
 import Link from "next/link";
@@ -10,6 +9,11 @@ import type { CSSProperties, ReactNode } from "react";
 import { Ico, Mono, monoFont, wf } from "../kit";
 
 export { Ico, Mono, monoFont, wf };
+
+// ─── Design tokens ───────────────────────────────────────────────────────────
+// Soft elevation so panels read as surfaces on the paper background rather than
+// flat outlined boxes — the single biggest lever away from a "plain" feel.
+const ELEVATION = "0 1px 2px rgba(28,22,10,0.05), 0 6px 16px rgba(28,22,10,0.05)";
 
 // ─── Section panel ───────────────────────────────────────────────────────────
 export function Panel({
@@ -28,7 +32,14 @@ export function Panel({
   pad?: boolean;
 }) {
   return (
-    <section style={{ background: "#fff", border: `1px solid ${wf.rail}`, ...style }}>
+    <section
+      style={{
+        background: "#fff",
+        border: `1px solid ${wf.hairline}`,
+        boxShadow: ELEVATION,
+        ...style
+      }}
+    >
       {title || action ? (
         <header
           style={{
@@ -36,9 +47,9 @@ export function Panel({
             alignItems: "center",
             justifyContent: "space-between",
             gap: 12,
-            padding: "12px 16px",
-            borderBottom: `1px solid ${wf.hairline}`,
-            background: wf.bone
+            flexWrap: "wrap",
+            padding: "13px 18px",
+            borderBottom: `1px solid ${wf.hairline}`
           }}
         >
           <div style={{ minWidth: 0 }}>
@@ -48,7 +59,7 @@ export function Panel({
                   margin: 0,
                   fontSize: 12,
                   fontWeight: 800,
-                  letterSpacing: "0.1em",
+                  letterSpacing: "0.09em",
                   textTransform: "uppercase",
                   color: wf.ink
                 }}
@@ -57,13 +68,13 @@ export function Panel({
               </p>
             ) : null}
             {meta ? (
-              <p style={{ margin: "2px 0 0", fontSize: 12, color: wf.muted }}>{meta}</p>
+              <p style={{ margin: "3px 0 0", fontSize: 12, color: wf.muted }}>{meta}</p>
             ) : null}
           </div>
-          {action ? <div style={{ flexShrink: 0 }}>{action}</div> : null}
+          {action ? <div style={{ flexShrink: 0, maxWidth: "100%" }}>{action}</div> : null}
         </header>
       ) : null}
-      <div style={pad ? { padding: 16 } : undefined}>{children}</div>
+      <div style={pad ? { padding: 18 } : undefined}>{children}</div>
     </section>
   );
 }
@@ -86,11 +97,12 @@ export function Kpi({
     <div
       style={{
         background: "#fff",
-        border: `1px solid ${wf.rail}`,
+        border: `1px solid ${wf.hairline}`,
         borderTop: `3px solid ${accent}`,
-        padding: "14px 16px",
+        boxShadow: ELEVATION,
+        padding: "15px 17px",
         display: "grid",
-        gap: 6
+        gap: 7
       }}
     >
       <p
@@ -109,10 +121,11 @@ export function Kpi({
         style={{
           margin: 0,
           fontFamily: monoFont,
-          fontSize: 26,
+          fontSize: 27,
           fontWeight: 700,
           color: wf.ink,
-          lineHeight: 1.1
+          lineHeight: 1.1,
+          letterSpacing: "-0.01em"
         }}
       >
         {value}
@@ -186,7 +199,7 @@ function adminBtnStyle(
     justifyContent: "center",
     gap: 7,
     height: h,
-    padding: size === "sm" ? "0 11px" : "0 15px",
+    padding: size === "sm" ? "0 12px" : "0 16px",
     fontSize: size === "sm" ? 11 : 12,
     fontWeight: 800,
     letterSpacing: "0.05em",
@@ -196,6 +209,7 @@ function adminBtnStyle(
     color: wf.ink,
     cursor: "pointer",
     whiteSpace: "nowrap",
+    transition: "background 120ms ease, border-color 120ms ease, box-shadow 120ms ease",
     width: block ? "100%" : undefined
   };
   if (variant === "primary") {
@@ -219,9 +233,10 @@ export function AdminBtn({
   style
 }: AdminBtnProps) {
   const merged = { ...adminBtnStyle(variant, size, block), ...style };
+  const className = `wf-abtn wf-abtn-${variant}`;
   if (href && !disabled) {
     return (
-      <Link href={href} style={merged} title={title} onClick={onClick}>
+      <Link href={href} className={className} style={merged} title={title} onClick={onClick}>
         {children}
       </Link>
     );
@@ -229,10 +244,11 @@ export function AdminBtn({
   return (
     <button
       type={type}
+      className={className}
       onClick={onClick}
       disabled={disabled}
       title={title}
-      style={{ ...merged, opacity: disabled ? 0.5 : 1 }}
+      style={{ ...merged, opacity: disabled ? 0.45 : 1 }}
     >
       {children}
     </button>
@@ -249,7 +265,8 @@ const fieldBase: CSSProperties = {
   color: wf.ink,
   fontSize: 13,
   fontFamily: "inherit",
-  outline: "none"
+  outline: "none",
+  transition: "border-color 120ms ease, box-shadow 120ms ease"
 };
 
 export function Field({
@@ -280,24 +297,35 @@ export function Field({
 }
 
 export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  const { style, ...rest } = props;
-  return <input {...rest} style={{ ...fieldBase, ...style }} />;
+  const { style, className, ...rest } = props;
+  return (
+    <input
+      {...rest}
+      className={className ? `wf-field ${className}` : "wf-field"}
+      style={{ ...fieldBase, ...style }}
+    />
+  );
 }
 
 export function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  const { style, children, ...rest } = props;
+  const { style, className, children, ...rest } = props;
   return (
-    <select {...rest} style={{ ...fieldBase, ...style }}>
+    <select
+      {...rest}
+      className={className ? `wf-field ${className}` : "wf-field"}
+      style={{ ...fieldBase, ...style }}
+    >
       {children}
     </select>
   );
 }
 
 export function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  const { style, ...rest } = props;
+  const { style, className, ...rest } = props;
   return (
     <textarea
       {...rest}
+      className={className ? `wf-field ${className}` : "wf-field"}
       style={{
         ...fieldBase,
         height: undefined,
@@ -336,7 +364,7 @@ export function DataTable<T>({
     return (
       <div
         style={{
-          padding: "36px 16px",
+          padding: "44px 16px",
           textAlign: "center",
           color: wf.muted,
           fontSize: 13,
@@ -355,9 +383,10 @@ export function DataTable<T>({
             {columns.map((col) => (
               <th
                 key={col.key}
+                scope="col"
                 style={{
                   textAlign: col.align || "left",
-                  padding: "9px 14px",
+                  padding: "10px 16px",
                   fontSize: 10,
                   fontWeight: 800,
                   letterSpacing: "0.1em",
@@ -374,15 +403,16 @@ export function DataTable<T>({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {rows.map((row, index) => {
             const href = onRowHref?.(row);
+            const last = index === rows.length - 1;
             const content = columns.map((col) => (
               <td
                 key={col.key}
                 style={{
                   textAlign: col.align || "left",
-                  padding: "11px 14px",
-                  borderBottom: `1px solid ${wf.hairline}`,
+                  padding: "12px 16px",
+                  borderBottom: last ? undefined : `1px solid ${wf.hairline}`,
                   color: wf.ink,
                   verticalAlign: "middle"
                 }}
@@ -393,11 +423,11 @@ export function DataTable<T>({
             return (
               <tr
                 key={getKey(row)}
+                className="wf-trow"
                 style={href ? { cursor: "pointer" } : undefined}
                 onClick={
                   href
                     ? (event) => {
-                        // ignore clicks that originate from interactive controls
                         const target = event.target as HTMLElement;
                         if (target.closest("a,button,select,input")) return;
                         window.location.assign(href);
@@ -434,8 +464,9 @@ export function FilterChips<T extends string>({
             key={opt.id}
             type="button"
             onClick={() => onChange(opt.id)}
+            className="wf-abtn"
             style={{
-              padding: "5px 11px",
+              padding: "6px 12px",
               fontSize: 11,
               fontWeight: 800,
               letterSpacing: "0.05em",
@@ -443,7 +474,8 @@ export function FilterChips<T extends string>({
               border: `1px solid ${active ? wf.ink : wf.rail}`,
               background: active ? wf.ink : "#fff",
               color: active ? "#fff" : wf.steel,
-              cursor: "pointer"
+              cursor: "pointer",
+              transition: "background 120ms ease, border-color 120ms ease"
             }}
           >
             {opt.label}
@@ -473,7 +505,9 @@ export function PageHead({
         alignItems: "flex-end",
         justifyContent: "space-between",
         gap: 16,
-        flexWrap: "wrap"
+        flexWrap: "wrap",
+        paddingBottom: 4,
+        borderBottom: `1px solid ${wf.hairline}`
       }}
     >
       <div style={{ minWidth: 0 }}>
@@ -493,20 +527,21 @@ export function PageHead({
         ) : null}
         <h1
           style={{
-            margin: "4px 0 0",
-            fontSize: 24,
+            margin: "5px 0 0",
+            fontSize: 25,
             fontWeight: 900,
-            letterSpacing: "-0.01em",
-            color: wf.ink
+            letterSpacing: "-0.018em",
+            color: wf.ink,
+            lineHeight: 1.15
           }}
         >
           {title}
         </h1>
         {desc ? (
-          <p style={{ margin: "6px 0 0", fontSize: 13, color: wf.muted, maxWidth: 560 }}>{desc}</p>
+          <p style={{ margin: "6px 0 0", fontSize: 13, color: wf.muted, maxWidth: 580 }}>{desc}</p>
         ) : null}
       </div>
-      {action ? <div style={{ flexShrink: 0 }}>{action}</div> : null}
+      {action ? <div style={{ flexShrink: 0, paddingBottom: 2 }}>{action}</div> : null}
     </div>
   );
 }
@@ -521,16 +556,17 @@ export function Notice({
 }) {
   const c =
     tone === "warn"
-      ? { bg: wf.amber, bd: wf.amberDeep, fg: "#92500a" }
+      ? { bg: "#fdf4e3", bd: wf.amberDeep, fg: "#92500a", bar: wf.safety }
       : tone === "good"
-        ? { bg: "#e7f0ea", bd: "#bcd6c6", fg: wf.pineDeep }
-        : { bg: wf.bone, bd: wf.rail, fg: wf.steel };
+        ? { bg: "#e7f0ea", bd: "#bcd6c6", fg: wf.pineDeep, bar: wf.pine }
+        : { bg: wf.bone, bd: wf.rail, fg: wf.steel, bar: wf.steel };
   return (
     <div
       style={{
-        padding: "10px 14px",
+        padding: "11px 14px",
         background: c.bg,
         border: `1px solid ${c.bd}`,
+        borderLeft: `3px solid ${c.bar}`,
         color: c.fg,
         fontSize: 12,
         fontWeight: 600

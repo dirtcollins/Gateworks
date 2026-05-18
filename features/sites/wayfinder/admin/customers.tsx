@@ -412,7 +412,7 @@ export function WayfinderCustomers() {
               : "Loading order history…"
           }
           action={
-            <div style={{ width: 240, maxWidth: "44vw" }}>
+            <div style={{ width: 240, maxWidth: "100%" }}>
               <TextInput
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}

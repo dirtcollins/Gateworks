@@ -328,7 +328,7 @@ export function WayfinderProcurementList() {
         title="Inbound purchase orders"
         meta={ready ? `${filtered.length} of ${orders.length} POs` : "Loading…"}
         action={
-          <div style={{ width: 260, maxWidth: "48vw" }}>
+          <div style={{ width: 260, maxWidth: "100%" }}>
             <TextInput
               value={query}
               onChange={(event) => setQuery(event.target.value)}

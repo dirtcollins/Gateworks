@@ -213,7 +213,7 @@ export function WayfinderProductsList({ products }: { products: Product[] }) {
         title="Catalog list"
         meta={`${filtered.length} of ${products.length} products`}
         action={
-          <div style={{ width: 260, maxWidth: "48vw" }}>
+          <div style={{ width: 260, maxWidth: "100%" }}>
             <TextInput
               value={query}
               onChange={(event) => setQuery(event.target.value)}

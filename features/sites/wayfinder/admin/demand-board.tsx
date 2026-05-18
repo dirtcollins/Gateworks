@@ -359,7 +359,7 @@ export function WayfinderDemandBoard({ metrics }: { metrics: DemandMetrics[] }) 
         title="Purchasing workbench"
         meta={`${filtered.length} of ${metrics.length} SKUs`}
         action={
-          <div style={{ width: 240, maxWidth: "44vw" }}>
+          <div style={{ width: 240, maxWidth: "100%" }}>
             <TextInput
               value={query}
               onChange={(event) => setQuery(event.target.value)}

@@ -447,7 +447,7 @@ export function WayfinderInventoryBoard({
         title="Stock ledger"
         meta={`${filtered.length} of ${items.length} SKUs`}
         action={
-          <div style={{ width: 260, maxWidth: "48vw" }}>
+          <div style={{ width: 260, maxWidth: "100%" }}>
             <TextInput
               value={query}
               onChange={(event) => setQuery(event.target.value)}

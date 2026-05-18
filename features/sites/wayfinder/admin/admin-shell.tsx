@@ -431,6 +431,13 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
           transition: background 120ms ease, color 120ms ease;
         }
         .wf-foot-link:hover { background: ${wf.ink}; color: #fff; border-color: ${wf.ink}; }
+        .wf-trow { transition: background 100ms ease; }
+        .wf-trow:hover { background: ${wf.bone}; }
+        .wf-field:focus { border-color: ${wf.ink}; box-shadow: 0 0 0 3px rgba(17,17,17,0.07); }
+        .wf-abtn-default:hover, .wf-abtn-ghost:hover { background: ${wf.bone}; border-color: ${wf.steel}; }
+        .wf-abtn-primary:hover { background: #2c2c2c; }
+        .wf-abtn-danger:hover { background: #fbeae8; }
+        .wf-abtn:disabled { cursor: default; box-shadow: none; }
         @media (max-width: 880px) {
           .wf-admin-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 50; display: none; height: 100vh; }
           .wf-admin-navtoggle { display: inline-flex !important; }
