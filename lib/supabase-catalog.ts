@@ -226,6 +226,28 @@ export async function fetchSupabaseProducts() {
     .filter((product) => product.variants.length);
 }
 
+// All catalog categories, including ones with no active products yet — used by
+// the admin product wizard so a new product can land in any category.
+export async function fetchCategories(): Promise<
+  { id: string; name: string; slug: string }[]
+> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("categories")
+    .select("id, name, slug")
+    .order("name", { ascending: true });
+
+  if (error) {
+    if (shouldRequireSupabase()) throw error;
+    console.warn("Supabase categories unavailable.", error.message);
+    return [];
+  }
+
+  return (data || []) as { id: string; name: string; slug: string }[];
+}
+
 export async function fetchSupabaseProduct(slug: string) {
   const supabase = getSupabaseClient();
   if (!supabase) {

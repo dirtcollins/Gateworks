@@ -505,3 +505,213 @@ export async function PATCH(request: NextRequest) {
     );
   }
 }
+
+// ─── Product creation ────────────────────────────────────────────────────────
+type CreateVariantInput = {
+  sku?: string;
+  price?: number | string;
+  cost?: number | string;
+  inventoryQuantity?: number | string;
+  inventoryStatus?: "in_stock" | "out_of_stock";
+  length?: string;
+  material?: string;
+  finish?: string;
+  color?: string;
+};
+
+type CreateProductBody = {
+  product?: {
+    title?: string;
+    description?: string;
+    details?: string[];
+    specifications?: Record<string, string>;
+  };
+  categoryId?: string;
+  newCategoryName?: string;
+  variants?: CreateVariantInput[];
+  images?: Array<{ url?: string; alt?: string }>;
+};
+
+function slugify(value: string) {
+  return (
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "item"
+  );
+}
+
+async function uniqueSlug(admin: SupabaseClient, table: string, base: string) {
+  let candidate = base;
+  for (let attempt = 2; attempt < 60; attempt += 1) {
+    const { data } = await admin
+      .from(table)
+      .select("id")
+      .eq("slug", candidate)
+      .maybeSingle();
+    if (!data) return candidate;
+    candidate = `${base}-${attempt}`;
+  }
+  return `${base}-${Date.now()}`;
+}
+
+function badRequest(reason: string) {
+  return NextResponse.json({ ok: false, reason }, { status: 400 });
+}
+
+export async function POST(request: NextRequest) {
+  const auth = await authorizeAdminRequest(request);
+  if (!auth.ok) return auth.response;
+  const admin = getSupabaseAdminClient();
+  if (!admin) {
+    return NextResponse.json(
+      {
+        ok: false,
+        reason: "Supabase service role is not configured. Product was not created."
+      },
+      { status: 503 }
+    );
+  }
+
+  const body = (await request.json()) as CreateProductBody;
+  const title = (body.product?.title || "").trim();
+  if (!title) return badRequest("Give the product a name.");
+
+  const variantInputs = (body.variants || []).filter((variant) =>
+    (variant.sku || "").trim()
+  );
+  if (!variantInputs.length) {
+    return badRequest("Add at least one variant with a SKU and price.");
+  }
+  for (const variant of variantInputs) {
+    const price = Number(variant.price);
+    if (!Number.isFinite(price) || price < 0) {
+      return badRequest(`Enter a valid price for SKU ${variant.sku}.`);
+    }
+  }
+
+  try {
+    // 1. Resolve the category — an existing id, or a freshly created one.
+    let categoryId = asUuid(body.categoryId);
+    if (!categoryId) {
+      const newName = (body.newCategoryName || "").trim();
+      if (!newName) return badRequest("Pick a category or name a new one.");
+      const categorySlug = await uniqueSlug(admin, "categories", slugify(newName));
+      const { data: category, error: categoryError } = await admin
+        .from("categories")
+        .insert({ name: newName, slug: categorySlug })
+        .select("id")
+        .single();
+      if (categoryError) throw categoryError;
+      categoryId = category.id as string;
+    }
+
+    // 2. Reject duplicate SKUs up front so the operator gets a clear message.
+    const skus = variantInputs.map((variant) => (variant.sku as string).trim());
+    const { data: existingSkus, error: skuError } = await admin
+      .from("product_variants")
+      .select("sku")
+      .in("sku", skus);
+    if (skuError) throw skuError;
+    if (existingSkus && existingSkus.length) {
+      return badRequest(
+        `SKU already in use: ${existingSkus
+          .map((row: { sku: string }) => row.sku)
+          .join(", ")}.`
+      );
+    }
+
+    // 3. Create the product row.
+    const productSlug = await uniqueSlug(admin, "products", slugify(title));
+    const { data: product, error: productError } = await admin
+      .from("products")
+      .insert({
+        category_id: categoryId,
+        title,
+        slug: productSlug,
+        description: (body.product?.description || "").trim(),
+        details: Array.isArray(body.product?.details) ? body.product?.details : [],
+        specifications:
+          body.product?.specifications &&
+          typeof body.product.specifications === "object"
+            ? body.product.specifications
+            : {},
+        status: "active"
+      })
+      .select("id")
+      .single();
+    if (productError) throw productError;
+    const productId = product.id as string;
+
+    // 4. Create variants — retry without `cost` if that column is absent.
+    const variantRows = variantInputs.map((variant) => ({
+      product_id: productId,
+      sku: (variant.sku as string).trim(),
+      price: Number(variant.price) || 0,
+      cost:
+        variant.cost === undefined || variant.cost === ""
+          ? null
+          : Number(variant.cost) || 0,
+      pricing_method: "manual",
+      inventory_status:
+        variant.inventoryStatus === "out_of_stock" ? "out_of_stock" : "in_stock",
+      inventory_quantity: Math.max(
+        0,
+        Math.floor(Number(variant.inventoryQuantity) || 0)
+      ),
+      length: variant.length?.trim() || null,
+      material: variant.material?.trim() || null,
+      finish: variant.finish?.trim() || null,
+      color: variant.color?.trim() || null
+    }));
+
+    let variantError = (await admin.from("product_variants").insert(variantRows))
+      .error;
+    if (variantError && variantError.code === "42703") {
+      const withoutCost = variantRows.map((row) => {
+        const next = { ...row };
+        delete (next as { cost?: unknown }).cost;
+        return next;
+      });
+      variantError = (await admin.from("product_variants").insert(withoutCost)).error;
+    }
+    if (variantError) {
+      // Roll the product back so a failed variant insert leaves nothing behind.
+      await admin.from("products").delete().eq("id", productId);
+      throw variantError;
+    }
+
+    // 5. Optional images.
+    const images = (body.images || []).filter((image) => (image.url || "").trim());
+    for (let index = 0; index < images.length; index += 1) {
+      const image = images[index];
+      const payload = buildProductImagePayload(productId, {
+        url: (image.url as string).trim(),
+        alt: image.alt?.trim() || title,
+        sort_order: index
+      });
+      await addProductImageWithFallback(admin, payload);
+    }
+
+    await writeAuditLog(
+      "create_product",
+      productId,
+      { title, slug: productSlug },
+      auth.actorId
+    );
+    return NextResponse.json({ ok: true, productId, slug: productSlug });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        reason:
+          error instanceof Error
+            ? error.message
+            : "Unknown product creation error."
+      },
+      { status: 500 }
+    );
+  }
+}

@@ -1,23 +1,16 @@
-// Wayfinder admin — new product route. Server component: provides the catalog
-// category list for the create form.
-import { WayfinderProductForm } from "@/features/sites/wayfinder/admin/product-form";
-import { categories, products as fallbackProducts } from "@/lib/catalog";
-import { fetchSupabaseProducts } from "@/lib/supabase-catalog";
+// Wayfinder admin — new product/service route. Server component: loads the
+// full category list and renders the guided creation wizard, which persists
+// via POST /api/admin/products.
+import { WayfinderProductWizard } from "@/features/sites/wayfinder/admin/product-wizard";
+import { fetchCategories } from "@/lib/supabase-catalog";
 
 export const metadata = {
-  title: "New product"
+  title: "Add a product"
 };
 
 export const dynamic = "force-dynamic";
 
 export default async function WayfinderAdminNewProductPage() {
-  const catalogProducts = (await fetchSupabaseProducts()) || fallbackProducts;
-  const categoryList = catalogProducts.length
-    ? Array.from(
-        new Map(
-          catalogProducts.map((product) => [product.category.slug, product.category])
-        ).values()
-      )
-    : categories;
-  return <WayfinderProductForm mode="create" categories={categoryList} />;
+  const categories = await fetchCategories();
+  return <WayfinderProductWizard categories={categories} />;
 }
