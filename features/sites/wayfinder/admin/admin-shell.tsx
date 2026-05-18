@@ -28,7 +28,8 @@ const NAV: NavGroup[] = [
       { href: "/admin", label: "Dashboard", icon: Ico.grid },
       { href: "/admin/orders", label: "Orders", icon: Ico.clipboard },
       { href: "/admin/quotes", label: "Quotes", icon: Ico.receipt },
-      { href: "/admin/reports", label: "Reports", icon: Ico.map }
+      { href: "/admin/reports", label: "Reports", icon: Ico.map },
+      { href: "/admin/dev-tasks", label: "Dev Tasks", icon: Ico.star }
     ]
   },
   {

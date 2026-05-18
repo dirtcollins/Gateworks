@@ -79,6 +79,18 @@ input[type="number"] {
   background: rgba(47, 111, 78, 0.18);
 }
 
+@media (max-width: 900px) {
+  .wf-devtask-controls,
+  .wf-devtask-editgrid,
+  .wf-devtask-detailgrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .wf-devtask-row {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 /* Print: letter-size (8.5 x 11) pages for quotes and invoices. */
 @media print {
   @page {
