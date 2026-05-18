@@ -1,19 +1,16 @@
 // Wayfinder admin — shared back-office primitives. Every admin page is built
-// from these, so their styling IS the admin design system: a calm warm-paper
-// surface, white panels lifted with a soft shadow, a consistent type scale, and
-// uniform spacing. Refining anything here propagates across the whole console.
+// from these, so their styling IS the admin design system: a cool, modern
+// dashboard look (slate neutrals, rounded surfaces, soft elevation) that is
+// deliberately distinct from the warm-paper storefront. The palette lives in
+// admin-theme.ts; refining anything here propagates across the whole console.
 "use client";
 
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
-import { Ico, Mono, monoFont, wf } from "../kit";
+import { Ico, Mono, monoFont } from "../kit";
+import { ELEVATION, RADIUS, RADIUS_SM, wf } from "./admin-theme";
 
 export { Ico, Mono, monoFont, wf };
-
-// ─── Design tokens ───────────────────────────────────────────────────────────
-// Soft elevation so panels read as surfaces on the paper background rather than
-// flat outlined boxes — the single biggest lever away from a "plain" feel.
-const ELEVATION = "0 1px 2px rgba(28,22,10,0.05), 0 6px 16px rgba(28,22,10,0.05)";
 
 // ─── Section panel ───────────────────────────────────────────────────────────
 export function Panel({
@@ -35,8 +32,10 @@ export function Panel({
     <section
       style={{
         background: "#fff",
-        border: `1px solid ${wf.hairline}`,
+        border: `1px solid ${wf.rail}`,
+        borderRadius: RADIUS,
         boxShadow: ELEVATION,
+        overflow: "hidden",
         ...style
       }}
     >
@@ -57,10 +56,9 @@ export function Panel({
               <p
                 style={{
                   margin: 0,
-                  fontSize: 12,
-                  fontWeight: 800,
-                  letterSpacing: "0.09em",
-                  textTransform: "uppercase",
+                  fontSize: 13.5,
+                  fontWeight: 700,
+                  letterSpacing: "-0.006em",
                   color: wf.ink
                 }}
               >
@@ -97,8 +95,9 @@ export function Kpi({
     <div
       style={{
         background: "#fff",
-        border: `1px solid ${wf.hairline}`,
+        border: `1px solid ${wf.rail}`,
         borderTop: `3px solid ${accent}`,
+        borderRadius: RADIUS,
         boxShadow: ELEVATION,
         padding: "15px 17px",
         display: "grid",
@@ -109,10 +108,10 @@ export function Kpi({
         style={{
           margin: 0,
           fontSize: 11,
-          fontWeight: 800,
-          letterSpacing: "0.12em",
+          fontWeight: 700,
+          letterSpacing: "0.1em",
           textTransform: "uppercase",
-          color: wf.steel
+          color: wf.muted
         }}
       >
         {label}
@@ -142,11 +141,11 @@ type PillTone = "neutral" | "open" | "active" | "done" | "warn" | "stop";
 
 const pillColors: Record<PillTone, { fg: string; bg: string; bd: string }> = {
   neutral: { fg: wf.steel, bg: wf.bone, bd: wf.rail },
-  open: { fg: "#1d4ed8", bg: "#eef2ff", bd: "#c7d2fe" },
-  active: { fg: wf.pineDeep, bg: "#e7f0ea", bd: "#bcd6c6" },
+  open: { fg: "#1d4ed8", bg: "#eff4ff", bd: "#c7d6fe" },
+  active: { fg: wf.pineDeep, bg: "#cdfaf2", bd: "#99f0e3" },
   done: { fg: "#fff", bg: wf.pine, bd: wf.pine },
   warn: { fg: "#92500a", bg: wf.amber, bd: wf.amberDeep },
-  stop: { fg: wf.red, bg: "#fbeae8", bd: "#e9c3bf" }
+  stop: { fg: "#b42318", bg: "#fef2f2", bd: "#fecaca" }
 };
 
 export function Pill({ tone = "neutral", children }: { tone?: PillTone; children: ReactNode }) {
@@ -158,10 +157,11 @@ export function Pill({ tone = "neutral", children }: { tone?: PillTone; children
         alignItems: "center",
         gap: 6,
         padding: "3px 9px",
+        borderRadius: 5,
         fontFamily: monoFont,
         fontSize: 10,
         fontWeight: 700,
-        letterSpacing: "0.05em",
+        letterSpacing: "0.04em",
         textTransform: "uppercase",
         color: c.fg,
         background: c.bg,
@@ -199,12 +199,12 @@ function adminBtnStyle(
     justifyContent: "center",
     gap: 7,
     height: h,
-    padding: size === "sm" ? "0 12px" : "0 16px",
-    fontSize: size === "sm" ? 11 : 12,
-    fontWeight: 800,
-    letterSpacing: "0.05em",
-    textTransform: "uppercase",
+    padding: size === "sm" ? "0 12px" : "0 15px",
+    fontSize: size === "sm" ? 12 : 13,
+    fontWeight: 600,
+    letterSpacing: "0",
     border: `1px solid ${wf.rail}`,
+    borderRadius: RADIUS_SM,
     background: "#fff",
     color: wf.ink,
     cursor: "pointer",
@@ -213,10 +213,10 @@ function adminBtnStyle(
     width: block ? "100%" : undefined
   };
   if (variant === "primary") {
-    return { ...base, background: wf.ink, color: "#fff", borderColor: wf.ink, fontWeight: 900 };
+    return { ...base, background: wf.ink, color: "#fff", borderColor: wf.ink, fontWeight: 700 };
   }
   if (variant === "ghost") return { ...base, background: "transparent" };
-  if (variant === "danger") return { ...base, color: wf.red, borderColor: "#e9c3bf" };
+  if (variant === "danger") return { ...base, color: wf.red, borderColor: "#fecaca" };
   return base;
 }
 
@@ -261,6 +261,7 @@ const fieldBase: CSSProperties = {
   height: 38,
   padding: "0 11px",
   border: `1px solid ${wf.rail}`,
+  borderRadius: RADIUS_SM,
   background: "#fff",
   color: wf.ink,
   fontSize: 13,
@@ -282,10 +283,10 @@ export function Field({
         <span
           style={{
             fontSize: 11,
-            fontWeight: 800,
-            letterSpacing: "0.08em",
+            fontWeight: 700,
+            letterSpacing: "0.07em",
             textTransform: "uppercase",
-            color: wf.steel
+            color: wf.muted
           }}
         >
           {label}
@@ -388,10 +389,10 @@ export function DataTable<T>({
                   textAlign: col.align || "left",
                   padding: "10px 16px",
                   fontSize: 10,
-                  fontWeight: 800,
-                  letterSpacing: "0.1em",
+                  fontWeight: 700,
+                  letterSpacing: "0.09em",
                   textTransform: "uppercase",
-                  color: wf.steel,
+                  color: wf.muted,
                   borderBottom: `1px solid ${wf.rail}`,
                   width: col.width,
                   whiteSpace: "nowrap"
@@ -467,10 +468,9 @@ export function FilterChips<T extends string>({
             className="wf-abtn"
             style={{
               padding: "6px 12px",
-              fontSize: 11,
-              fontWeight: 800,
-              letterSpacing: "0.05em",
-              textTransform: "uppercase",
+              fontSize: 12,
+              fontWeight: 600,
+              borderRadius: RADIUS_SM,
               border: `1px solid ${active ? wf.ink : wf.rail}`,
               background: active ? wf.ink : "#fff",
               color: active ? "#fff" : wf.steel,
@@ -506,8 +506,8 @@ export function PageHead({
         justifyContent: "space-between",
         gap: 16,
         flexWrap: "wrap",
-        paddingBottom: 4,
-        borderBottom: `1px solid ${wf.hairline}`
+        paddingBottom: 14,
+        borderBottom: `1px solid ${wf.rail}`
       }}
     >
       <div style={{ minWidth: 0 }}>
@@ -516,10 +516,10 @@ export function PageHead({
             style={{
               margin: 0,
               fontSize: 11,
-              fontWeight: 800,
-              letterSpacing: "0.14em",
+              fontWeight: 700,
+              letterSpacing: "0.12em",
               textTransform: "uppercase",
-              color: wf.steel
+              color: wf.muted
             }}
           >
             {eyebrow}
@@ -529,8 +529,8 @@ export function PageHead({
           style={{
             margin: "5px 0 0",
             fontSize: 25,
-            fontWeight: 900,
-            letterSpacing: "-0.018em",
+            fontWeight: 800,
+            letterSpacing: "-0.022em",
             color: wf.ink,
             lineHeight: 1.15
           }}
@@ -556,10 +556,10 @@ export function Notice({
 }) {
   const c =
     tone === "warn"
-      ? { bg: "#fdf4e3", bd: wf.amberDeep, fg: "#92500a", bar: wf.safety }
+      ? { bg: "#fffbeb", bd: "#fde68a", fg: "#92500a", bar: wf.safety }
       : tone === "good"
-        ? { bg: "#e7f0ea", bd: "#bcd6c6", fg: wf.pineDeep, bar: wf.pine }
-        : { bg: wf.bone, bd: wf.rail, fg: wf.steel, bar: wf.steel };
+        ? { bg: "#effcf9", bd: "#a7f0e3", fg: wf.pineDeep, bar: wf.pine }
+        : { bg: wf.bone, bd: wf.rail, fg: wf.steel, bar: wf.muted };
   return (
     <div
       style={{
@@ -567,6 +567,7 @@ export function Notice({
         background: c.bg,
         border: `1px solid ${c.bd}`,
         borderLeft: `3px solid ${c.bar}`,
+        borderRadius: RADIUS_SM,
         color: c.fg,
         fontSize: 12,
         fontWeight: 600

@@ -8,7 +8,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { Ico, monoFont, sansFont, wf, wfFontVars } from "../kit";
+import { Ico, monoFont, sansFont, wfFontVars } from "../kit";
+import { RADIUS_SM, wf } from "./admin-theme";
 import { alertCountForHref, useAdminAlerts } from "@/lib/admin-alerts";
 
 type NavItem = {
@@ -106,6 +107,7 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
               placeItems: "center",
               width: 30,
               height: 30,
+              borderRadius: 7,
               background: wf.safety,
               color: wf.ink
             }}
@@ -391,6 +393,8 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
           align-items: center;
           gap: 9px;
           padding: 9px 10px 9px 0;
+          border-radius: ${RADIUS_SM}px;
+          overflow: hidden;
           color: ${wf.steel};
           transition: background 120ms ease, color 120ms ease;
         }
@@ -403,14 +407,13 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
           justify-content: center;
           gap: 7px;
           height: 38px;
-          font-size: 12px;
-          font-weight: 800;
-          letter-spacing: 0.04em;
-          text-transform: uppercase;
+          font-size: 13px;
+          font-weight: 700;
+          border-radius: ${RADIUS_SM}px;
           transition: background 120ms ease, border-color 120ms ease;
         }
         .wf-qa-primary { background: ${wf.ink}; color: #fff; }
-        .wf-qa-primary:hover { background: #2c2c2c; }
+        .wf-qa-primary:hover { background: #222b38; }
         .wf-qa-ghost {
           background: #fff;
           color: ${wf.ink};
@@ -421,10 +424,10 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
           flex: 1;
           text-align: center;
           padding: 8px;
-          font-size: 10px;
-          font-weight: 800;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          border-radius: ${RADIUS_SM}px;
           color: ${wf.steel};
           background: #fff;
           border: 1px solid ${wf.rail};
@@ -433,10 +436,10 @@ export function WayfinderAdminShell({ children }: { children: ReactNode }) {
         .wf-foot-link:hover { background: ${wf.ink}; color: #fff; border-color: ${wf.ink}; }
         .wf-trow { transition: background 100ms ease; }
         .wf-trow:hover { background: ${wf.bone}; }
-        .wf-field:focus { border-color: ${wf.ink}; box-shadow: 0 0 0 3px rgba(17,17,17,0.07); }
+        .wf-field:focus { border-color: ${wf.ink}; box-shadow: 0 0 0 3px rgba(15,20,25,0.1); }
         .wf-abtn-default:hover, .wf-abtn-ghost:hover { background: ${wf.bone}; border-color: ${wf.steel}; }
-        .wf-abtn-primary:hover { background: #2c2c2c; }
-        .wf-abtn-danger:hover { background: #fbeae8; }
+        .wf-abtn-primary:hover { background: #222b38; }
+        .wf-abtn-danger:hover { background: #fef2f2; }
         .wf-abtn:disabled { cursor: default; box-shadow: none; }
         @media (max-width: 880px) {
           .wf-admin-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 50; display: none; height: 100vh; }
