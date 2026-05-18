@@ -1,7 +1,13 @@
+// Admin auth gate. Protects the Wayfinder back-office (/admin/*) — orders,
+// customer data, catalog/price editing, PO approval — none of which may be
+// reachable without an authenticated admin. Recovered from the pre-retirement
+// middleware (commit 6692b39^) and kept aligned with lib/admin-auth.ts.
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminRole } from "@/lib/admin-roles";
 
+// Routes under /admin that must stay reachable without a session, so an
+// unauthenticated user can actually sign in / be told they're denied.
 const publicAdminPaths = new Set([
   "/admin/login",
   "/admin/access-denied",
@@ -15,6 +21,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Dev bypass — keep local development frictionless. Production always
+  // enforces auth; non-production only enforces when ADMIN_REQUIRE_AUTH=true.
   if (
     process.env.NODE_ENV !== "production" &&
     process.env.ADMIN_REQUIRE_AUTH !== "true"
@@ -35,9 +43,7 @@ export async function middleware(request: NextRequest) {
     });
   }
 
-  let response = NextResponse.next({
-    request
-  });
+  let response = NextResponse.next({ request });
   let cookiesToApply: Array<{
     name: string;
     value: string;
@@ -55,9 +61,7 @@ export async function middleware(request: NextRequest) {
           request.cookies.set(name, value);
         });
 
-        response = NextResponse.next({
-          request
-        });
+        response = NextResponse.next({ request });
 
         cookiesToSet.forEach(({ name, value, options }) => {
           response.cookies.set(name, value, options);
@@ -74,6 +78,7 @@ export async function middleware(request: NextRequest) {
   if (userError || !user) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/admin/login";
+    loginUrl.search = "";
     loginUrl.searchParams.set("next", pathname);
     return applySupabaseCookies(NextResponse.redirect(loginUrl), cookiesToApply);
   }
@@ -88,7 +93,10 @@ export async function middleware(request: NextRequest) {
     const deniedUrl = request.nextUrl.clone();
     deniedUrl.pathname = "/admin/access-denied";
     deniedUrl.search = "";
-    return applySupabaseCookies(NextResponse.redirect(deniedUrl), cookiesToApply);
+    return applySupabaseCookies(
+      NextResponse.redirect(deniedUrl),
+      cookiesToApply
+    );
   }
 
   response.headers.set("cache-control", "private, no-store");

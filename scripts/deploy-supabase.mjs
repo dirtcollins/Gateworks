@@ -22,7 +22,12 @@ const sqlFiles = [
   "supabase/order-payments-ledger.sql",
   "supabase/pick-ticket-line-progress.sql",
   "supabase/demand-reorder-intelligence.sql",
-  "supabase/website-production-readiness.sql"
+  "supabase/website-production-readiness.sql",
+  "supabase/marketing-subscribers.sql",
+  "supabase/pricing-tiers.sql",
+  "supabase/ar-aging.sql",
+  "supabase/design-lab-ratings.sql",
+  "supabase/quotes-and-purchase-orders.sql"
 ];
 
 async function runSql(filePath, query) {
@@ -46,11 +51,27 @@ async function runSql(filePath, query) {
   return response.json().catch(() => ({}));
 }
 
+const failures = [];
+
 for (const sqlFile of sqlFiles) {
   const absolutePath = path.resolve(sqlFile);
   const query = await readFile(absolutePath, "utf8");
-  console.log(`Applying ${sqlFile}...`);
-  await runSql(sqlFile, query);
+  process.stdout.write(`Applying ${sqlFile}... `);
+
+  try {
+    await runSql(sqlFile, query);
+    console.log("ok");
+  } catch (error) {
+    console.log("FAILED");
+    failures.push({ file: sqlFile, message: error.message });
+  }
+}
+
+if (failures.length) {
+  console.log(`\n${failures.length} file(s) reported errors (continuing best-effort):`);
+  for (const failure of failures) {
+    console.log(`  - ${failure.file}: ${failure.message.replace(/\s+/g, " ").slice(0, 200)}`);
+  }
 }
 
 console.log(`Supabase schema applied to ${projectRef}.`);

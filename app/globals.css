@@ -4,11 +4,16 @@
 
 :root {
   color-scheme: light;
-  --truewerk-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  --truewerk-font: var(--font-inter), ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
 }
 
 * {
   box-sizing: border-box;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(47, 111, 78, 0.55);
+  outline-offset: 2px;
 }
 
 body {
@@ -24,6 +29,18 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+/* Quantity fields use custom +/- steppers, so hide native number spinners. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .line-clamp-2 {
@@ -60,4 +77,16 @@ textarea {
 
 ::selection {
   background: rgba(47, 111, 78, 0.18);
+}
+
+/* Print: letter-size (8.5 x 11) pages for quotes and invoices. */
+@media print {
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+
+  body {
+    background: #ffffff;
+  }
 }

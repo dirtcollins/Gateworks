@@ -245,7 +245,7 @@ export const useQuoteStore = create<QuoteState>()(
               if (!existing) {
                 return {
                   ...quote,
-                  items: [...quote.items, item],
+                  items: [item, ...quote.items],
                   updatedAt: isoDate()
                 };
               }

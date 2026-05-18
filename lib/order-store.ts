@@ -90,6 +90,7 @@ type OrderState = {
   updateOrderStatus: (orderId: string, status: OrderStatus, detail?: string) => void;
   updatePaymentStatus: (orderId: string, paymentStatus: PaymentStatus, detail?: string) => void;
   upsertOrder: (order: OrderRecord) => void;
+  removeOrder: (orderId: string) => void;
   clearOrders: () => void;
 };
 
@@ -221,6 +222,10 @@ export const useOrderStore = create<OrderState>()(
 
           return { orders: [normalizeOrderRecord(order), ...state.orders] };
         }),
+      removeOrder: (orderId) =>
+        set((state) => ({
+          orders: state.orders.filter((order) => order.id !== orderId)
+        })),
       clearOrders: () => set({ orders: [] })
     }),
     {

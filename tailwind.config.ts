@@ -29,7 +29,36 @@ const config: Config = {
           pine: "#2f6f4e",
           black: "#111111",
           amber: "#eee6d8"
+        },
+        // Design Lab — Concept 1 "Industrial Pro" palette.
+        d1: {
+          paper: "#f6f3ec",
+          ink: "#16150f",
+          steel: "#6c685c",
+          line: "#dcd6c8",
+          pine: "#2f6f4e",
+          amber: "#d6a93f",
+          red: "#b42318",
+          card: "#ffffff"
         }
+      },
+      fontFamily: {
+        sans: ["var(--truewerk-font)"],
+        d1: ["var(--truewerk-font)"]
+      },
+      // Named semantic type scale. Prefer these over raw text-xs/text-2xl so
+      // typography stays consistent: text-caption, text-label, text-body,
+      // text-heading, text-display.
+      fontSize: {
+        caption: ["0.6875rem", { lineHeight: "1rem" }],
+        label: ["0.75rem", { lineHeight: "1rem" }],
+        body: ["0.875rem", { lineHeight: "1.25rem" }],
+        heading: ["1.125rem", { lineHeight: "1.5rem" }],
+        display: ["1.875rem", { lineHeight: "2.25rem" }]
+      },
+      borderRadius: {
+        card: "0.5rem",
+        chip: "0.25rem"
       },
       boxShadow: {
         toolbar: "0 10px 30px rgba(31, 37, 32, 0.12)"
@@ -57,13 +86,18 @@ const config: Config = {
           "52%": { transform: "scale(0.9)", filter: "drop-shadow(0 0 4px rgba(220,38,38,0.25))" },
           "76%": { transform: "scale(1.14)", filter: "drop-shadow(0 0 6px rgba(220,38,38,0.3))" },
           "100%": { transform: "scale(1)", filter: "drop-shadow(0 0 0 rgba(220,38,38,0))" }
+        },
+        "image-fade": {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" }
         }
       },
       animation: {
         "cart-bump": "cart-bump 650ms ease-out",
         "cart-badge": "cart-badge 650ms ease-out",
         "button-confirm": "button-confirm 520ms ease-out both",
-        "heart-save": "heart-save 720ms ease-out both"
+        "heart-save": "heart-save 720ms ease-out both",
+        "image-fade": "image-fade 200ms ease-out"
       }
     }
   },

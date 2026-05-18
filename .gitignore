@@ -7,3 +7,6 @@ dist/
 .env
 .env*.local
 .vercel
+
+# Claude Code: share agent definitions, keep personal settings local
+.claude/settings.local.json

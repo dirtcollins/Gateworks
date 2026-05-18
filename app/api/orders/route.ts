@@ -5,6 +5,12 @@ import {
 } from "@/lib/inventory-repository";
 import { authorizeAdminRequest } from "@/lib/admin-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import {
+  applyTierDiscount,
+  resolveLineDiscountPct,
+  type PriceTierRule
+} from "@/lib/pricing-tiers";
+import { calculateTax } from "@/lib/tax";
 import type { FulfillmentMethod, OrderStatus, PaymentStatus } from "@/lib/platform-backend";
 import type { CustomerDrawing, OrderPayment } from "@/lib/order-store";
 
@@ -42,6 +48,9 @@ type OrderPayload = {
   status: OrderStatus;
   paymentStatus: PaymentStatus;
   isQuoteRequest: boolean;
+  poNumber?: string;
+  poStatus?: string;
+  sourceQuoteId?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -67,6 +76,9 @@ type OrderRow = {
   status: OrderStatus;
   payment_status: PaymentStatus;
   is_quote_request: boolean;
+  po_number?: string | null;
+  po_status?: string | null;
+  source_quote_id?: string | null;
   created_at: string;
   updated_at: string;
   order_items?: OrderItemRow[];
@@ -126,6 +138,9 @@ type PatchOrderPayload = {
   status?: OrderStatus;
   paymentStatus?: PaymentStatus;
   convertToOrder?: boolean;
+  poNumber?: string;
+  poStatus?: string;
+  sourceQuoteId?: string;
   payment?: {
     amount?: number;
     method?: string;
@@ -280,6 +295,9 @@ function toClientOrder(row: OrderRow) {
     status: row.status,
     paymentStatus: row.payment_status,
     isQuoteRequest: row.is_quote_request,
+    poNumber: row.po_number || "",
+    poStatus: row.po_status || "none",
+    sourceQuoteId: row.source_quote_id || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     activity: [
@@ -350,6 +368,92 @@ async function resolveOrderItemVariantIds(
   }) as ResolvedOrderItem[];
 }
 
+async function fetchVariantCosts(
+  admin: NonNullable<Awaited<ReturnType<typeof getSupabaseAdminClient>>>,
+  variantIds: string[]
+) {
+  const costByVariant = new Map<string, number>();
+  const uniqueIds = Array.from(new Set(variantIds.filter(Boolean)));
+
+  if (!uniqueIds.length) {
+    return costByVariant;
+  }
+
+  const { data, error } = await admin
+    .from("product_variants")
+    .select("id, cost")
+    .in("id", uniqueIds);
+
+  if (error) {
+    throw error;
+  }
+
+  (data || []).forEach((record) => {
+    const row = record as { id?: string; cost?: number | string | null };
+
+    if (row.id) {
+      costByVariant.set(row.id, Number(row.cost ?? 0));
+    }
+  });
+
+  return costByVariant;
+}
+
+// Resolve the customer's B2B pricing tier and its discount rules. Fully
+// defensive: a missing company link or pricing-tier table just yields no
+// discount rather than failing order creation.
+async function resolveTierPricing(
+  admin: NonNullable<Awaited<ReturnType<typeof getSupabaseAdminClient>>>,
+  email: string | undefined
+): Promise<{ tier: string | null; rules: PriceTierRule[] }> {
+  const empty = { tier: null as string | null, rules: [] as PriceTierRule[] };
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (!normalizedEmail) return empty;
+
+  try {
+    const { data: companyUser, error: companyUserError } = await admin
+      .from("company_users")
+      .select("companies (pricing_tier)")
+      .eq("email", normalizedEmail)
+      .maybeSingle();
+
+    if (companyUserError || !companyUser) return empty;
+
+    const companyRecord = Array.isArray(companyUser.companies)
+      ? companyUser.companies[0]
+      : companyUser.companies;
+    const tier = (companyRecord as { pricing_tier?: string } | null)?.pricing_tier;
+    if (!tier) return empty;
+
+    const { data: ruleData, error: ruleError } = await admin
+      .from("price_tier_rules")
+      .select("tier, category_slug, discount_pct, min_quantity")
+      .eq("tier", tier);
+
+    if (ruleError || !ruleData) return { tier, rules: [] };
+
+    const rules: PriceTierRule[] = ruleData.map((row) => {
+      const record = row as {
+        tier: string;
+        category_slug: string | null;
+        discount_pct: number | string;
+        min_quantity: number | string;
+      };
+
+      return {
+        tier: record.tier,
+        categorySlug: record.category_slug,
+        discountPct: Number(record.discount_pct || 0),
+        minQuantity: Number(record.min_quantity || 1)
+      };
+    });
+
+    return { tier, rules };
+  } catch {
+    return empty;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const auth = await authorizeAdminRequest(request);
   if (!auth.ok) return auth.response;
@@ -391,6 +495,9 @@ export async function GET(request: NextRequest) {
     "status",
     "payment_status",
     "is_quote_request",
+    "po_number",
+    "po_status",
+    "source_quote_id",
     "notes",
     "created_at",
     "updated_at"
@@ -488,6 +595,29 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // An order with nothing in it (and no value) is junk — it surfaces later as
+  // a 0/0 pick ticket. Block it at the source.
+  if (!payload.items?.length) {
+    return NextResponse.json(
+      {
+        ok: false,
+        persisted: false,
+        reason: "An order must have at least one line item."
+      },
+      { status: 400 }
+    );
+  }
+  if (Number(payload.total) <= 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        persisted: false,
+        reason: "An order total must be greater than $0."
+      },
+      { status: 400 }
+    );
+  }
+
   try {
     const safeUserId = (payload.userId || "guest").trim();
 
@@ -509,6 +639,43 @@ export async function POST(request: NextRequest) {
       payload.isQuoteRequest
     );
 
+    // Resolve items, costs, and B2B tier pricing before creating the order so
+    // discounted line prices and the order totals stay consistent.
+    const resolvedItems = payload.items.length
+      ? await resolveOrderItemVariantIds(admin, payload.items)
+      : [];
+    const variantCosts = resolvedItems.length
+      ? await fetchVariantCosts(
+          admin,
+          resolvedItems.map((item) => item.resolvedVariantId)
+        )
+      : new Map<string, number>();
+    const { tier, rules: tierRules } = await resolveTierPricing(admin, payload.email);
+
+    const pricedItems = resolvedItems.map((item) => {
+      const discountPct = tier
+        ? resolveLineDiscountPct(tierRules, { tier, quantity: item.quantity })
+        : 0;
+      const unitPrice = applyTierDiscount(item.price, discountPct);
+      return {
+        item,
+        unitPrice,
+        lineTotal: Number((unitPrice * item.quantity).toFixed(2)),
+        discountPct
+      };
+    });
+
+    const hasDiscount = pricedItems.some((priced) => priced.discountPct > 0);
+    const discountedSubtotal = Number(
+      pricedItems.reduce((sum, priced) => sum + priced.lineTotal, 0).toFixed(2)
+    );
+    const orderSubtotal = hasDiscount ? discountedSubtotal : payload.subtotal;
+    const orderTax =
+      hasDiscount && !payload.isQuoteRequest ? calculateTax(discountedSubtotal) : payload.tax;
+    const orderTotal = hasDiscount
+      ? Number((orderSubtotal + orderTax + (payload.deliveryFee || 0)).toFixed(2))
+      : payload.total;
+
     const { data: order, error: orderError } = await admin
       .from("orders")
       .insert({
@@ -524,13 +691,16 @@ export async function POST(request: NextRequest) {
         requested_window: payload.requestedWindow,
         job_name: payload.jobName,
         jobsite_address: payload.jobsiteAddress,
-        subtotal: payload.subtotal,
-        tax_total: payload.tax,
+        subtotal: orderSubtotal,
+        tax_total: orderTax,
         delivery_fee: payload.deliveryFee,
-        total: payload.total,
+        total: orderTotal,
         status: payload.status,
         payment_status: payload.paymentStatus,
         is_quote_request: payload.isQuoteRequest,
+        po_number: payload.poNumber || null,
+        po_status: payload.poNumber ? payload.poStatus || "submitted" : "none",
+        source_quote_id: payload.sourceQuoteId || null,
         notes: payload.jobsiteAddress?.notes || null
       })
       .select("id, order_number")
@@ -538,11 +708,9 @@ export async function POST(request: NextRequest) {
 
     if (orderError) throw orderError;
 
-    if (payload.items.length && order?.id) {
-      const resolvedItems = await resolveOrderItemVariantIds(admin, payload.items);
-
+    if (pricedItems.length && order?.id) {
       const { error: itemsError } = await admin.from("order_items").insert(
-        resolvedItems.map((item) => ({
+        pricedItems.map(({ item, unitPrice, lineTotal }) => ({
           order_id: order.id,
           product_id: asUuid(item.productId),
           variant_id: item.resolvedVariantId,
@@ -552,8 +720,9 @@ export async function POST(request: NextRequest) {
           quantity_needed: item.quantity,
           quantity_pulled: 0,
           pulled: false,
-          unit_price: item.price,
-          line_total: item.price * item.quantity,
+          unit_price: unitPrice,
+          unit_cost: variantCosts.get(item.resolvedVariantId) ?? 0,
+          line_total: lineTotal,
           item_payload: {
             ...item,
             variantId: item.resolvedVariantId
@@ -561,7 +730,7 @@ export async function POST(request: NextRequest) {
         }))
       );
 
-    if (itemsError) throw itemsError;
+      if (itemsError) throw itemsError;
     }
 
     return NextResponse.json({
@@ -739,6 +908,9 @@ export async function PATCH(request: NextRequest) {
   const updates: Record<string, string | boolean> = {};
   if (payload.status) updates.status = payload.status;
   if (payload.paymentStatus) updates.payment_status = payload.paymentStatus;
+  if (payload.poNumber !== undefined) updates.po_number = payload.poNumber;
+  if (payload.poStatus !== undefined) updates.po_status = payload.poStatus;
+  if (payload.sourceQuoteId !== undefined) updates.source_quote_id = payload.sourceQuoteId;
   if (payload.convertToOrder) {
     updates.is_quote_request = false;
     updates.status = payload.status || "submitted";
@@ -783,4 +955,94 @@ export async function PATCH(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, persisted: true, workflow });
+}
+
+// Delete orders — a single order by ?orderId (draft or cancelled only, so a
+// live order can't be wiped), or every draft order via ?scope=drafts. Line
+// items are removed first so the parent delete can't orphan them.
+export async function DELETE(request: NextRequest) {
+  const auth = await authorizeAdminRequest(request);
+  if (!auth.ok) return auth.response;
+
+  const admin = getSupabaseAdminClient();
+  if (!admin) {
+    return NextResponse.json(
+      { ok: false, persisted: false, reason: "Supabase is not configured." },
+      { status: 503 }
+    );
+  }
+
+  const { searchParams } = new URL(request.url);
+  const orderId = searchParams.get("orderId");
+  const scope = searchParams.get("scope");
+
+  try {
+    let targetIds: string[] = [];
+
+    if (orderId) {
+      const { data: row, error } = await admin
+        .from("orders")
+        .select("id, status")
+        .eq("id", orderId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!row) {
+        return NextResponse.json(
+          { ok: false, reason: "Order not found." },
+          { status: 404 }
+        );
+      }
+      if (row.status !== "draft" && row.status !== "cancelled") {
+        return NextResponse.json(
+          { ok: false, reason: "Only draft or cancelled orders can be deleted." },
+          { status: 400 }
+        );
+      }
+      targetIds = [orderId];
+    } else if (scope === "drafts") {
+      const { data, error } = await admin
+        .from("orders")
+        .select("id")
+        .eq("status", "draft")
+        .eq("is_quote_request", false);
+      if (error) throw error;
+      targetIds = (data || []).map((entry) => entry.id as string);
+    } else {
+      return NextResponse.json(
+        { ok: false, reason: "Provide an orderId, or scope=drafts." },
+        { status: 400 }
+      );
+    }
+
+    if (!targetIds.length) {
+      return NextResponse.json({ ok: true, persisted: true, deleted: 0 });
+    }
+
+    const { error: itemsError } = await admin
+      .from("order_items")
+      .delete()
+      .in("order_id", targetIds);
+    if (itemsError) throw itemsError;
+
+    const { error: ordersError } = await admin
+      .from("orders")
+      .delete()
+      .in("id", targetIds);
+    if (ordersError) throw ordersError;
+
+    return NextResponse.json({
+      ok: true,
+      persisted: true,
+      deleted: targetIds.length
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        persisted: false,
+        reason: error instanceof Error ? error.message : "Unknown order delete error."
+      },
+      { status: 500 }
+    );
+  }
 }
