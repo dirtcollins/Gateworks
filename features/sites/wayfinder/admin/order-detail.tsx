@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useOrderStore, type OrderRecord, type OrderPayment } from "@/lib/order-store";
+import type { CartItem } from "@/lib/types";
 import type { PaymentStatus } from "@/lib/platform-backend";
 import { fmt } from "../kit";
 import {
@@ -21,6 +22,7 @@ import {
   TextInput,
   SelectInput,
   Field,
+  TextArea,
   monoFont,
   wf
 } from "./admin-kit";
@@ -35,7 +37,7 @@ import {
   paymentStatusTone
 } from "./order-helpers";
 
-const PAYMENT_METHODS = ["Cash", "Check", "Credit card", "ACH", "Wire", "Financing"];
+const PAYMENT_METHODS = ["Cash", "Check", "Credit Card", "ACH", "Wire Transfer", "Financing", "Other"];
 
 export function WayfinderOrderDetail({ orderId }: { orderId: string }) {
   const storedOrders = useOrderStore((state) => state.orders);
@@ -45,8 +47,12 @@ export function WayfinderOrderDetail({ orderId }: { orderId: string }) {
   const updatePaymentStatus = useOrderStore((state) => state.updatePaymentStatus);
 
   const [loaded, setLoaded] = useState(false);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState(PAYMENT_METHODS[0]);
+  const [payDate, setPayDate] = useState(todayInputDate());
+  const [payReference, setPayReference] = useState("");
+  const [payNote, setPayNote] = useState("");
   const [message, setMessage] = useState("");
 
   const order = useMemo(
@@ -112,13 +118,14 @@ export function WayfinderOrderDetail({ orderId }: { orderId: string }) {
       return;
     }
     const now = new Date().toISOString();
+    const paidAt = payDate ? new Date(`${payDate}T12:00:00`).toISOString() : now;
     const payment: OrderPayment = {
       id: `pay-${Date.now()}`,
       amount,
       method: payMethod,
-      paidAt: now,
-      reference: "",
-      note: "",
+      paidAt,
+      reference: payReference.trim(),
+      note: payNote.trim(),
       createdBy: "Counter staff",
       createdAt: now
     };
@@ -132,58 +139,108 @@ export function WayfinderOrderDetail({ orderId }: { orderId: string }) {
     });
     updatePaymentStatus(order.id, nextStatus, `${payMethod} payment of ${fmt(amount)} recorded.`);
     setPayAmount("");
+    setPayDate(todayInputDate());
+    setPayReference("");
+    setPayNote("");
+    setPaymentModalOpen(false);
     setMessage(`${fmt(amount)} ${payMethod} payment recorded.`);
+    void fetch("/api/orders", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orderId: order.id,
+        payment: {
+          amount,
+          method: payMethod,
+          paidAt: payment.paidAt,
+          reference: payment.reference,
+          note: payment.note,
+          createdBy: payment.createdBy
+        }
+      })
+    }).catch(() => null);
   }
 
   return (
     <>
-      <PageHead
-        eyebrow={
-          <Link href="/admin/orders" style={{ color: wf.steel }}>
-            ← Orders
-          </Link>
-        }
-        title={<Mono style={{ fontSize: 24 }}>{order.orderNumber}</Mono>}
-        desc={`${order.companyName || order.customerName} · placed ${formatDate(
-          order.createdAt
-        )}`}
-        action={
-          <div style={{ display: "flex", gap: 8 }}>
-            {step ? (
-              <AdminBtn onClick={advance}>{step.label}</AdminBtn>
-            ) : null}
-            <AdminBtn
-              variant="primary"
-              onClick={() => window.print()}
-              title="Print pick ticket"
-            >
-              <Ico.clipboard size={14} /> Pick ticket
-            </AdminBtn>
-          </div>
-        }
-      />
-
-      {message ? <Notice tone="good">{message}</Notice> : null}
-
       <div
         style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 8,
-          alignItems: "center"
+          position: "sticky",
+          top: 0,
+          zIndex: 20,
+          display: "grid",
+          gap: 10,
+          margin: "-4px 0 4px",
+          padding: "4px 0 12px",
+          background: wf.paper,
+          borderBottom: `1px solid ${wf.hairline}`
         }}
       >
-        <Pill tone={orderStatusTone(order.status)}>
-          {ORDER_STATUS_LABELS[order.status]}
-        </Pill>
-        <Pill tone={paymentStatusTone(order.paymentStatus)}>
-          {PAYMENT_STATUS_LABELS[order.paymentStatus]}
-        </Pill>
-        <Pill tone="neutral">{order.fulfillmentMethod}</Pill>
-        <span style={{ fontSize: 11, color: wf.muted, fontFamily: monoFont }}>
-          Updated {formatDate(order.updatedAt)} · {formatTime(order.updatedAt)}
-        </span>
+        <PageHead
+          eyebrow={
+            <Link href="/admin/orders" style={{ color: wf.steel }}>
+              ← Orders
+            </Link>
+          }
+          title={<Mono style={{ fontSize: 24 }}>{order.orderNumber}</Mono>}
+          desc={`${order.companyName || order.customerName} · placed ${formatDate(
+            order.createdAt
+          )}`}
+          action={
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              {step ? (
+                <AdminBtn onClick={advance}>{step.label}</AdminBtn>
+              ) : null}
+              <AdminBtn
+                onClick={() => setPaymentModalOpen(true)}
+                disabled={order.status === "cancelled"}
+                title={order.status === "cancelled" ? "Reopen the order before recording payment" : "Record payment"}
+              >
+                <Ico.check size={14} /> Record payment
+              </AdminBtn>
+              <AdminBtn onClick={() => window.print()} title="Print order">
+                <Ico.receipt size={14} /> Print order
+              </AdminBtn>
+              <AdminBtn
+                href={`mailto:${order.email || ""}?subject=${encodeURIComponent(order.orderNumber)}`}
+                disabled={!order.email}
+                title={order.email ? "Email customer" : "No customer email on file"}
+              >
+                <Ico.mail size={14} /> Email
+              </AdminBtn>
+              <AdminBtn
+                variant="primary"
+                onClick={() => window.print()}
+                title="Print pick ticket"
+              >
+                <Ico.clipboard size={14} /> Pick ticket
+              </AdminBtn>
+            </div>
+          }
+        />
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            alignItems: "center"
+          }}
+        >
+          <Pill tone={orderStatusTone(order.status)}>
+            {ORDER_STATUS_LABELS[order.status]}
+          </Pill>
+          <Pill tone={paymentStatusTone(order.paymentStatus)}>
+            {PAYMENT_STATUS_LABELS[order.paymentStatus]}
+          </Pill>
+          <Pill tone="neutral">{order.fulfillmentMethod}</Pill>
+          <span style={{ fontSize: 11, color: wf.muted, fontFamily: monoFont }}>
+            Updated {formatDate(order.updatedAt)} · {formatTime(order.updatedAt)}
+          </span>
+        </div>
       </div>
+
+      {message ? <Notice tone="good">{message}</Notice> : null}
 
       <div
         style={{
@@ -201,7 +258,7 @@ export function WayfinderOrderDetail({ orderId }: { orderId: string }) {
               >
                 <thead>
                   <tr style={{ background: wf.bone }}>
-                    {["SKU", "Item", "Qty", "Unit", "Line total"].map((h, i) => (
+                    {["Item", "SKU", "Qty", "Unit", "Line total"].map((h, i) => (
                       <th
                         key={h}
                         style={{
@@ -225,10 +282,57 @@ export function WayfinderOrderDetail({ orderId }: { orderId: string }) {
                     order.items.map((item) => (
                       <tr key={item.variantId}>
                         <td style={cell()}>
-                          <Mono style={{ fontSize: 11 }}>{item.sku}</Mono>
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "44px minmax(180px, 1fr)",
+                              gap: 10,
+                              alignItems: "center",
+                              minWidth: 260
+                            }}
+                          >
+                            {item.image ? (
+                              <img
+                                src={item.image}
+                                alt=""
+                                style={{
+                                  width: 44,
+                                  height: 44,
+                                  objectFit: "contain",
+                                  border: `1px solid ${wf.hairline}`,
+                                  borderRadius: 6,
+                                  background: "#fff"
+                                }}
+                              />
+                            ) : (
+                              <span
+                                aria-hidden="true"
+                                style={{
+                                  width: 44,
+                                  height: 44,
+                                  border: `1px solid ${wf.hairline}`,
+                                  borderRadius: 6,
+                                  background: wf.bone
+                                }}
+                              />
+                            )}
+                            <div style={{ display: "grid", gap: 3 }}>
+                              <span style={{ fontWeight: 700 }}>{item.title}</span>
+                              {formatVariantDetails(item) ? (
+                                <span style={{ fontSize: 11, color: wf.steel }}>
+                                  {formatVariantDetails(item)}
+                                </span>
+                              ) : null}
+                              {item.pickNotes ? (
+                                <span style={{ fontSize: 11, color: wf.muted }}>
+                                  Note: {item.pickNotes}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
                         </td>
                         <td style={cell()}>
-                          <span style={{ fontWeight: 700 }}>{item.title}</span>
+                          <Mono style={{ fontSize: 11 }}>{item.sku}</Mono>
                         </td>
                         <td style={cell("right")}>
                           <Mono>{item.quantity}</Mono>
@@ -367,8 +471,110 @@ export function WayfinderOrderDetail({ orderId }: { orderId: string }) {
             </div>
           </Panel>
 
-          <Panel title="Record payment">
+          <Panel
+            title="Payment history"
+            meta={`${(order.payments || []).length} payment${(order.payments || []).length === 1 ? "" : "s"}`}
+            action={
+              <AdminBtn
+                size="sm"
+                onClick={() => setPaymentModalOpen(true)}
+                disabled={order.status === "cancelled"}
+              >
+                <Ico.check size={13} /> Record
+              </AdminBtn>
+            }
+          >
             <div style={{ display: "grid", gap: 10 }}>
+              {(order.payments || []).length ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 6
+                  }}
+                >
+                  {(order.payments || []).map((p) => (
+                    <div
+                      key={p.id}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "minmax(0, 1fr) auto",
+                        gap: 8,
+                        fontSize: 11,
+                        fontFamily: monoFont,
+                        color: wf.steel
+                      }}
+                    >
+                      <span style={{ display: "grid", gap: 2 }}>
+                        <span>
+                          {p.method} · {formatDate(p.paidAt)} · {p.createdBy || "Admin"}
+                        </span>
+                        {p.reference ? <span>Ref {p.reference}</span> : null}
+                        {p.note ? <span style={{ fontFamily: "inherit" }}>{p.note}</span> : null}
+                      </span>
+                      <span style={{ fontWeight: 700, color: wf.ink }}>
+                        {fmt(p.amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ margin: 0, color: wf.muted, fontSize: 13 }}>
+                  No payments have been recorded yet.
+                </p>
+              )}
+            </div>
+          </Panel>
+        </div>
+      </div>
+      {paymentModalOpen ? (
+        <div
+          role="presentation"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            display: "grid",
+            placeItems: "center",
+            padding: 18,
+            background: "rgba(17, 24, 39, 0.34)"
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Record payment for ${order.orderNumber}`}
+            style={{
+              width: "min(520px, 100%)",
+              background: "#fff",
+              border: `1px solid ${wf.rail}`,
+              borderRadius: 8,
+              boxShadow: "0 22px 70px rgba(17, 24, 39, 0.25)",
+              overflow: "hidden"
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 12,
+                padding: "14px 16px",
+                borderBottom: `1px solid ${wf.hairline}`
+              }}
+            >
+              <div>
+                <p style={{ margin: 0, fontWeight: 800, fontSize: 14 }}>
+                  Record payment
+                </p>
+                <p style={{ margin: "3px 0 0", color: wf.muted, fontSize: 12 }}>
+                  Balance due {fmt(due)}
+                </p>
+              </div>
+              <AdminBtn size="sm" variant="ghost" onClick={() => setPaymentModalOpen(false)}>
+                <Ico.x size={13} /> Close
+              </AdminBtn>
+            </div>
+            <div style={{ display: "grid", gap: 12, padding: 16 }}>
               <Field label="Amount">
                 <TextInput
                   type="number"
@@ -379,62 +585,74 @@ export function WayfinderOrderDetail({ orderId }: { orderId: string }) {
                   placeholder={due ? due.toFixed(2) : "0.00"}
                 />
               </Field>
-              <Field label="Method">
-                <SelectInput
-                  value={payMethod}
-                  onChange={(event) => setPayMethod(event.target.value)}
-                >
-                  {PAYMENT_METHODS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </SelectInput>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 10
+                }}
+                className="wf-payment-modal-grid"
+              >
+                <Field label="Method">
+                  <SelectInput
+                    value={payMethod}
+                    onChange={(event) => setPayMethod(event.target.value)}
+                  >
+                    {PAYMENT_METHODS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </SelectInput>
+                </Field>
+                <Field label="Payment date">
+                  <TextInput
+                    type="date"
+                    value={payDate}
+                    onChange={(event) => setPayDate(event.target.value)}
+                  />
+                </Field>
+              </div>
+              <Field label="Reference number">
+                <TextInput
+                  value={payReference}
+                  onChange={(event) => setPayReference(event.target.value)}
+                  placeholder="Check, auth, or receipt #"
+                />
+              </Field>
+              <Field label="Notes">
+                <TextArea
+                  value={payNote}
+                  onChange={(event) => setPayNote(event.target.value)}
+                  placeholder="Counter notes for this payment"
+                />
               </Field>
               <AdminBtn variant="primary" block onClick={recordPayment}>
                 <Ico.check size={14} /> Apply payment
               </AdminBtn>
-              {(order.payments || []).length ? (
-                <div
-                  style={{
-                    borderTop: `1px solid ${wf.hairline}`,
-                    paddingTop: 8,
-                    display: "grid",
-                    gap: 6
-                  }}
-                >
-                  {(order.payments || []).map((p) => (
-                    <div
-                      key={p.id}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: 11,
-                        fontFamily: monoFont,
-                        color: wf.steel
-                      }}
-                    >
-                      <span>
-                        {p.method} · {formatDate(p.paidAt)}
-                      </span>
-                      <span style={{ fontWeight: 700, color: wf.ink }}>
-                        {fmt(p.amount)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
             </div>
-          </Panel>
+          </div>
         </div>
-      </div>
+      ) : null}
       <style>{`
         @media (max-width: 880px) {
           .wf-admin-detail-grid { grid-template-columns: 1fr !important; }
+          .wf-payment-modal-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
     </>
   );
+}
+
+function todayInputDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatVariantDetails(item: CartItem): string {
+  return Object.entries(item.options || {})
+    .filter(([, value]) => value && value !== "Standard")
+    .map(([key, value]) => `${key}: ${value}`)
+    .join(" · ");
 }
 
 function cell(align: "left" | "right" = "left"): React.CSSProperties {

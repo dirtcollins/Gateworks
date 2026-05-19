@@ -49,8 +49,8 @@ const createMenuGroups = [
     title: "Sales",
     items: [
       { label: "New Order", href: "/admin/orders/new" },
-      { label: "New Quote", href: "/admin/quotes?action=create" },
-      { label: "Quick Invoice", href: "/admin/quotes?action=create&type=invoice" },
+      { label: "New Quote", href: "/admin/quotes/new" },
+      { label: "Quick Invoice", href: "/admin/invoices/new" },
       { label: "Counter Sale", href: "/admin/orders/new?type=counter-sale" },
       { label: "Add Customer", href: "/admin/customers?action=create" }
     ]

@@ -8,6 +8,7 @@ export type DemandMetrics = {
   id: string;
   productTitle: string;
   productSlug: string;
+  productImage?: InventoryRow["productImage"];
   sku: string;
   category: string;
   categorySlug: string;
@@ -249,6 +250,7 @@ export function buildDemandMetrics(rows: InventoryRow[]): DemandMetrics[] {
       id: row.id,
       productTitle: row.productTitle,
       productSlug: row.productSlug,
+      productImage: row.productImage,
       sku: row.sku,
       category: row.category,
       categorySlug: row.categorySlug,

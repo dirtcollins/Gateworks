@@ -7,7 +7,13 @@ import {
   readScopedPersistedState
 } from "@/lib/scoped-store";
 import type { CartItem } from "@/lib/types";
-import type { FulfillmentMethod, OrderStatus, PaymentStatus } from "@/lib/platform-backend";
+import type {
+  DeliveryStatus,
+  FulfillmentMethod,
+  FulfillmentStatus,
+  OrderStatus,
+  PaymentStatus
+} from "@/lib/platform-backend";
 
 export type OrderAddress = {
   name: string;
@@ -43,6 +49,14 @@ export type OrderPayment = {
   createdAt: string;
 };
 
+export type OrderActivityEntry = {
+  id: string;
+  label: string;
+  detail: string;
+  createdAt: string;
+  createdBy?: string;
+};
+
 export type OrderRecord = {
   id: string;
   orderNumber: string;
@@ -66,18 +80,18 @@ export type OrderRecord = {
   payments?: OrderPayment[];
   status: OrderStatus;
   paymentStatus: PaymentStatus;
+  fulfillmentStatus: FulfillmentStatus;
+  deliveryStatus: DeliveryStatus;
   isQuoteRequest: boolean;
   createdAt: string;
   updatedAt: string;
-  activity: Array<{
-    id: string;
-    label: string;
-    detail: string;
-    createdAt: string;
-  }>;
+  activity: OrderActivityEntry[];
 };
 
-type CreateOrderInput = Omit<OrderRecord, "id" | "orderNumber" | "createdAt" | "updatedAt" | "activity">;
+type CreateOrderInput = Omit<
+  OrderRecord,
+  "id" | "orderNumber" | "createdAt" | "updatedAt" | "activity" | "fulfillmentStatus" | "deliveryStatus"
+>;
 
 type OrderState = {
   orders: OrderRecord[];
@@ -102,7 +116,7 @@ function orderDefaults() {
   return { orders: [] };
 }
 
-function getNextDocumentNumber(orders: OrderRecord[], prefix: "Order" | "Quote") {
+function getNextDocumentNumber(orders: OrderRecord[], prefix: "ORD" | "Quote") {
   const highest = orders.reduce((currentHighest, order) => {
     const expectedQuote = prefix === "Quote";
     if (Boolean(order.isQuoteRequest) !== expectedQuote) return currentHighest;
@@ -120,18 +134,38 @@ function normalizeDocumentNumber(orderNumber: string, isQuoteRequest: boolean) {
   const sequence =
     rawSequence > documentSequenceMax ? rawSequence % 100000 : rawSequence;
   if (!Number.isFinite(sequence) || sequence <= 0) return orderNumber;
-  return `${isQuoteRequest ? "Quote" : "Order"}-${String(sequence).padStart(5, "0")}`;
+  return `${isQuoteRequest ? "Quote" : "ORD"}-${String(sequence).padStart(5, "0")}`;
 }
 
 function normalizeOrderRecord(order: OrderRecord): OrderRecord {
   return {
     ...order,
+    fulfillmentStatus: order.fulfillmentStatus || inferFulfillmentStatus(order),
+    deliveryStatus: order.deliveryStatus || inferDeliveryStatus(order),
     orderNumber: normalizeDocumentNumber(order.orderNumber, Boolean(order.isQuoteRequest)),
     payments: (order.payments || []).map((payment) => ({
       ...payment,
       createdBy: payment.createdBy || "Admin"
     }))
   };
+}
+
+function inferFulfillmentStatus(order: Pick<OrderRecord, "status">): FulfillmentStatus {
+  if (order.status === "cancelled") return "cancelled";
+  if (order.status === "completed") return "fulfilled";
+  if (order.status === "ready_for_pickup" || order.status === "out_for_delivery") return "ready";
+  if (order.status === "picking") return "picking";
+  return "queued";
+}
+
+function inferDeliveryStatus(order: Pick<OrderRecord, "fulfillmentMethod" | "status">): DeliveryStatus {
+  if (order.fulfillmentMethod !== "delivery") return "none";
+  if (order.status === "cancelled") return "cancelled";
+  if (order.status === "completed") return "delivered";
+  if (order.status === "out_for_delivery") return "out_for_delivery";
+  if (order.status === "picking") return "loaded";
+  if (order.status === "confirmed") return "assigned";
+  return "scheduled";
 }
 
 function makeActivity(label: string, detail: string) {
@@ -157,7 +191,9 @@ export const useOrderStore = create<OrderState>()(
           const record: OrderRecord = {
           ...order,
           id: `order-${Date.now()}`,
-          orderNumber: getNextDocumentNumber(get().orders, order.isQuoteRequest ? "Quote" : "Order"),
+          orderNumber: getNextDocumentNumber(get().orders, order.isQuoteRequest ? "Quote" : "ORD"),
+          fulfillmentStatus: inferFulfillmentStatus(order),
+          deliveryStatus: inferDeliveryStatus(order),
           createdAt: now,
           updatedAt: now,
           activity: [
@@ -178,6 +214,11 @@ export const useOrderStore = create<OrderState>()(
               ? {
                   ...order,
                   status,
+                  fulfillmentStatus: inferFulfillmentStatus({ status }),
+                  deliveryStatus: inferDeliveryStatus({
+                    fulfillmentMethod: order.fulfillmentMethod,
+                    status
+                  }),
                   updatedAt: new Date().toISOString(),
                   activity: [
                     makeActivity("Order status updated", detail || `Status changed to ${status}.`),

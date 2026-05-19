@@ -23,6 +23,7 @@ import {
   wf,
   type Column
 } from "./admin-kit";
+import { ProductListCell } from "./product-list-cell";
 
 type StockTab = "all" | "in_stock" | "low_stock" | "out_of_stock";
 
@@ -54,6 +55,15 @@ function priceRange(product: Product) {
   const prices = product.variants.map((variant) => variant.price).filter((n) => n > 0);
   if (!prices.length) return product.price;
   return Math.min(...prices);
+}
+
+function productImage(product: Product) {
+  return (
+    product.variants.find((variant) => variant.image)?.image ||
+    product.images[0]?.sizes?.thumb ||
+    product.images[0]?.url ||
+    product.variants[0]?.image
+  );
 }
 
 export function WayfinderProductsList({ products }: { products: Product[] }) {
@@ -105,14 +115,13 @@ export function WayfinderProductsList({ products }: { products: Product[] }) {
       render: (product) => {
         const sku = product.variants[0]?.sku;
         return (
-          <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-            <span style={{ fontWeight: 800 }}>{product.title}</span>
-            {sku ? (
-              <Mono style={{ fontSize: 10, color: wf.muted, letterSpacing: "0.04em" }}>
-                SKU {sku}
-              </Mono>
-            ) : null}
-          </div>
+          <ProductListCell
+            title={product.title}
+            subtitle={sku ? `SKU ${sku}` : undefined}
+            meta={product.category.name}
+            image={productImage(product)}
+            imageAlt={product.title}
+          />
         );
       }
     },

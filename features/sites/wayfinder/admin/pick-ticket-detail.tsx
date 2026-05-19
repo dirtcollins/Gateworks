@@ -1,9 +1,9 @@
 // Wayfinder admin — pick-ticket detail. Walks a single order line by line
 // against the real inventory rows: each line carries an aisle/bay location, a
-// need/pulled count, and a notes field. Pull progress persists to
-// lib/pick-ticket-store (localStorage) and best-effort PATCHes
-// /api/pick-tickets; completing the ticket advances the order status via
-// lib/order-store and PATCHes /api/orders.
+// need/pulled count, and a notes field. Pull progress is written to
+// /api/pick-tickets (Supabase order_items / pick_ticket_items) with the local
+// pick-ticket store acting as optimistic/offline state; completing the ticket
+// advances the order status via lib/order-store and PATCHes /api/orders.
 "use client";
 
 import Image from "next/image";
@@ -145,9 +145,19 @@ export function WayfinderPickTicketDetail({
               payload.reason ||
               "Supabase is not connected — pull progress is saved in this browser only."
           });
+          return;
         }
+        setNotice({
+          tone: "good",
+          message: "Pull progress saved to the warehouse database."
+        });
       })
-      .catch(() => null);
+      .catch(() =>
+        setNotice({
+          tone: "warn",
+          message: "Network error — pull progress is saved in this browser only."
+        })
+      );
   }
 
   function patchOrderStatus(nextStatus: OrderStatus, detail: string) {

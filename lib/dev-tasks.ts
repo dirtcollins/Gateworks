@@ -40,6 +40,7 @@ type PhaseSeed = {
 };
 
 const createdAt = "2026-05-18";
+const completedAt = "2026-05-19";
 
 const phaseSeeds: PhaseSeed[] = [
   {
@@ -488,38 +489,51 @@ function taskId(phaseIndex: number, taskIndex: number) {
   return `phase-${String(phaseIndex + 1).padStart(2, "0")}-task-${String(taskIndex + 1).padStart(2, "0")}`;
 }
 
+const completedTaskIds = new Set<string>([
+  ...Array.from({ length: 18 }, (_, index) => taskId(0, index)),
+  ...Array.from({ length: 10 }, (_, index) => taskId(1, index)),
+  ...Array.from({ length: 16 }, (_, index) => taskId(2, index)),
+  ...Array.from({ length: 6 }, (_, index) => taskId(3, index))
+]);
+
 export const devTasks: DevTask[] = phaseSeeds.flatMap((phase, phaseIndex) =>
-  phase.tasks.map((title, taskIndex) => ({
-    id: taskId(phaseIndex, taskIndex),
-    title,
-    description: `${title} for the Gateworks Order System build.`,
-    phase: phase.phase,
-    status: "not_started",
-    priority: phase.priority,
-    progressPercent: 0,
-    owner: phase.priority === "critical" ? "Codex + backend" : "Codex",
-    dependencies: taskIndex === 0 ? [] : [taskId(phaseIndex, Math.max(0, taskIndex - 1))],
-    backendNotes:
-      phase.backendNotes ||
-      "Keep business rules in server code or shared domain modules instead of scattering logic through UI components.",
-    frontendNotes:
-      phase.frontendNotes ||
-      "Use the existing Wayfinder admin primitives, compact typography, and responsive operational layouts.",
-    databaseNotes:
-      phase.databaseNotes ||
-      "Add persistence only where the workflow requires durable business behavior and preserve auditability.",
-    testingNotes:
-      phase.testingNotes || "Run focused TypeScript and behavior checks that prove this task works.",
-    acceptanceCriteria: [
-      "The implementation matches the Gateworks order-system specification.",
-      "The change is scoped to the task and does not break quote, invoice, catalog, or warehouse workflows.",
-      "TypeScript checks pass for changed code."
-    ],
-    codexInstructions:
-      "Read this task and its phase notes before implementation. Prefer existing project patterns, keep changes scoped, and update this tracker when work is complete.",
-    createdAt,
-    updatedAt: createdAt
-  }))
+  phase.tasks.map((title, taskIndex) => {
+    const id = taskId(phaseIndex, taskIndex);
+    const isCompleted = completedTaskIds.has(id);
+
+    return {
+      id,
+      title,
+      description: `${title} for the Gateworks Order System build.`,
+      phase: phase.phase,
+      status: isCompleted ? "completed" : "not_started",
+      priority: phase.priority,
+      progressPercent: isCompleted ? 100 : 0,
+      owner: phase.priority === "critical" ? "Codex + backend" : "Codex",
+      dependencies: taskIndex === 0 ? [] : [taskId(phaseIndex, Math.max(0, taskIndex - 1))],
+      backendNotes:
+        phase.backendNotes ||
+        "Keep business rules in server code or shared domain modules instead of scattering logic through UI components.",
+      frontendNotes:
+        phase.frontendNotes ||
+        "Use the existing Wayfinder admin primitives, compact typography, and responsive operational layouts.",
+      databaseNotes:
+        phase.databaseNotes ||
+        "Add persistence only where the workflow requires durable business behavior and preserve auditability.",
+      testingNotes:
+        phase.testingNotes || "Run focused TypeScript and behavior checks that prove this task works.",
+      acceptanceCriteria: [
+        "The implementation matches the Gateworks order-system specification.",
+        "The change is scoped to the task and does not break quote, invoice, catalog, or warehouse workflows.",
+        "TypeScript checks pass for changed code."
+      ],
+      codexInstructions:
+        "Read this task and its phase notes before implementation. Prefer existing project patterns, keep changes scoped, and update this tracker when work is complete.",
+      createdAt,
+      updatedAt: isCompleted ? completedAt : createdAt,
+      completedAt: isCompleted ? completedAt : undefined
+    };
+  })
 );
 
 export const devTaskPhases = phaseSeeds.map((phase) => phase.phase);

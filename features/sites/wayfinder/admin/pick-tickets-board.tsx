@@ -349,14 +349,30 @@ function PickBoard({ rows }: { rows: TicketRow[] }) {
 
 function TicketCard({ row, dense }: { row: TicketRow; dense: boolean }) {
   const pct = percent(row.progress);
+  const href = `/admin/warehouse/${encodeURIComponent(row.orderId)}`;
   return (
     <article
+      role="link"
+      tabIndex={0}
+      onClick={(event) => {
+        const target = event.target as HTMLElement;
+        if (target.closest("a,button,select,input,textarea")) return;
+        window.location.assign(href);
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        const target = event.target as HTMLElement;
+        if (target.closest("a,button,select,input,textarea")) return;
+        event.preventDefault();
+        window.location.assign(href);
+      }}
       style={{
         background: "#fff",
         border: `1px solid ${wf.rail}`,
         padding: dense ? 10 : 14,
         display: "grid",
-        gap: dense ? 8 : 10
+        gap: dense ? 8 : 10,
+        cursor: "pointer"
       }}
     >
       <div
@@ -471,7 +487,7 @@ function TicketCard({ row, dense }: { row: TicketRow; dense: boolean }) {
       <AdminBtn
         size="sm"
         variant="primary"
-        href={`/admin/warehouse/${encodeURIComponent(row.orderId)}`}
+        href={href}
         block
       >
         <Ico.clipboard size={13} /> Open pick ticket

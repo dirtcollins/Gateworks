@@ -11,7 +11,13 @@ import {
   type PriceTierRule
 } from "@/lib/pricing-tiers";
 import { calculateTax } from "@/lib/tax";
-import type { FulfillmentMethod, OrderStatus, PaymentStatus } from "@/lib/platform-backend";
+import type {
+  DeliveryStatus,
+  FulfillmentMethod,
+  FulfillmentStatus,
+  OrderStatus,
+  PaymentStatus
+} from "@/lib/platform-backend";
 import type { CustomerDrawing, OrderPayment } from "@/lib/order-store";
 
 type OrderPayload = {
@@ -47,6 +53,8 @@ type OrderPayload = {
   total: number;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
+  fulfillmentStatus?: FulfillmentStatus;
+  deliveryStatus?: DeliveryStatus;
   isQuoteRequest: boolean;
   poNumber?: string;
   poStatus?: string;
@@ -75,6 +83,8 @@ type OrderRow = {
   notes: string | null;
   status: OrderStatus;
   payment_status: PaymentStatus;
+  fulfillment_status?: FulfillmentStatus | null;
+  delivery_status?: DeliveryStatus | null;
   is_quote_request: boolean;
   po_number?: string | null;
   po_status?: string | null;
@@ -167,6 +177,68 @@ const validPaymentMethods = new Set([
   "Other"
 ]);
 
+const allowedOrderStatusTransitions: Record<OrderStatus, OrderStatus[]> = {
+  draft: ["submitted", "confirmed", "cancelled"],
+  submitted: ["confirmed", "cancelled"],
+  confirmed: ["picking", "cancelled"],
+  picking: ["ready_for_pickup", "out_for_delivery", "cancelled"],
+  ready_for_pickup: ["completed", "cancelled"],
+  out_for_delivery: ["completed", "cancelled"],
+  completed: [],
+  cancelled: ["confirmed"]
+};
+
+function inferFulfillmentStatus(status: OrderStatus): FulfillmentStatus {
+  if (status === "cancelled") return "cancelled";
+  if (status === "completed") return "fulfilled";
+  if (status === "ready_for_pickup" || status === "out_for_delivery") return "ready";
+  if (status === "picking") return "picking";
+  return "queued";
+}
+
+function inferDeliveryStatus(
+  fulfillmentMethod: FulfillmentMethod,
+  status: OrderStatus
+): DeliveryStatus {
+  if (fulfillmentMethod !== "delivery") return "none";
+  if (status === "cancelled") return "cancelled";
+  if (status === "completed") return "delivered";
+  if (status === "out_for_delivery") return "out_for_delivery";
+  if (status === "picking") return "loaded";
+  if (status === "confirmed") return "assigned";
+  return "scheduled";
+}
+
+function dbDeliveryStatus(status: DeliveryStatus): Exclude<DeliveryStatus, "none"> {
+  return status === "none" ? "scheduled" : status;
+}
+
+function canTransitionOrderStatus(current: OrderStatus, next: OrderStatus) {
+  if (current === next) return true;
+  return allowedOrderStatusTransitions[current]?.includes(next) || false;
+}
+
+async function logOrderActivity(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdminClient>>,
+  input: {
+    orderId: string;
+    type: string;
+    label: string;
+    detail: string;
+    createdBy?: string;
+    payload?: Record<string, unknown>;
+  }
+) {
+  await admin.from("order_activity_logs").insert({
+    order_id: input.orderId,
+    activity_type: input.type,
+    label: input.label,
+    detail: input.detail,
+    created_by: input.createdBy || "Admin",
+    payload: input.payload || {}
+  });
+}
+
 function parseOrderSequence(orderNumber: string | null | undefined) {
   const value = Number(String(orderNumber || "").replace(/\D/g, ""));
   if (!Number.isFinite(value) || value <= 0) return 0;
@@ -186,12 +258,12 @@ function formatDocumentSequence(sequence: number) {
 function normalizeDocumentNumber(orderNumber: string, isQuoteRequest: boolean) {
   const sequence = parseOrderSequence(orderNumber);
   if (!sequence) return orderNumber;
-  return `${isQuoteRequest ? "Quote" : "Order"}-${formatDocumentSequence(sequence)}`;
+  return `${isQuoteRequest ? "Quote" : "ORD"}-${formatDocumentSequence(sequence)}`;
 }
 
 async function getNextDocumentNumber(
   admin: NonNullable<ReturnType<typeof getSupabaseAdminClient>>,
-  prefix: "Order" | "Quote",
+  prefix: "ORD" | "Quote",
   isQuoteRequest: boolean
 ) {
   const { data, error } = await admin
@@ -294,6 +366,11 @@ function toClientOrder(row: OrderRow) {
     total: Number(row.total),
     status: row.status,
     paymentStatus: row.payment_status,
+    fulfillmentStatus: row.fulfillment_status || inferFulfillmentStatus(row.status),
+    deliveryStatus:
+      row.fulfillment_method === "pickup"
+        ? "none"
+        : row.delivery_status || inferDeliveryStatus(row.fulfillment_method, row.status),
     isQuoteRequest: row.is_quote_request,
     poNumber: row.po_number || "",
     poStatus: row.po_status || "none",
@@ -494,6 +571,8 @@ export async function GET(request: NextRequest) {
     "total",
     "status",
     "payment_status",
+    "fulfillment_status",
+    "delivery_status",
     "is_quote_request",
     "po_number",
     "po_status",
@@ -635,7 +714,7 @@ export async function POST(request: NextRequest) {
 
     const orderNumber = await getNextDocumentNumber(
       admin,
-      payload.isQuoteRequest ? "Quote" : "Order",
+      payload.isQuoteRequest ? "Quote" : "ORD",
       payload.isQuoteRequest
     );
 
@@ -697,6 +776,11 @@ export async function POST(request: NextRequest) {
         total: orderTotal,
         status: payload.status,
         payment_status: payload.paymentStatus,
+        fulfillment_status: payload.fulfillmentStatus || inferFulfillmentStatus(payload.status),
+        delivery_status: dbDeliveryStatus(
+          payload.deliveryStatus ||
+            inferDeliveryStatus(payload.fulfillmentMethod, payload.status)
+        ),
         is_quote_request: payload.isQuoteRequest,
         po_number: payload.poNumber || null,
         po_status: payload.poNumber ? payload.poStatus || "submitted" : "none",
@@ -731,6 +815,17 @@ export async function POST(request: NextRequest) {
       );
 
       if (itemsError) throw itemsError;
+    }
+
+    if (order?.id) {
+      await logOrderActivity(admin, {
+        orderId: order.id,
+        type: "order_created",
+        label: payload.isQuoteRequest ? "Quote request created" : "Order created",
+        detail: `${payload.fulfillmentMethod === "pickup" ? "Pickup" : "Delivery"} order ${order.order_number} created.`,
+        createdBy: "System",
+        payload: { orderNumber: order.order_number, status: payload.status }
+      }).catch(() => null);
     }
 
     return NextResponse.json({
@@ -886,6 +981,15 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    await logOrderActivity(admin, {
+      orderId: payload.orderId,
+      type: "payment_created",
+      label: "Payment recorded",
+      detail: `${paymentMethod} payment of $${amount.toFixed(2)} recorded.`,
+      createdBy: payload.payment.createdBy || "Admin",
+      payload: { paymentId: paymentRow?.id, paymentStatus: nextPaymentStatus }
+    }).catch(() => null);
+
     return NextResponse.json({
       ok: true,
       persisted: true,
@@ -906,7 +1010,43 @@ export async function PATCH(request: NextRequest) {
   }
 
   const updates: Record<string, string | boolean> = {};
-  if (payload.status) updates.status = payload.status;
+  let previousStatus: OrderStatus | null = null;
+  let fulfillmentMethod: FulfillmentMethod = "pickup";
+
+  if (payload.status) {
+    const { data: existingOrder, error: existingOrderError } = await admin
+      .from("orders")
+      .select("status, fulfillment_method")
+      .eq("id", payload.orderId)
+      .single();
+
+    if (existingOrderError) {
+      return NextResponse.json(
+        { ok: false, persisted: false, reason: existingOrderError.message },
+        { status: 500 }
+      );
+    }
+
+    previousStatus = existingOrder.status as OrderStatus;
+    fulfillmentMethod = existingOrder.fulfillment_method as FulfillmentMethod;
+
+    if (!canTransitionOrderStatus(previousStatus, payload.status)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          persisted: false,
+          reason: `Order status cannot transition from ${previousStatus} to ${payload.status}.`
+        },
+        { status: 400 }
+      );
+    }
+
+    updates.status = payload.status;
+    updates.fulfillment_status = inferFulfillmentStatus(payload.status);
+    updates.delivery_status = dbDeliveryStatus(
+      inferDeliveryStatus(fulfillmentMethod, payload.status)
+    );
+  }
   if (payload.paymentStatus) updates.payment_status = payload.paymentStatus;
   if (payload.poNumber !== undefined) updates.po_number = payload.poNumber;
   if (payload.poStatus !== undefined) updates.po_status = payload.poStatus;
@@ -914,6 +1054,10 @@ export async function PATCH(request: NextRequest) {
   if (payload.convertToOrder) {
     updates.is_quote_request = false;
     updates.status = payload.status || "submitted";
+    updates.fulfillment_status = inferFulfillmentStatus(updates.status as OrderStatus);
+    updates.delivery_status = dbDeliveryStatus(
+      inferDeliveryStatus(fulfillmentMethod, updates.status as OrderStatus)
+    );
   }
 
   if (!Object.keys(updates).length) {
@@ -933,6 +1077,17 @@ export async function PATCH(request: NextRequest) {
       { ok: false, persisted: false, reason: error.message },
       { status: 500 }
     );
+  }
+
+  if (payload.status && previousStatus) {
+    await logOrderActivity(admin, {
+      orderId: payload.orderId,
+      type: "status_changed",
+      label: "Order status changed",
+      detail: `Status changed from ${previousStatus} to ${payload.status}.`,
+      createdBy: "Admin",
+      payload: { from: previousStatus, to: payload.status }
+    }).catch(() => null);
   }
 
   const workflow: Record<string, unknown> = {};

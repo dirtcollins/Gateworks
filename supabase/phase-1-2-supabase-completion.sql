@@ -5,6 +5,20 @@
 
 create extension if not exists pgcrypto;
 
+do $$
+begin
+  create type public.fulfillment_status as enum ('queued', 'picking', 'ready', 'partially_fulfilled', 'fulfilled', 'cancelled');
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  create type public.delivery_status as enum ('scheduled', 'assigned', 'loaded', 'out_for_delivery', 'delivered', 'failed', 'cancelled');
+exception when undefined_object then
+  create type public.delivery_status as enum ('scheduled', 'assigned', 'loaded', 'out_for_delivery', 'delivered', 'failed', 'cancelled');
+when duplicate_object then null;
+end $$;
+
 alter table public.orders add column if not exists site_user_id text references public.site_users(id) on delete set null;
 alter table public.orders add column if not exists customer_name text;
 alter table public.orders add column if not exists company_name text;
@@ -15,9 +29,23 @@ alter table public.orders add column if not exists requested_window text;
 alter table public.orders add column if not exists job_name text;
 alter table public.orders add column if not exists jobsite_address jsonb not null default '{}'::jsonb;
 alter table public.orders add column if not exists payment_status public.payment_status not null default 'unpaid';
+alter table public.orders add column if not exists fulfillment_status public.fulfillment_status not null default 'queued';
+alter table public.orders add column if not exists delivery_status public.delivery_status not null default 'scheduled';
 alter table public.orders add column if not exists is_quote_request boolean not null default false;
+alter table public.orders alter column order_number set default ('ORD-' || nextval('public.order_number_sequence'));
 
 alter table public.order_items add column if not exists item_payload jsonb not null default '{}'::jsonb;
+
+alter table public.invoices add column if not exists customer_id text;
+alter table public.invoices add column if not exists customer_name text;
+alter table public.invoices add column if not exists customer_email text;
+alter table public.invoices add column if not exists billing_address text;
+alter table public.invoices add column if not exists jobsite_address text;
+alter table public.invoices add column if not exists terms text;
+alter table public.invoices add column if not exists notes text;
+
+alter table public.invoice_items add column if not exists title text;
+alter table public.invoice_items add column if not exists options jsonb not null default '{}'::jsonb;
 
 alter table public.saved_carts add column if not exists site_user_id text references public.site_users(id) on delete cascade;
 alter table public.saved_carts add column if not exists job_name text;
@@ -67,6 +95,39 @@ create table if not exists public.customer_drawing_uploads (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.order_activity_logs (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.orders(id) on delete cascade,
+  activity_type text not null,
+  label text not null,
+  detail text not null default '',
+  created_by text,
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.order_notes (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.orders(id) on delete cascade,
+  body text not null,
+  visibility text not null default 'internal' check (visibility in ('internal', 'customer')),
+  created_by text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.order_attachments (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.orders(id) on delete cascade,
+  file_name text not null,
+  file_size integer not null default 0 check (file_size >= 0),
+  file_type text,
+  storage_path text,
+  public_url text,
+  uploaded_by text,
+  created_at timestamptz not null default now()
+);
+
 drop trigger if exists saved_carts_set_updated_at on public.saved_carts;
 create trigger saved_carts_set_updated_at
 before update on public.saved_carts
@@ -79,15 +140,24 @@ for each row execute function public.set_updated_at();
 
 create index if not exists orders_site_user_created_idx on public.orders(site_user_id, created_at desc);
 create index if not exists orders_payment_status_idx on public.orders(payment_status, created_at desc);
+create index if not exists orders_fulfillment_status_idx on public.orders(fulfillment_status, created_at desc);
+create index if not exists orders_delivery_status_idx on public.orders(delivery_status, created_at desc);
+create index if not exists invoices_customer_created_idx on public.invoices(customer_id, created_at desc);
 create index if not exists saved_carts_site_user_idx on public.saved_carts(site_user_id, updated_at desc);
 create index if not exists saved_cart_items_saved_cart_idx on public.saved_cart_items(saved_cart_id);
 create index if not exists customer_saved_jobsites_site_user_idx on public.customer_saved_jobsites(site_user_id);
 create index if not exists customer_drawing_uploads_order_idx on public.customer_drawing_uploads(order_id);
 create index if not exists customer_drawing_uploads_site_user_idx on public.customer_drawing_uploads(site_user_id, created_at desc);
+create index if not exists order_activity_logs_order_idx on public.order_activity_logs(order_id, created_at desc);
+create index if not exists order_notes_order_idx on public.order_notes(order_id, created_at desc);
+create index if not exists order_attachments_order_idx on public.order_attachments(order_id, created_at desc);
 
 alter table public.saved_cart_items enable row level security;
 alter table public.customer_saved_jobsites enable row level security;
 alter table public.customer_drawing_uploads enable row level security;
+alter table public.order_activity_logs enable row level security;
+alter table public.order_notes enable row level security;
+alter table public.order_attachments enable row level security;
 
 drop policy if exists "Public can create checkout orders" on public.orders;
 create policy "Public can create checkout orders"
@@ -147,9 +217,31 @@ to anon, authenticated
 using (false)
 with check (false);
 
+drop policy if exists "Order activity is managed through service routes" on public.order_activity_logs;
+create policy "Order activity is managed through service routes"
+on public.order_activity_logs for all
+to anon, authenticated
+using (false)
+with check (false);
+
+drop policy if exists "Order notes are managed through service routes" on public.order_notes;
+create policy "Order notes are managed through service routes"
+on public.order_notes for all
+to anon, authenticated
+using (false)
+with check (false);
+
+drop policy if exists "Order attachments are managed through service routes" on public.order_attachments;
+create policy "Order attachments are managed through service routes"
+on public.order_attachments for all
+to anon, authenticated
+using (false)
+with check (false);
+
 grant usage on schema public to anon, authenticated;
 grant select, insert, update on public.orders to anon, authenticated;
 grant select, insert on public.order_items to anon, authenticated;
 grant select, insert, update, delete on public.saved_carts, public.saved_cart_items to anon, authenticated;
 grant select, insert, update, delete on public.customer_saved_jobsites to anon, authenticated;
 grant select, insert, update, delete on public.customer_drawing_uploads to anon, authenticated;
+grant select, insert, update, delete on public.order_activity_logs, public.order_notes, public.order_attachments to anon, authenticated;

@@ -36,6 +36,26 @@ export const paymentStatuses = [
   "failed"
 ] as const;
 
+export const fulfillmentStatuses = [
+  "queued",
+  "picking",
+  "ready",
+  "partially_fulfilled",
+  "fulfilled",
+  "cancelled"
+] as const;
+
+export const deliveryStatuses = [
+  "none",
+  "scheduled",
+  "assigned",
+  "loaded",
+  "out_for_delivery",
+  "delivered",
+  "failed",
+  "cancelled"
+] as const;
+
 export const inventoryEventTypes = [
   "receive",
   "adjust",
@@ -61,6 +81,8 @@ export type StaffRole = (typeof staffRoles)[number];
 export type OrderStatus = (typeof orderStatuses)[number];
 export type DocumentStatus = (typeof documentStatuses)[number];
 export type PaymentStatus = (typeof paymentStatuses)[number];
+export type FulfillmentStatus = (typeof fulfillmentStatuses)[number];
+export type DeliveryStatus = (typeof deliveryStatuses)[number];
 export type InventoryEventType = (typeof inventoryEventTypes)[number];
 export type FulfillmentMethod = (typeof fulfillmentMethods)[number];
 export type PlatformStorageBucket = (typeof platformStorageBuckets)[number];

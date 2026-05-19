@@ -418,11 +418,24 @@ export function DataTable<T>({
                 key={getKey(row)}
                 className="wf-trow"
                 style={href ? { cursor: "pointer" } : undefined}
+                role={href ? "link" : undefined}
+                tabIndex={href ? 0 : undefined}
                 onClick={
                   href
                     ? (event) => {
                         const target = event.target as HTMLElement;
-                        if (target.closest("a,button,select,input")) return;
+                        if (target.closest("a,button,select,input,textarea")) return;
+                        window.location.assign(href);
+                      }
+                    : undefined
+                }
+                onKeyDown={
+                  href
+                    ? (event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        const target = event.target as HTMLElement;
+                        if (target.closest("a,button,select,input,textarea")) return;
+                        event.preventDefault();
                         window.location.assign(href);
                       }
                     : undefined

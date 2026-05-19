@@ -348,6 +348,7 @@ export function WayfinderProcurementList() {
           columns={columns}
           rows={filtered}
           getKey={(o) => o.id}
+          onRowHref={(o) => `/admin/procurement/${encodeURIComponent(o.id)}`}
           empty={
             ready
               ? "No purchase orders match the current filters."

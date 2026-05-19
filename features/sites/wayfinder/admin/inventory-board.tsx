@@ -31,6 +31,7 @@ import {
   wf,
   type Column
 } from "./admin-kit";
+import { ProductListCell } from "./product-list-cell";
 
 type StockTab = "all" | "in_stock" | "low_stock" | "out_of_stock";
 
@@ -320,12 +321,13 @@ export function WayfinderInventoryBoard({
       key: "product",
       header: "Product / SKU",
       render: (row) => (
-        <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-          <span style={{ fontWeight: 800 }}>{row.productTitle}</span>
-          <Mono style={{ fontSize: 10, color: wf.muted, letterSpacing: "0.04em" }}>
-            {row.sku}
-          </Mono>
-        </div>
+        <ProductListCell
+          title={row.productTitle}
+          subtitle={row.sku}
+          meta={`${row.finish} · ${row.size}`}
+          image={row.productImage?.sizes.thumb || row.productImage?.url}
+          imageAlt={row.productImage?.alt || row.productTitle}
+        />
       )
     },
     {
@@ -429,10 +431,14 @@ export function WayfinderInventoryBoard({
                     alignItems: "center"
                   }}
                 >
-                  <Mono style={{ fontWeight: 700, fontSize: 12 }}>{row.sku}</Mono>
+                  <ProductListCell
+                    title={row.productTitle}
+                    subtitle={row.sku}
+                    image={row.productImage?.sizes.thumb || row.productImage?.url}
+                    imageAlt={row.productImage?.alt || row.productTitle}
+                  />
                   <Pill tone={STATUS_PILL[row.status]}>{STATUS_LABEL[row.status]}</Pill>
                 </div>
-                <span style={{ fontSize: 11, color: wf.muted }}>{row.productTitle}</span>
                 <Mono style={{ fontSize: 10, color: wf.steel }}>
                   {row.locationCode} · Bay {row.binCode} · {row.quantityAvailable} avail / reorder{" "}
                   {row.reorderPoint}
@@ -489,6 +495,7 @@ export function WayfinderInventoryBoard({
           columns={columns}
           rows={filtered}
           getKey={(row) => row.id}
+          onRowHref={(row) => `/admin/products/${encodeURIComponent(row.productId)}/edit`}
           empty="No inventory rows match the current filters."
         />
       </Panel>

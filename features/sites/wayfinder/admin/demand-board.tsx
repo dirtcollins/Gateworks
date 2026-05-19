@@ -26,6 +26,7 @@ import {
   wf,
   type Column
 } from "./admin-kit";
+import { ProductListCell } from "./product-list-cell";
 
 const DEMAND_LABELS: Record<DemandLevel, string> = {
   low: "Low",
@@ -130,16 +131,13 @@ export function WayfinderDemandBoard({ metrics }: { metrics: DemandMetrics[] }) 
       key: "product",
       header: "Product",
       render: (item) => (
-        <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
-          <span style={{ fontWeight: 800, color: wf.ink }}>
-            {item.productTitle}
-          </span>
-          <span
-            style={{ fontFamily: monoFont, fontSize: 11, color: wf.muted }}
-          >
-            {item.sku} · {item.category}
-          </span>
-        </div>
+        <ProductListCell
+          title={item.productTitle}
+          subtitle={item.sku}
+          meta={item.category}
+          image={item.productImage?.sizes.thumb || item.productImage?.url}
+          imageAlt={item.productImage?.alt || item.productTitle}
+        />
       )
     },
     {
@@ -306,25 +304,21 @@ export function WayfinderDemandBoard({ metrics }: { metrics: DemandMetrics[] }) 
                     display: "flex",
                     justifyContent: "space-between",
                     gap: 8,
-                    alignItems: "flex-start"
+                    alignItems: "center"
                   }}
                 >
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 800,
-                      color: wf.ink,
-                      minWidth: 0
-                    }}
-                  >
-                    {item.productTitle}
-                  </span>
+                  <ProductListCell
+                    title={item.productTitle}
+                    subtitle={item.sku}
+                    image={item.productImage?.sizes.thumb || item.productImage?.url}
+                    imageAlt={item.productImage?.alt || item.productTitle}
+                  />
                   <Pill tone={URGENCY_TONE[item.reorderUrgency]}>
                     {URGENCY_LABELS[item.reorderUrgency]}
                   </Pill>
                 </div>
                 <Mono style={{ fontSize: 11, color: wf.muted }}>
-                  {item.sku} · {item.supplier}
+                  {item.supplier}
                 </Mono>
                 <div
                   style={{

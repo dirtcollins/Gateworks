@@ -193,22 +193,6 @@ export function WayfinderQuotesList() {
     return { count: quotes.length, open: open.length, pipeline, accepted };
   }, [quotes]);
 
-  async function handleCreate() {
-    if (busy) return;
-    setBusy(true);
-    const result = await saveQuote({
-      status: "draft",
-      createdBy: "Counter staff",
-      items: []
-    });
-    setBusy(false);
-    if (result.quote) {
-      router.push(`/admin/quotes/${encodeURIComponent(result.quote.id)}`);
-    } else {
-      setMessage("Could not create the quote — Supabase is not configured.");
-    }
-  }
-
   async function handleStartFromTemplate() {
     if (busy || !templateChoice) return;
     const template = templates.find((t) => t.id === templateChoice);
@@ -502,7 +486,7 @@ export function WayfinderQuotesList() {
         title="Quotes"
         desc="The quote pipeline — draft, send, template, and convert customer quotes into invoiced jobs."
         action={
-          <AdminBtn variant="primary" onClick={handleCreate} disabled={busy}>
+          <AdminBtn variant="primary" href="/admin/quotes/new">
             <Ico.plus size={14} /> New quote
           </AdminBtn>
         }
@@ -634,6 +618,7 @@ export function WayfinderQuotesList() {
             columns={poColumns}
             rows={filteredPurchaseOrders}
             getKey={(o) => o.id}
+            onRowHref={(o) => `/admin/orders/${encodeURIComponent(o.id)}`}
             empty={
               ordersLoaded
                 ? "No customer purchase orders yet."
@@ -645,6 +630,7 @@ export function WayfinderQuotesList() {
             columns={quoteColumns}
             rows={tableRows}
             getKey={(q) => q.id}
+            onRowHref={(q) => `/admin/quotes/${encodeURIComponent(q.id)}`}
             empty={
               ready
                 ? view === "templates"
